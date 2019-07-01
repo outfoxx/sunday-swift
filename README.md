@@ -1,3 +1,4 @@
-# Sunday
+# 🙏 Sunday
+## The framework of REST
 
-A description of this package.
+Swift framework for building REST clients.
