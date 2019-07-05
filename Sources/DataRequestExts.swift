@@ -71,8 +71,8 @@ extension DataRequest {
         let contentTypeName = response.allHeaderFields[HTTP.StandardHeaders.contentType] as? String,
         let contentType = MediaType(contentTypeName)
       else {
-          let badType = response.allHeaderFields[HTTP.StandardHeaders.contentType] as? String ?? "none"
-          return .failure(SundayError.responseSerializationFailed(reason: .invalidContentType(badType)))
+        let badType = response.allHeaderFields[HTTP.StandardHeaders.contentType] as? String ?? "none"
+        return .failure(SundayError.responseSerializationFailed(reason: .invalidContentType(badType)))
       }
 
       do {
