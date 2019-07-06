@@ -64,7 +64,7 @@ public struct NetworkRequestManager : RequestManager {
 
     var request = URLRequest(url: url)
     request.httpMethod = method.rawValue
-    request.setValue(accept, forHTTPHeaderField: HTTP.StandardHeaders.accept)
+    request.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
 
     headers?.forEach { key, values in
       values.forEach { value in
@@ -77,8 +77,8 @@ public struct NetworkRequestManager : RequestManager {
     }
 
     if let body = body {
-      if request.value(forHTTPHeaderField: HTTP.StandardHeaders.contentType) == nil {
-        request.setValue(contentType.value, forHTTPHeaderField: HTTP.StandardHeaders.contentType)
+      if request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType) == nil {
+        request.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
       }
 
       request.httpBody = try target.mediaTypeEncoders.find(for: contentType).encode(body)

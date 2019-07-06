@@ -69,6 +69,10 @@ public struct MediaType {
     self.parameters = Dictionary(uniqueKeysWithValues: parameters.map { key, value in (key.lowercased(), value.lowercased()) })
   }
 
+  public static func from(accept headers: [String]) -> [MediaType] {
+    return headers.flatMap { header in header.components(separatedBy: ",") }.compactMap { MediaType($0) }
+  }
+
   private static let fullRegex = Regex("^((?:[a-z]+|\\*))\\/(x(?:-|\\\\.)|(?:(?:vnd|prs)\\.)|\\*)?([a-z\\-\\.]+|\\*)(?:\\+([a-z]+))?( *(?:; *(?:(?:[\\w\\.-]+) *= *(?:[\\w\\.-]+)) *)*)$", options: [.ignoreCase])
   private static let paramRegex = Regex(" *; *([\\w\\.-]+) *= *([\\w\\.-]+)", options: [.ignoreCase])
 
@@ -133,7 +137,7 @@ public struct MediaType {
     return "\(type)/\(tree)\(subtype)\(suffix)\(parameters)"
   }
 
-  public static let plainText = MediaType(type: .text, subtype: "plain")
+  public static let plain = MediaType(type: .text, subtype: "plain")
   public static let html = MediaType(type: .text, subtype: "html")
   public static let json = MediaType(type: .application, subtype: "json")
   public static let cbor = MediaType(type: .application, subtype: "cbor")

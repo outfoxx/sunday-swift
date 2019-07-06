@@ -10,5 +10,4 @@ import Foundation
 import OSLogTrace
 
 
-internal let logging = OSLogManager.for(subsystem: Bundle.framework.bundleIdentifier!)
-
+internal let logging = OSLogManager.for(subsystem: Bundle.target.bundleIdentifier!)

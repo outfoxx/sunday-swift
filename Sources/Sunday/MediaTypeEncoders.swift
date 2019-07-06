@@ -109,7 +109,6 @@ extension CBOREncoder : MediaTypeEncoder {}
 
 public struct DataEncoder : MediaTypeEncoder {
 
-
   enum Error : Swift.Error {
     case translationNotSupported
   }
@@ -119,6 +118,32 @@ public struct DataEncoder : MediaTypeEncoder {
       throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .octetStream, error: Error.translationNotSupported))
     }
     return data
+  }
+
+}
+
+
+public struct TextEncoder : MediaTypeEncoder {
+
+  enum Error : Swift.Error {
+    case translationNotSupported
+    case encodingFailed
+  }
+
+  public let encoding: String.Encoding
+
+  public init(encoding: String.Encoding = .utf8) {
+    self.encoding = encoding
+  }
+
+  public func encode<T>(_ value: T) throws -> Data where T : Encodable {
+    guard let string = value as? String else {
+      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .plain, error: Error.translationNotSupported))
+    }
+    guard let encoded = string.data(using: encoding) else {
+      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .plain, error: Error.encodingFailed))
+    }
+    return encoded
   }
 
 }

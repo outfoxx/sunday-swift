@@ -16,7 +16,7 @@ class HeaderTokenAuthorizer: RequestAdapter {
   private let tokenType: String
   private let token: String
 
-  init(tokenType: String, token: String, header: String = HTTP.StandardHeaders.authorization) {
+  init(tokenType: String, token: String, header: String = HTTP.StdHeaders.authorization) {
     self.header = header
     self.tokenType = tokenType
     self.token = token

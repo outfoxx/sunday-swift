@@ -15,6 +15,10 @@ let package = Package(
       name: "Sunday",
       targets: ["Sunday"]
     ),
+    .library(
+      name: "SundayServer",
+      targets: ["SundayServer"]
+    ),
   ],
   dependencies: [
     .package(url: "https://github.com/outfoxx/OSLogTrace.git", from: "1.0.0"),
@@ -24,8 +28,7 @@ let package = Package(
     .package(url: "https://github.com/PromiseKit/Foundation.git", from: "3.3.3"),
     .package(url: "https://github.com/ReactiveX/RxSwift.git", from: "5.0.0"),
     .package(url: "https://github.com/sharplet/Regex.git", from: "2.1.0"),
-    .package(url: "https://github.com/outfoxx/Embassy.git", from: "4.1.1"),
-    .package(url: "https://github.com/envoy/Ambassador.git", from: "4.0.5")
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", from: "2.1.0"),
   ],
   targets: [
     .target(
@@ -37,18 +40,22 @@ let package = Package(
         "RxSwift",
         "Regex",
         "PotentCodables",
-        "OSLogTrace"
-      ],
-      path: "Sources"
+        "OSLogTrace",
+        "URITemplate"
+      ]
+    ),
+    .target(
+      name: "SundayServer",
+      dependencies: [
+        "Sunday",
+      ]
     ),
     .testTarget(
       name: "SundayTests",
       dependencies: [
         "Sunday",
-        "Embassy",
-        "Ambassador"
-      ],
-      path: "Tests"
+        "SundayServer",
+      ]
     ),
   ]
 )

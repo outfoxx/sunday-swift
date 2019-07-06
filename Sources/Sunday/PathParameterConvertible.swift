@@ -9,8 +9,8 @@
 import Foundation
 
 
-protocol PathParameterConvertible {
-  func path() -> String
+protocol CustomPathConvertible {
+  var pathDescription: String { get }
 }
 
 
@@ -18,9 +18,9 @@ protocol PathParameterConvertible {
  * Standard PathParameterConvertible types
  */
 
-extension UUID : PathParameterConvertible {
+extension UUID : CustomPathConvertible {
 
-  func path() -> String {
+  var pathDescription: String {
     return uuidString
   }
 
