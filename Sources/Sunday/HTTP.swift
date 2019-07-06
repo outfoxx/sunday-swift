@@ -77,13 +77,14 @@ public struct HTTP {
 
   public struct StdHeaders {
 
-    public static let contentType = "Content-Type"
-    public static let contentLength = "Content-Length"
-    public static let accept = "Accept"
-    public static let transferType = "Transfer-Type"
-    public static let connection = "Connection"
-    public static let server = "Server"
-    public static let authorization = "Authorization"
+    public static let accept = "accept"
+    public static let authorization = "authorization"
+    public static let connection = "connection"
+    public static let contentLength = "content-length"
+    public static let contentType = "content-type"
+    public static let server = "server"
+    public static let transferType = "transfer-type"
+    public static let userAgent = "user-agent"
     
   }
 

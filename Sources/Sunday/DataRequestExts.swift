@@ -68,10 +68,10 @@ extension DataRequest {
       }
 
       guard
-        let contentTypeName = response.allHeaderFields[HTTP.StdHeaders.contentType] as? String,
+        let contentTypeName = response.value(forHTTPHeaderField: HTTP.StdHeaders.contentType),
         let contentType = MediaType(contentTypeName)
       else {
-        let badType = response.allHeaderFields[HTTP.StdHeaders.contentType] as? String ?? "none"
+        let badType = response.value(forHTTPHeaderField: HTTP.StdHeaders.contentType) ?? "none"
         return .failure(SundayError.responseSerializationFailed(reason: .invalidContentType(badType)))
       }
 

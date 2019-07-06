@@ -79,7 +79,7 @@ public final class HTTPConnection {
       // generate convenience headers as strings
       var headers: HTTP.Headers = [:]
       for header in parsedRequest.headers {
-        guard let value = String(data: header.value, encoding: .ascii)?.trimmingCharacters(in: .whitespaces) else { continue }
+        guard let value = String(data: header.value, encoding: .ascii) else { continue }
         var currentValues = headers[header.name] ?? []
         currentValues.append(value)
         headers.updateValue(currentValues, forKey: header.name)

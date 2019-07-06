@@ -145,7 +145,7 @@ public struct HTTPRequestParser {
 
           // parse raw header
           let parts: [Data] = lineBytes.split(separator: Self.headerSeparator, maxSplits: 1)
-          guard parts.count == 2, let name = String(data: parts[0], encoding: .ascii) else {
+          guard parts.count == 2, let name = String(data: parts[0], encoding: .ascii)?.lowercased() else {
             throw Error.invalidHeaderData
           }
 
@@ -230,10 +230,10 @@ public struct HTTPRequestParser {
 }
 
 private func detectRequestBodyType(headers: HTTP.RawHeaders) -> (HTTP.TransferType, Int?)? {
-  let transferType = headers.first { $0.name.caseInsensitiveCompare(HTTP.StdHeaders.transferType) == .orderedSame }
+  let transferType = headers.first { $0.name == HTTP.StdHeaders.transferType }
     .flatMap { String(data: $0.value, encoding: .utf8) }
     .flatMap { HTTP.TransferType(rawValue: $0) }
-  let contentLength = headers.first { $0.name.caseInsensitiveCompare(HTTP.StdHeaders.contentLength) == .orderedSame }
+  let contentLength = headers.first { $0.name == HTTP.StdHeaders.contentLength }
     .flatMap { String(data: $0.value, encoding: .utf8) }
     .flatMap { Int($0) }
 
