@@ -23,7 +23,6 @@ extension HTTP {
     
   }
 
-
   public struct Response {
 
     public struct Status : CustomStringConvertible {
@@ -108,6 +107,18 @@ extension HTTP {
 
     public static func ok<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
       return Response(status: .ok, headers: headers, entity: .value { encoder in try encoder.encode(value) })
+    }
+
+    public static func created(data: Data? = nil, headers: HTTP.Headers = [:]) -> Response {
+      return Response(status: .created, headers: headers, entity: data.flatMap { .data($0) } ?? .none)
+    }
+
+    public static func created<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
+      return Response(status: .created, headers: headers, entity: .value { encoder in try encoder.encode(value) })
+    }
+
+    public static func noContent(headers: HTTP.Headers = [:]) -> Response {
+      return Response(status: .noContent, headers: headers, entity: .none)
     }
 
     public static func notFound(message: String? = nil, headers: HTTP.Headers = [:]) -> Response {
