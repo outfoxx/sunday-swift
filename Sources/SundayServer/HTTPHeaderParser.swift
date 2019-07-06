@@ -235,13 +235,13 @@ private func detectRequestBodyType(headers: HTTP.RawHeaders) -> (HTTP.TransferTy
     .flatMap { HTTP.TransferType(rawValue: $0) }
   let contentLength = headers.first { $0.name == HTTP.StdHeaders.contentLength }
     .flatMap { String(data: $0.value, encoding: .utf8) }
-    .flatMap { Int($0) }
+    .flatMap { UInt($0) }
 
   if transferType == .chunked {
     return (.chunked, nil)
   }
-  else if let contentLength = contentLength {
-    return (.identity, contentLength)
+  else if let contentLength = contentLength, contentLength != 0 {
+    return (.identity, Int(contentLength))
   }
   return nil
 }
