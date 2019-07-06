@@ -92,11 +92,13 @@ public final class HTTPConnection {
                                   version: parsedRequest.line.version,
                                   headers: headers,
                                   rawHeaders: parsedRequest.headers,
-                                  body: content)
+                                  body: parsedRequest.body)
 
 
       do {
+
         let response = try dispatcher(request)
+
         self.send(response: response)
       }
       catch {
@@ -121,9 +123,14 @@ public final class HTTPConnection {
     var status = response.status
     var headers = response.headers
 
+    // Determine how the response body will be sent using the response's entity
+
     let sendBody: ((@escaping (Error?) -> Void) -> Void)?
+
     switch response.entity {
     case .data(let data):
+      // standard HTTP response body using `Content-Length`
+
       headers[HTTP.StdHeaders.contentLength] = ["\(data.count)"]
       sendBody = { finalizer in
         self.send(data: data, context: "sending body", completion: finalizer)
