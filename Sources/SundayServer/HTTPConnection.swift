@@ -12,7 +12,7 @@ import OSLogTrace
 
 
 private let minHTTPReqeustLength = 16
-private let maxHTTPReqeustLength = 1024 * 500
+private let maxHTTPChunkLength = 1024 * 128
 
 
 /// HTTPConnection represents an active HTTP connection
@@ -54,7 +54,8 @@ public final class HTTPConnection {
     self.dispatcher = dispatcher
     self.log = log
 
-    self.transport.receive(minimumIncompleteLength: minHTTPReqeustLength, maximumLength: maxHTTPReqeustLength, completion: handleReceive(content:context:isComplete:error:))
+    self.transport.receive(minimumIncompleteLength: minHTTPReqeustLength, maximumLength: maxHTTPChunkLength,
+                           completion: handleReceive(content:context:isComplete:error:))
   }
 
   private func handleReceive(content: Data?, context: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) {
@@ -72,7 +73,8 @@ public final class HTTPConnection {
         let content = content,
         let parsedRequest = try requestParser.process(content)
       else {
-        transport.receive(minimumIncompleteLength: 1, maximumLength: maxHTTPReqeustLength, completion: handleReceive(content:context:isComplete:error:))
+        transport.receive(minimumIncompleteLength: 1, maximumLength: maxHTTPChunkLength,
+                          completion: handleReceive(content:context:isComplete:error:))
         return
       }
 
