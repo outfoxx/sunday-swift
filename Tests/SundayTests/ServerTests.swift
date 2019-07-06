@@ -12,59 +12,182 @@ import class PotentCodables.JSONDecoder
 @testable import SundayServer
 
 
-struct Item : Codable {
+struct Item : Codable, Equatable {
   let name: String
-  let cost: Decimal
+  let cost: Float
 }
 
 
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 class HTTPServerTests: XCTestCase {
 
-  func testRoutableServer() throws {
+  static let server = try! HTTPServer(port: .any, localOnly: true) {
+    Path("/{type}") {
+      ContentNegotiation {
 
-    let server = try HTTPServer(port: .any) {
-      Path("/{type}") {
-        ContentNegotiation {
-
-          GET(.path("type")) { type -> HTTP.Response in
-            .ok(value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
-          }
-
-          POST(.path("type"), .body(Item.self)) { type, body -> HTTP.Response in
-            .ok(value: body)
-          }
-
-          Path("{id}") {
-
-            GET(.path("id", Int.self)) { id -> HTTP.Response in
-              .ok(value: Item(name: "abc", cost: 12.80))
-            }
-
-          }
-
+        GET(.path("type")) { type in
+          .ok(value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
         }
+
+        POST(.path("type"), .body(Item.self)) { type, body in
+          .created(value: body)
+        }
+
+        Path("{id}") {
+
+          GET(.path("id", Int.self)) { id in
+            .ok(value: Item(name: "abc", cost: 12.80))
+          }
+
+          DELETE(.path("id", Int.self)) { id in
+            .noContent()
+          }
+        }
+
       }
     }
+  }
 
-    Thread.sleep(forTimeInterval: 0.5)
+  override class func setUp() {
+    super.setUp()
 
-    let x = expectation(description: "Completed")
-    SessionManager.default.request("http://localhost:\(server.port)/something", method: .post, parameters: ["name": "abc", "cost": 12.40],
+    XCTAssertTrue(server.start())
+  }
+
+  func testPOST() throws {
+
+    let postX = expectation(description: "POST")
+    SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .post,
+                                   parameters: ["name": "ghi", "cost": 19.20],
                                    encoding: JSONEncoding.default, headers: ["Accept": "application/json"])
-//      .validate()
       .response { (response) in
-        defer { x.fulfill() }
+        defer { postX.fulfill() }
 
         guard response.error == nil else {
           XCTFail("Request failed: \(response.error!)")
           return
         }
 
-        print("Response - ", String(data: response.data!, encoding: .utf8)!)
+        guard let data = response.data else {
+          XCTFail("No response data")
+          return
+        }
+
+        guard response.response?.statusCode == 201 else {
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          return
+        }
+
+        do {
+          let item = try JSONDecoder.default.decode(Item.self, from: data)
+          XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
+        }
+        catch {
+          XCTFail("Decode/Compare failed: \(error)")
+        }
       }
 
-    waitForExpectations(timeout: 10)
+    waitForExpectations(timeout: 2)
+
+  }
+
+  func testGETList() {
+
+    let listX = expectation(description: "GET (list)")
+    SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .get,
+                                   headers: ["Accept": "application/json"])
+      .response { (response) in
+        defer { listX.fulfill() }
+
+        guard response.error == nil else {
+          XCTFail("Request failed: \(response.error!)")
+          return
+        }
+
+        guard let data = response.data else {
+          XCTFail("No response data")
+          return
+        }
+
+        guard response.response?.statusCode == 200 else {
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          return
+        }
+
+        do {
+          let items = try JSONDecoder.default.decode([Item].self, from: data)
+          XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
+          XCTAssertTrue(items.contains(Item(name: "def", cost: 6.40)))
+        }
+        catch {
+          XCTFail("Decode/Compare failed: \(error)")
+        }
+    }
+
+    waitForExpectations(timeout: 2)
+  }
+
+  func testGETItem() {
+
+    let itemX = expectation(description: "GET (item)")
+    SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .get,
+                                   headers: ["Accept": "application/json"])
+      .response { (response) in
+        defer { itemX.fulfill() }
+
+        guard response.error == nil else {
+          XCTFail("Request failed: \(response.error!)")
+          return
+        }
+
+        guard let data = response.data else {
+          XCTFail("No response data")
+          return
+        }
+
+        guard response.response?.statusCode == 200 else {
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          return
+        }
+
+        do {
+          let item = try JSONDecoder.default.decode(Item.self, from: data)
+          XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
+        }
+        catch {
+          XCTFail("Decode/Compare failed: \(error)")
+        }
+    }
+
+    waitForExpectations(timeout: 2)
+  }
+
+  func testDELETE() {
+
+    let deleteX = expectation(description: "DELETE")
+    SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .delete)
+      .response { (response) in
+        defer { deleteX.fulfill() }
+
+        guard response.error == nil else {
+          XCTFail("Request failed: \(response.error!)")
+          return
+        }
+
+        guard let data = response.data else {
+          XCTFail("No response data")
+          return
+        }
+
+        guard response.response?.statusCode == 204 else {
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          return
+        }
+
+        XCTAssertEqual(data.count, 0)
+    }
+
+    waitForExpectations(timeout: 2)
   }
 
 }
