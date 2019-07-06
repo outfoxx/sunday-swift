@@ -13,7 +13,7 @@ import RxSwift
 
 
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
-public class HTTPServer {
+public class HTTPServer : NSObject {
 
   public typealias Dispatcher = (HTTP.Request) throws -> HTTP.Response
 
@@ -27,11 +27,14 @@ public class HTTPServer {
   }
 
   public private(set) var state: NWListener.State? = nil
+  @objc public private(set) dynamic var isReady: Bool = false
 
-  public init(port: NWEndpoint.Port = 8080, serviceName: String? = nil, localOnly: Bool = false, dispatcher: @escaping Dispatcher) throws {
+  public init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil, dispatcher: @escaping Dispatcher) throws {
     self.dispatcher = dispatcher
 
-    listener = try NWListener(using: .tcp, on: port)
+    self.listener = try NWListener(using: .tcp, on: port)
+
+    super.init()
 
     if let serviceName = serviceName {
       listener.service = NWListener.Service(name: serviceName, type: "_http._tcp")
@@ -45,12 +48,36 @@ public class HTTPServer {
 
     listener.stateUpdateHandler = { [weak self] state in
       guard let self = self else { return }
-      self.queue.async {
-        self.state = state
+      switch state {
+      case .ready:
+        self.isReady = true
+      default:
+        self.isReady = false
       }
     }
 
-    listener.start(queue: queue)
+  }
+
+  public func start(timeout: TimeInterval = 5) -> Bool {
+    let sema = DispatchSemaphore(value: 0)
+
+    let obs = observe(\.isReady, options: [.initial, .new]) { object, change in
+      if change.newValue! {
+        sema.signal()
+      }
+    }
+
+    return withExtendedLifetime(obs) {
+
+      listener.start(queue: queue)
+
+      switch sema.wait(timeout: .now() + timeout) {
+      case .success: return true
+      case .timedOut: return false
+      }
+
+    }
+
   }
 
   func connect(with connection: NWConnection) {
@@ -68,18 +95,14 @@ public class HTTPServer {
     connection.start(queue: queue)
   }
 
-  public func waitForReady() {
-    while self.queue.sync(execute: { return self.state }) != .ready {}
-  }
-
 }
 
 @available(macOS 10.14, iOS 13, tvOS 13, watchOS 6, *)
 extension HTTPServer {
 
-  public convenience init(port: NWEndpoint.Port = .any, serviceName: String? = nil, localOnly: Bool = true, @RoutableBuilder _ buildRoutable: () -> Routable) throws {
+  public convenience init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil, @RoutableBuilder _ buildRoutable: () -> Routable) throws {
     let routable = buildRoutable()
-    try self.init(port: port, serviceName: serviceName, localOnly: localOnly, dispatcher: { request in
+    try self.init(port: port, localOnly: localOnly, serviceName: serviceName, dispatcher: { request in
       do {
         guard let response = try routable.route(request: request, path: request.url.path, variables: [:]) else {
           return .notFound(message: "No method handler found")

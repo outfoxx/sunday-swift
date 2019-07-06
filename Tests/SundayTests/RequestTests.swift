@@ -46,7 +46,7 @@ class RequestTests: ParameterizedTest {
         }
       }
     }
-    server.waitForReady()
+    XCTAssertTrue(server.start())
 
     let x = expectation(description: "echo repsonse")
 
