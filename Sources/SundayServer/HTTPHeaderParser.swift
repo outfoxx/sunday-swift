@@ -277,17 +277,3 @@ private func parseHTTPVersion(from str: String) -> HTTP.Version?  {
   guard ver.count == 2, let major = Int(ver[0]), let minor = Int(ver[1]) else { return nil }
   return (major, minor)
 }
-
-extension String {
-  /// String without leading spaces
-  var withoutLeadingSpaces: String {
-    var firstNoneSpace: Int = count
-    for (i, char) in enumerated() {
-      if char != " " {
-        firstNoneSpace = i
-        break
-      }
-    }
-    return String(suffix(from: index(startIndex, offsetBy: firstNoneSpace)))
-  }
-}
