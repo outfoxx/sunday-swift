@@ -17,6 +17,10 @@ import Regex
  **/
 public struct MediaType {
 
+  public enum Error : Swift.Error {
+    case invalid
+  }
+
   public enum StandardParameterName : String {
     case charSet = "charset"
   }
@@ -157,6 +161,28 @@ public struct MediaType {
 
 
 extension MediaType : Equatable, Hashable {}
+
+extension MediaType : Codable {
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    let value = try container.decode(String.self)
+    guard let source = MediaType(value) else {
+      throw Error.invalid
+    }
+    self.type = source.type
+    self.tree = source.tree
+    self.subtype = source.subtype
+    self.suffix = source.suffix
+    self.parameters = source.parameters
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    try container.encode(value)
+  }
+
+}
 
 
 extension MediaType {
