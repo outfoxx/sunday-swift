@@ -56,7 +56,7 @@ public struct ResponseEncoding : Routable {
     }
 
     // Skip handling anything that isn't a value entity response
-    guard case .value(let generator) = response.entity else {
+    guard case .encoded(let generator) = response.entity else {
       return response
     }
 

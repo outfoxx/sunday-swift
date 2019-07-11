@@ -166,7 +166,7 @@ public struct HTTPRequestParser {
           }
 
           // ensure all data for body is available, otherwise wait for more
-          if length > data.count {
+          if length > buffer.count {
             return nil
           }
 

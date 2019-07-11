@@ -13,12 +13,17 @@ import RxSwift
 
 
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
-public class HTTPServer : NSObject {
+open class HTTPServer : NSObject {
 
-  public typealias Dispatcher = (HTTP.Request) throws -> HTTP.Response
+  public enum Async : Swift.Error {
+    case dispatch(() -> Void)
+  }
+
+  public typealias Dispatcher = (HTTPServer, HTTP.Request) throws -> HTTP.Response
 
   private let listener: NWListener
-  private let queue = DispatchQueue(label: "HTTP Server Connection Queue")
+  private let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])
+  private let mgrQueue = DispatchQueue(label: "HTTP Server Queue", attributes: [])
   private let dispatcher: Dispatcher
   private var connections = [String : HTTPConnection]()
 
@@ -86,33 +91,17 @@ public class HTTPServer : NSObject {
                                         transport: connection,
                                         dispatcher: self.dispatcher,
                                         log: logging.for(category: "HTTP Connection"))
-    connections[httpConnection.id] = httpConnection
+    mgrQueue.sync {
+      connections[httpConnection.id] = httpConnection
+    }
 
     connection.stateUpdateHandler = { state in
-      self.connections.removeValue(forKey: httpConnection.id)
+      self.mgrQueue.sync {
+        self.connections.removeValue(forKey: httpConnection.id)
+      }
     }
 
     connection.start(queue: queue)
-  }
-
-}
-
-@available(macOS 10.14, iOS 13, tvOS 13, watchOS 6, *)
-extension HTTPServer {
-
-  public convenience init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil, @RoutableBuilder _ buildRoutable: () -> Routable) throws {
-    let routable = buildRoutable()
-    try self.init(port: port, localOnly: localOnly, serviceName: serviceName, dispatcher: { request in
-      do {
-        guard let response = try routable.route(request: request, path: request.url.path, variables: [:]) else {
-          return .notFound(message: "No method handler found")
-        }
-        return response
-      }
-      catch {
-        return .internalServerError(message: String(describing: error))
-      }
-    })
   }
 
 }

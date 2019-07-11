@@ -37,7 +37,7 @@ class RequestTests: ParameterizedTest {
   @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
   func testAdaptiveResponseDecoding() throws {
 
-    let server = try HTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
         Path("/echo") {
           POST(.body(AnyValue.self)) { body in

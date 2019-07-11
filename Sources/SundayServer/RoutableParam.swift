@@ -7,6 +7,7 @@
 
 import Foundation
 import Sunday
+import PotentCodables
 
 
 public protocol StringInitializable {
@@ -16,10 +17,24 @@ public protocol StringInitializable {
 
 public struct Param<T> {
 
-  public typealias Converter = ([String: Any], URLComponents, Data?) -> T?
+  public typealias Converter = ([String: Any], URLComponents, Data?) throws -> T?
 
   public let name: String
   public let converter: Converter
+
+  public static func `var`( _ name: String) -> Param<Any> {
+    return Param<Any>(name: name) { variables, _, _ in
+      guard let value = variables[name] as? String else { return nil }
+      return value
+    }
+  }
+
+  public static func `var`<U>( _ name: String, _ type: U.Type) -> Param<U> {
+    return Param<U>(name: name) { variables, _, _ in
+      guard let value = variables[name] as? U else { return nil }
+      return value
+    }
+  }
 
   public static func path(_ name: String) -> Param<String> {
     return path(name, String.self)
@@ -69,7 +84,23 @@ public struct Param<T> {
     return Param<T>(name: "@body") { variables, _, body in
       guard let decoder = variables["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = body else { return nil }
-      return try? decoder.decode(type, from: body)
+      return try decoder.decode(type, from: body)
+    }
+  }
+
+  public static func body<T>(ref: T.Type) -> Param<T> {
+    return Param<T>(name: "@body") { variables, _, body in
+      guard let decoder = variables["@body-decoder"] as? MediaTypeDecoder else { return nil }
+      guard let body = body else { return nil }
+      return try decoder.decode(Ref.self, from: body).as(T.self)
+    }
+  }
+
+  public static func body<T>(embebbedRef: T.Type) -> Param<T> {
+    return Param<T>(name: "@body") { variables, _, body in
+      guard let decoder = variables["@body-decoder"] as? MediaTypeDecoder else { return nil }
+      guard let body = body else { return nil }
+      return try decoder.decode(EmbeddedRef.self, from: body).as(T.self)
     }
   }
 

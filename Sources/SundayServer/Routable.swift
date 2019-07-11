@@ -8,13 +8,13 @@
 
 import Foundation
 import Sunday
-import URITemplate
 import Regex
 
 
 public enum RoutingError : Swift.Error {
   case invalidURL
-  case parameterConversion(name: String)
+  case parameterConversionFailed(name: String, error: Error)
+  case missingRequiredParameter(name: String)
 }
 
 public protocol Routable {

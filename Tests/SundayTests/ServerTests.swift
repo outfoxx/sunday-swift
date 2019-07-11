@@ -21,7 +21,7 @@ struct Item : Codable, Equatable {
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 class HTTPServerTests: XCTestCase {
 
-  static let server = try! HTTPServer(port: .any, localOnly: true) {
+  static let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
     Path("/{type}") {
       ContentNegotiation {
 
@@ -74,7 +74,8 @@ class HTTPServerTests: XCTestCase {
         }
 
         guard response.response?.statusCode == 201 else {
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          let message = String(data: data, encoding: .utf8)!
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
           return
         }
 
@@ -88,7 +89,6 @@ class HTTPServerTests: XCTestCase {
       }
 
     waitForExpectations(timeout: 2)
-
   }
 
   func testGETList() {
@@ -110,7 +110,8 @@ class HTTPServerTests: XCTestCase {
         }
 
         guard response.response?.statusCode == 200 else {
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          let message = String(data: data, encoding: .utf8)!
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
           return
         }
 
@@ -146,7 +147,8 @@ class HTTPServerTests: XCTestCase {
         }
 
         guard response.response?.statusCode == 200 else {
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          let message = String(data: data, encoding: .utf8)!
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
           return
         }
 
@@ -180,7 +182,8 @@ class HTTPServerTests: XCTestCase {
         }
 
         guard response.response?.statusCode == 204 else {
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(String(data: data, encoding: .utf8)!)")
+          let message = String(data: data, encoding: .utf8)!
+          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
           return
         }
 

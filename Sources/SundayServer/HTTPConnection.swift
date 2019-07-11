@@ -30,12 +30,10 @@ public final class HTTPConnection {
     case sendingBody
   }
 
-  public typealias Dispatcher = (HTTP.Request) throws -> HTTP.Response
-
   public weak var server: HTTPServer?
   public let id: String = UUID().uuidString
   public let transport: NWConnection
-  public let dispatcher: Dispatcher
+  public let dispatcher: HTTPServer.Dispatcher
   public let log: OSLog
 
   private(set) var requestState: RequestState = .parsingHeader
@@ -46,7 +44,7 @@ public final class HTTPConnection {
   public init(
     server: HTTPServer,
     transport: NWConnection,
-    dispatcher: @escaping Dispatcher,
+    dispatcher: @escaping HTTPServer.Dispatcher,
     log: OSLog
   ) {
     self.server = server
@@ -59,7 +57,7 @@ public final class HTTPConnection {
   }
 
   private func handleReceive(content: Data?, context: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) {
-    guard error == nil, isComplete == false else {
+    guard let server = server, error == nil, isComplete == false else {
       if let error = error {
         log.error("network connection error: \(error)")
       }
@@ -97,12 +95,17 @@ public final class HTTPConnection {
 
       do {
 
-        let response = try dispatcher(request)
+        let response = try dispatcher(server, request)
 
         self.send(response: response)
       }
       catch {
-        self.send(error: error)
+        if case HTTPServer.Async.dispatch(let block) = error {
+          transport.queue?.async(execute: block)
+        }
+        else {
+          self.send(error: error)
+        }
       }
     }
     catch {
@@ -152,7 +155,7 @@ public final class HTTPConnection {
           })
       }
 
-    case .value:
+    case .encoded:
       status = .notAcceptable
       headers[HTTP.StdHeaders.contentType] = [MediaType.plain.value]
 
@@ -171,7 +174,7 @@ public final class HTTPConnection {
     // we don't support keep-alive connection for now, just force it to be closed
     headers[HTTP.StdHeaders.connection] = ["close"]
 
-    if headers[HTTP.StdHeaders.server]?.count == 0 {
+    if headers[HTTP.StdHeaders.server]?.count ?? 0 == 0 {
       headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle.target.infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
     }
 

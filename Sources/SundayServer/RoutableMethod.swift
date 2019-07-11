@@ -37,12 +37,36 @@ public func METHOD(_ method: HTTP.Method,
 }
 
 
+func convert<T>(_ param: Param<T>, _ variables: [String: Any], _ url: URLComponents, _ body: Data?) throws -> T {
+  let converted: T?
+  do {
+     converted = try param.converter(variables, url, body)
+  }
+  catch {
+    throw RoutingError.parameterConversionFailed(name: param.name, error: error)
+  }
+  guard let value = converted else {
+    throw RoutingError.missingRequiredParameter(name: param.name)
+  }
+  return value
+}
+
+func convert<T>(_ param: Param<T>, _ variables: [String: Any], _ url: URLComponents, _ body: Data?) throws -> T? {
+  do {
+    return try param.converter(variables, url, body)
+  }
+  catch {
+    throw RoutingError.parameterConversionFailed(name: param.name, error: error)
+  }
+}
+
+
 public func METHOD<A1>(_ method: HTTP.Method,
                        _ a1: Param<A1>,
                        _ handler: @escaping (A1) throws -> HTTP.Response) -> Routable {
-  return Method(method: method) { pathParams, queryParams, request in
-    guard let _a1 = a1.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a1.name) }
-    return try handler(_a1)
+  return Method(method: method) { variables, url, request in
+    let a1: A1 = try convert(a1, variables, url, request.body)
+    return try handler(a1)
   }
 }
 
@@ -50,10 +74,9 @@ public func METHOD<A1>(_ method: HTTP.Method,
 public func METHOD<A1, A2>(_ method: HTTP.Method,
                            _ a1: Param<A1>, _ a2: Param<A2>,
                            _ handler: @escaping (A1, A2) throws -> HTTP.Response) -> Routable {
-  return Method(method: method) { pathParams, queryParams, request in
-    guard let _a1 = a1.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a1.name) }
-    guard let _a2 = a2.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a2.name)  }
-    return try handler(_a1, _a2)
+  return Method(method: method) { variables, url, request in
+    return try handler(try convert(a1, variables, url, request.body),
+                       try convert(a2, variables, url, request.body))
   }
 }
 
@@ -61,11 +84,10 @@ public func METHOD<A1, A2>(_ method: HTTP.Method,
 public func METHOD<A1, A2, A3>(_ method: HTTP.Method,
                                _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>,
                                _ handler: @escaping (A1, A2, A3) throws -> HTTP.Response) -> Routable {
-  return Method(method: method) { pathParams, queryParams, request in
-    guard let _a1 = a1.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a1.name) }
-    guard let _a2 = a2.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a2.name)  }
-    guard let _a3 = a3.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a3.name)  }
-    return try handler(_a1, _a2, _a3)
+  return Method(method: method) { variables, url, request in
+    return try handler(try convert(a1, variables, url, request.body),
+                       try convert(a2, variables, url, request.body),
+                       try convert(a3, variables, url, request.body))
   }
 }
 
@@ -73,12 +95,11 @@ public func METHOD<A1, A2, A3>(_ method: HTTP.Method,
 public func METHOD<A1, A2, A3, A4>(_ method: HTTP.Method,
                                    _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>,
                                    _ handler: @escaping (A1, A2, A3, A4) throws -> HTTP.Response) -> Routable {
-  return Method(method: method) { pathParams, queryParams, request in
-    guard let _a1 = a1.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a1.name) }
-    guard let _a2 = a2.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a2.name)  }
-    guard let _a3 = a3.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a3.name)  }
-    guard let _a4 = a4.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a4.name)  }
-    return try handler(_a1, _a2, _a3, _a4)
+  return Method(method: method) { variables, url, request in
+    return try handler(try convert(a1, variables, url, request.body),
+                       try convert(a2, variables, url, request.body),
+                       try convert(a3, variables, url, request.body),
+                       try convert(a4, variables, url, request.body))
   }
 }
 
@@ -86,13 +107,12 @@ public func METHOD<A1, A2, A3, A4>(_ method: HTTP.Method,
 public func METHOD<A1, A2, A3, A4, A5>(_ method: HTTP.Method,
                                        _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>, _ a5: Param<A5>,
                                        _ handler: @escaping (A1, A2, A3, A4, A5) throws -> HTTP.Response) -> Routable {
-  return Method(method: method) { pathParams, queryParams, request in
-    guard let _a1 = a1.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a1.name) }
-    guard let _a2 = a2.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a2.name)  }
-    guard let _a3 = a3.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a3.name)  }
-    guard let _a4 = a4.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a4.name)  }
-    guard let _a5 = a5.converter(pathParams, queryParams, request.body) else { throw RoutingError.parameterConversion(name: a5.name)  }
-    return try handler(_a1, _a2, _a3, _a4, _a5)
+  return Method(method: method) { variables, url, request in
+    return try handler(try convert(a1, variables, url, request.body),
+                       try convert(a2, variables, url, request.body),
+                       try convert(a3, variables, url, request.body),
+                       try convert(a4, variables, url, request.body),
+                       try convert(a5, variables, url, request.body))
   }
 }
 

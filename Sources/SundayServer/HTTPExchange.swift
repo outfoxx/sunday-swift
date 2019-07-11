@@ -10,9 +10,9 @@ import Sunday
 import RxSwift
 
 
-extension HTTP {
+public extension HTTP {
 
-  public struct Request {
+  struct Request {
 
     public let method: HTTP.Method
     public let url: URL
@@ -20,14 +20,30 @@ extension HTTP {
     public let headers: HTTP.Headers
     public let rawHeaders: HTTP.RawHeaders
     public let body: Data?
+
+    public init(method: HTTP.Method, url: URL, version: HTTP.Version,
+                headers: HTTP.Headers, rawHeaders: HTTP.RawHeaders,
+                body: Data?) {
+      self.method = method
+      self.url = url
+      self.version = version
+      self.headers = headers
+      self.rawHeaders = rawHeaders
+      self.body = body
+    }
     
   }
 
-  public struct Response {
+  struct Response {
 
     public struct Status : CustomStringConvertible {
       public let code: StatusCode
       public let info: String
+
+      public init(code: StatusCode, info: String) {
+        self.code = code
+        self.info = info
+      }
 
       public var description: String {
         return "\(code.rawValue) \(info)"
@@ -93,20 +109,30 @@ extension HTTP {
     public enum Entity {
       case data(Data)
       case stream(Observable<Data>)
-      case value((MediaTypeEncoder) throws -> Data)
+      case encoded((MediaTypeEncoder) throws -> Data)
       case none
+
+      public static func value<T : Encodable>(_ value: T) -> Entity {
+        return Self.encoded({ encoder in try encoder.encode(value) })
+      }
     }
 
     public let status: Status
     public let headers: HTTP.Headers
     public let entity: Entity
 
+    public init(status: Status, headers: HTTP.Headers, entity: Entity) {
+      self.status = status
+      self.headers = headers
+      self.entity = entity
+    }
+
     public static func ok(data: Data? = nil, headers: HTTP.Headers = [:]) -> Response {
       return Response(status: .ok, headers: headers, entity: data.flatMap { .data($0) } ?? .none)
     }
 
     public static func ok<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
-      return Response(status: .ok, headers: headers, entity: .value { encoder in try encoder.encode(value) })
+      return Response(status: .ok, headers: headers, entity: .value(value))
     }
 
     public static func created(data: Data? = nil, headers: HTTP.Headers = [:]) -> Response {
@@ -114,7 +140,7 @@ extension HTTP {
     }
 
     public static func created<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
-      return Response(status: .created, headers: headers, entity: .value { encoder in try encoder.encode(value) })
+      return Response(status: .created, headers: headers, entity: .value(value))
     }
 
     public static func noContent(headers: HTTP.Headers = [:]) -> Response {
