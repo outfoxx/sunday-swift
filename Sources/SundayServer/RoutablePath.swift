@@ -1,25 +1,28 @@
 //
 //  RoutablePath.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/28/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import Sunday
 import Regex
+import Sunday
 
 
-public struct Path : Routable {
+public struct Path: Routable {
 
   public let variableNames: [String]
   public let matcher: Regex
   public let routable: Routable
 
   public init(_ template: String, @RoutableBuilder _ buildRoutable: () -> Routable) {
-    self.variableNames = Self.pathVariableNames(for: template)
-    self.matcher = Self.pathMatcher(for: template)
-    self.routable = buildRoutable()
+    variableNames = Self.pathVariableNames(for: template)
+    matcher = Self.pathMatcher(for: template)
+    routable = buildRoutable()
   }
 
   public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
@@ -53,7 +56,7 @@ public struct Path : Routable {
 }
 
 
-public struct CatchAll : Routable {
+public struct CatchAll: Routable {
 
   private let handler: RouteHandler
 
@@ -68,12 +71,12 @@ public struct CatchAll : Routable {
 }
 
 
-public struct Trace : Routable {
+public struct Trace: Routable {
 
   private let routable: Routable
 
   public init(@RoutableBuilder routableBuilder: () -> Routable) {
-    self.routable = routableBuilder()
+    routable = routableBuilder()
   }
 
   public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {

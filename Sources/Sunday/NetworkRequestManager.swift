@@ -2,16 +2,18 @@
 //  NetworkRequestManager.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 7/12/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 import RxSwift
 
 
-public struct NetworkRequestManager : RequestManager {
+public struct NetworkRequestManager: RequestManager {
 
 
   public let target: EndpointTarget
@@ -31,19 +33,19 @@ public struct NetworkRequestManager : RequestManager {
                               requestTimeout: TimeInterval? = nil,
                               resourceTimeout: TimeInterval? = nil,
                               configurator: (URLSessionConfiguration) -> Void = { _ in }) -> SessionManager {
-  
+
     config.networkServiceType = .default
     config.allowsCellularAccess = true
     config.httpShouldUsePipelining = true
     config.timeoutIntervalForRequest = requestTimeout ?? sessionTimeoutIntervalForRequestDefault
     config.timeoutIntervalForResource = resourceTimeout ?? sessionTimeoutIntervalForResourceDefault
-  
+
     if #available(iOS 11, macOS 10.13, tvOS 11, *) {
       config.waitsForConnectivity = true
     }
-  
+
     configurator(config)
-  
+
     let sessionManager = SessionManager(configuration: config,
                                         delegate: delegate,
                                         serverTrustPolicyManager: trustPolicies.map { ServerTrustPolicyManager(policies: $0) })
@@ -90,9 +92,8 @@ public struct NetworkRequestManager : RequestManager {
   public func fetch<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                                 contentType: MediaType?, acceptTypes: [MediaType]?, headers: HTTP.Headers?) throws -> Single<D> {
 
-    return try self
-      .request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters, queryParameters: queryParameters, body: body,
-               contentType: contentType, acceptTypes: acceptTypes, headers: headers)
+    return try request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters, queryParameters: queryParameters, body: body,
+                       contentType: contentType, acceptTypes: acceptTypes, headers: headers)
       .observe(mediaTypeDecoders: target.mediaTypeDecoders,
                queue: target.defaultRequestQueue)
   }
@@ -100,9 +101,8 @@ public struct NetworkRequestManager : RequestManager {
   public func fetch<B: Encodable>(method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                   contentType: MediaType?, acceptTypes: [MediaType]?, headers: HTTP.Headers?) throws -> Completable {
 
-    return try self
-      .request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters, queryParameters: queryParameters, body: body,
-               contentType: contentType, acceptTypes: acceptTypes, headers: headers)
+    return try request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters, queryParameters: queryParameters, body: body,
+                       contentType: contentType, acceptTypes: acceptTypes, headers: headers)
       .complete(mediaTypeDecoders: target.mediaTypeDecoders,
                 queue: target.defaultRequestQueue)
   }
@@ -126,17 +126,17 @@ public struct NetworkRequestManager : RequestManager {
 
 private let acceptableStatusCodes: Set<Int> = [200, 201, 204, 205, 206, 400, 409, 410, 412, 413]
 
-fileprivate let sessionTimeoutIntervalForResourceDefault = TimeInterval(60)
-fileprivate let sessionTimeoutIntervalForRequestDefault = TimeInterval(15)
+private let sessionTimeoutIntervalForResourceDefault = TimeInterval(60)
+private let sessionTimeoutIntervalForRequestDefault = TimeInterval(15)
 
 
 
 extension NetworkRequestManager {
-  
+
   public func fetch<B: Encodable>(method: HTTP.Method, path: String, body: B? = nil) throws -> Completable {
     return try fetch(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body, contentType: nil, acceptTypes: nil, headers: nil)
   }
-  
+
   public func fetch<B: Encodable, D: Decodable>(method: HTTP.Method, path: String, body: B? = nil) throws -> Single<D> {
     return try fetch(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body, contentType: nil, acceptTypes: nil, headers: nil)
   }

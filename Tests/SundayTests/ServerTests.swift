@@ -1,18 +1,21 @@
 //
-//  HTTPServerTests.swift
-//  
+//  ServerTests.swift
+//  Sunday
 //
-//  Created by Kevin Wooten on 7/5/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import XCTest
 import Alamofire
 import PotentJSON
 @testable import Sunday
 @testable import SundayServer
+import XCTest
 
 
-struct Item : Codable, Equatable {
+struct Item: Codable, Equatable {
   let name: String
   let cost: Float
 }
@@ -25,21 +28,21 @@ class HTTPServerTests: XCTestCase {
     Path("/{type}") {
       ContentNegotiation {
 
-        GET(.path("type")) { req, res, type in
+        GET(.path("type")) { _, res, _ in
           res.send(status: .ok, value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
         }
 
-        POST(.path("type"), .body(Item.self)) { req, res, type, body in
+        POST(.path("type"), .body(Item.self)) { _, res, _, body in
           res.send(status: .created, value: body)
         }
 
         Path("/{id}") {
 
-          GET(.path("id", Int.self)) { req, res, id in
+          GET(.path("id", Int.self)) { _, res, _ in
             res.send(status: .ok, value: Item(name: "abc", cost: 12.80))
           }
 
-          DELETE(.path("id", Int.self)) { req, res, id in
+          DELETE(.path("id", Int.self)) { _, res, _ in
             res.send(status: .noContent)
           }
         }
@@ -60,7 +63,7 @@ class HTTPServerTests: XCTestCase {
     SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .post,
                                    parameters: ["name": "ghi", "cost": 19.20],
                                    encoding: JSONEncoding.default, headers: ["Accept": "application/json"])
-      .response { (response) in
+      .response { response in
         defer { postX.fulfill() }
 
         guard response.error == nil else {
@@ -96,7 +99,7 @@ class HTTPServerTests: XCTestCase {
     let listX = expectation(description: "GET (list)")
     SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .get,
                                    headers: ["Accept": "application/json"])
-      .response { (response) in
+      .response { response in
         defer { listX.fulfill() }
 
         guard response.error == nil else {
@@ -123,7 +126,7 @@ class HTTPServerTests: XCTestCase {
         catch {
           XCTFail("Decode/Compare failed: \(error)")
         }
-    }
+      }
 
     waitForExpectations(timeout: 2)
   }
@@ -133,7 +136,7 @@ class HTTPServerTests: XCTestCase {
     let itemX = expectation(description: "GET (item)")
     SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .get,
                                    headers: ["Accept": "application/json"])
-      .response { (response) in
+      .response { response in
         defer { itemX.fulfill() }
 
         guard response.error == nil else {
@@ -159,7 +162,7 @@ class HTTPServerTests: XCTestCase {
         catch {
           XCTFail("Decode/Compare failed: \(error)")
         }
-    }
+      }
 
     waitForExpectations(timeout: 2)
   }
@@ -168,7 +171,7 @@ class HTTPServerTests: XCTestCase {
 
     let deleteX = expectation(description: "DELETE")
     SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .delete)
-      .response { (response) in
+      .response { response in
         defer { deleteX.fulfill() }
 
         guard response.error == nil else {
@@ -188,7 +191,7 @@ class HTTPServerTests: XCTestCase {
         }
 
         XCTAssertEqual(data.count, 0)
-    }
+      }
 
     waitForExpectations(timeout: 2)
   }
@@ -198,7 +201,7 @@ class HTTPServerTests: XCTestCase {
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
         Path("/chunked") {
-          PUT(.body()) { req, res, tyoe in
+          PUT(.body()) { _, _, _ in
 
           }
         }

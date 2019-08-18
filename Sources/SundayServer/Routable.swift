@@ -2,16 +2,18 @@
 //  Routable.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/16/19.
-//  Copyright © 2019 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import Sunday
 import Regex
+import Sunday
 
 
-public enum RoutingError : Swift.Error {
+public enum RoutingError: Swift.Error {
   case invalidURL
   case parameterConversionFailed(name: String, error: Error)
   case missingRequiredParameter(name: String)
@@ -47,7 +49,7 @@ public struct RoutableBuilder {
 }
 
 
-public struct Routables : Routable {
+public struct Routables: Routable {
 
   public let all: [Routable]
 

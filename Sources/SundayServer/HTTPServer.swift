@@ -2,14 +2,16 @@
 //  HTTPServer.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/16/19.
-//  Copyright © 2019 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
 import Network
-import Sunday
 import RxSwift
+import Sunday
 
 
 public protocol HTTPServer: AnyObject {
@@ -24,25 +26,25 @@ public protocol HTTPServer: AnyObject {
 
 
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
-open class NetworkHTTPServer : NSObject, HTTPServer {
+open class NetworkHTTPServer: NSObject, HTTPServer {
 
   public let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])
   private let listener: NWListener
   private let mgrQueue = DispatchQueue(label: "HTTP Server Queue", attributes: [])
   private let dispatcher: Dispatcher
-  private var connections = [String : NetworkHTTPConnection]()
+  private var connections = [String: NetworkHTTPConnection]()
 
   public var port: UInt16 {
     return listener.port?.rawValue ?? 0
   }
 
-  public private(set) var state: NWListener.State? = nil
+  public private(set) var state: NWListener.State?
   @objc public private(set) dynamic var isReady: Bool = false
 
   public init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil, dispatcher: @escaping Dispatcher) throws {
     self.dispatcher = dispatcher
 
-    self.listener = try NWListener(using: .tcp, on: port)
+    listener = try NWListener(using: .tcp, on: port)
 
     super.init()
 
@@ -71,7 +73,7 @@ open class NetworkHTTPServer : NSObject, HTTPServer {
   public func start(timeout: TimeInterval = 5) -> Bool {
     let sema = DispatchSemaphore(value: 0)
 
-    let obs = observe(\.isReady, options: [.initial, .new]) { object, change in
+    let obs = observe(\.isReady, options: [.initial, .new]) { _, change in
       if change.newValue! {
         sema.signal()
       }
@@ -96,13 +98,13 @@ open class NetworkHTTPServer : NSObject, HTTPServer {
                                                server: self,
                                                id: UUID().uuidString,
                                                log: logging.for(category: "HTTP Connection"),
-                                               dispatcher: self.dispatcher)
+                                               dispatcher: dispatcher)
 
     mgrQueue.sync {
       connections[httpConnection.id] = httpConnection
     }
 
-    connection.stateUpdateHandler = { state in
+    connection.stateUpdateHandler = { _ in
       self.mgrQueue.sync {
         self.connections.removeValue(forKey: httpConnection.id)
       }

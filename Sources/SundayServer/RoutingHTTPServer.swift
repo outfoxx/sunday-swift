@@ -1,8 +1,11 @@
 //
-//  File.swift
-//  
+//  RoutingHTTPServer.swift
+//  Sunday
 //
-//  Created by Kevin Wooten on 7/8/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -27,7 +30,7 @@ open class RoutingHTTPServer: NetworkHTTPServer {
           return response.send(status: .notFound, text: "No method handler found")
         }
 
-         try routed.handler(routed.route, request, response)
+        try routed.handler(routed.route, request, response)
 
       }
       catch {

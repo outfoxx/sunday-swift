@@ -1,9 +1,11 @@
 //
-//  MediaType,swift
+//  MediaType.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/18/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -17,15 +19,15 @@ import Regex
  **/
 public struct MediaType {
 
-  public enum Error : Swift.Error {
+  public enum Error: Swift.Error {
     case invalid
   }
 
-  public enum StandardParameterName : String {
+  public enum StandardParameterName: String {
     case charSet = "charset"
   }
 
-  public enum `Type` : String, CaseIterable, Equatable, Hashable, Codable {
+  public enum `Type`: String, CaseIterable, Equatable, Hashable, Codable {
     case application
     case audio
     case example
@@ -39,7 +41,7 @@ public struct MediaType {
     case any = "*"
   }
 
-  public enum Tree : String, CaseIterable, Equatable, Hashable, Codable {
+  public enum Tree: String, CaseIterable, Equatable, Hashable, Codable {
     case standard = ""
     case vendor = "vnd."
     case personal = "prs."
@@ -48,7 +50,7 @@ public struct MediaType {
     case any = "*"
   }
 
-  public enum Suffix : String, CaseIterable, Equatable, Hashable, Codable {
+  public enum Suffix: String, CaseIterable, Equatable, Hashable, Codable {
     case xml
     case json
     case ber
@@ -65,7 +67,7 @@ public struct MediaType {
   public let suffix: Suffix?
   public let parameters: [String: String]
 
-  public init(type: `Type`, tree: Tree = .standard, subtype: String = "*", suffix: Suffix? = nil, parameters: [String: String] = [:]) {
+  public init(type: Type, tree: Tree = .standard, subtype: String = "*", suffix: Suffix? = nil, parameters: [String: String] = [:]) {
     self.type = type
     self.tree = tree
     self.subtype = subtype.lowercased()
@@ -92,7 +94,7 @@ public struct MediaType {
       self.tree = tree
     }
     else {
-      self.tree = .standard
+      tree = .standard
     }
 
     guard let subtype = match.captures[2]?.lowercased() else {
@@ -104,20 +106,19 @@ public struct MediaType {
       self.suffix = suffix
     }
     else {
-      self.suffix = nil
+      suffix = nil
     }
 
     if let encodedParameters = match.captures[4] {
-      self.parameters = Dictionary(uniqueKeysWithValues:
+      parameters = Dictionary(uniqueKeysWithValues:
         Self.paramRegex.allMatches(in: encodedParameters)
           .compactMap { parameterMatch -> (String, String)? in
             guard let key = parameterMatch.captures[0], let value = parameterMatch.captures[1] else { return nil }
             return (key.lowercased(), value.lowercased())
-          }
-      )
+      })
     }
     else {
-      self.parameters = [:]
+      parameters = [:]
     }
   }
 
@@ -125,7 +126,7 @@ public struct MediaType {
     return parameters[name.rawValue]
   }
 
-  public func with(type: `Type`? = nil, tree: Tree? = nil, subtype: String? = nil, parameters: [String: String]? = nil) -> MediaType {
+  public func with(type: Type? = nil, tree: Tree? = nil, subtype: String? = nil, parameters: [String: String]? = nil) -> MediaType {
     let type = type ?? self.type
     let tree = tree ?? self.tree
     let subtype = subtype?.lowercased() ?? self.subtype
@@ -164,9 +165,9 @@ public struct MediaType {
 }
 
 
-extension MediaType : Equatable, Hashable {}
+extension MediaType: Equatable, Hashable {}
 
-extension MediaType : Codable {
+extension MediaType: Codable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
@@ -188,32 +189,32 @@ extension MediaType : Codable {
 extension MediaType {
 
   public static func compatible(lhs: MediaType, rhs: MediaType) -> Bool {
-    if lhs.type != .any && rhs.type != .any && lhs.type != rhs.type { return false }
-    if lhs.tree != .any && rhs.tree != .any && lhs.tree != rhs.tree { return false }
-    if lhs.subtype != "*" && rhs.subtype != "*" && lhs.subtype != rhs.subtype { return false }
+    if lhs.type != .any, rhs.type != .any, lhs.type != rhs.type { return false }
+    if lhs.tree != .any, rhs.tree != .any, lhs.tree != rhs.tree { return false }
+    if lhs.subtype != "*", rhs.subtype != "*", lhs.subtype != rhs.subtype { return false }
     if lhs.suffix != rhs.suffix { return false }
     return Set(lhs.parameters.keys).intersection(rhs.parameters.keys).allSatisfy { lhs.parameters[$0] == rhs.parameters[$0] }
   }
 
 }
 
-public func ~=(pattern: MediaType, value: MediaType) -> Bool {
+public func ~= (pattern: MediaType, value: MediaType) -> Bool {
   return MediaType.compatible(lhs: pattern, rhs: value)
 }
 
-public func ~=(pattern: String, value: MediaType) -> Bool {
+public func ~= (pattern: String, value: MediaType) -> Bool {
   guard let pattern = MediaType(pattern) else { return false }
   return MediaType.compatible(lhs: pattern, rhs: value)
 }
 
-public func ~=(pattern: MediaType, value: String) -> Bool {
+public func ~= (pattern: MediaType, value: String) -> Bool {
   guard let value = MediaType(value) else { return false }
   return MediaType.compatible(lhs: pattern, rhs: value)
 }
 
 
 
-extension MediaType : CustomStringConvertible {
+extension MediaType: CustomStringConvertible {
 
   public var description: String {
     return value

@@ -1,13 +1,15 @@
 //
-//  Authorizer.swift
+//  Authorizers.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/20/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 
 
 class HeaderTokenAuthorizer: RequestAdapter {

@@ -2,12 +2,14 @@
 //  RxSwiftExtensions.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 7/17/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import RxSwift
 import PromiseKit
+import RxSwift
 
 
 extension PrimitiveSequence where Trait == SingleTrait {

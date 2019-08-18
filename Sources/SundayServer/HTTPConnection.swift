@@ -1,14 +1,17 @@
 //
 //  HTTPConnection.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/16/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
 import Network
-import Sunday
 import OSLogTrace
+import Sunday
 
 
 private let minHTTPReqeustLength = 16
@@ -23,7 +26,7 @@ public class HTTPConnection {
 
     let server: HTTPServer
     let raw: HTTP.Request
-    var parameters: [String : String]
+    var parameters: [String: String]
 
     init(server: HTTPServer, raw: HTTP.Request, parameters: [String: String]) {
       self.server = server
@@ -39,7 +42,7 @@ public class HTTPConnection {
     let connection: HTTPConnection
     var state: HTTPResponseState = .initial
     var headers: HTTP.Headers = [:]
-    var properties: [String : Any] = [:]
+    var properties: [String: Any] = [:]
 
     init(server: HTTPServer, connection: HTTPConnection) {
       self.server = server
@@ -58,8 +61,8 @@ public class HTTPConnection {
     func setHeaders(_ values: [String], forName name: String) {
       headers[name] = values
     }
-    
-    func start(status: HTTP.Response.Status, headers: [String : [String]]) {
+
+    func start(status: HTTP.Response.Status, headers: [String: [String]]) {
       precondition(state == .initial)
 
       var headers = headers.merging(self.headers) { first, _ in first }
@@ -82,8 +85,8 @@ public class HTTPConnection {
 
       let responseHeaderParts = [
         "HTTP/1.1 \(status)",
-        headers.map { (key, values) in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }.joined(separator: "\r\n"),
-        "\r\n"
+        headers.map { key, values in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }.joined(separator: "\r\n"),
+        "\r\n",
       ]
 
       let responseHeader = responseHeaderParts.joined(separator: "\r\n")
@@ -113,7 +116,7 @@ public class HTTPConnection {
     func finish(headers: HTTP.Headers) {
       precondition(state == .sendingChunks)
 
-      connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] error in
+      connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] _ in
         guard let self = self else { return }
         self.connection.close()
       }
@@ -147,9 +150,9 @@ public class HTTPConnection {
       guard
         let content = content,
         let parsedRequest = try requestParser.process(content)
-        else {
-          receive(minimum: 1, maximum: maxHTTPChunkLength, completion: handleReceive(content:isComplete:error:))
-          return
+      else {
+        receive(minimum: 1, maximum: maxHTTPChunkLength, completion: handleReceive(content:isComplete:error:))
+        return
       }
 
       // generate convenience headers as strings
@@ -184,7 +187,7 @@ public class HTTPConnection {
     fatalError("Not Implemented")
   }
 
-  open func receive(minimum: Int, maximum: Int, completion: @escaping (Data?,Bool,Error?) -> Void) {
+  open func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {
     fatalError("Not Implemented")
   }
 
@@ -223,7 +226,7 @@ public final class NetworkHTTPConnection: HTTPConnection {
   }
 
   public override func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {
-    transport.receive(minimumIncompleteLength: minimum, maximumLength: maximum) { data, context, isComplete, error in
+    transport.receive(minimumIncompleteLength: minimum, maximumLength: maximum) { data, _, isComplete, error in
       completion(data, isComplete, error)
     }
   }

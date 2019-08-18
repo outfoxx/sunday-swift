@@ -1,13 +1,15 @@
 //
-//  DataRequest.swift
+//  DataRequestExts.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 7/12/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 import RxSwift
 
 
@@ -18,9 +20,9 @@ extension DataRequest {
     return Single.create { completer in
       let inFlight = self.responseByContentType(mediaTypeDecoders: mediaTypeDecoders, queue: queue) { (response: DataResponse<D>) in
         switch response.result {
-        case let .success(value):
+        case .success(let value):
           completer(.success(value))
-        case let .failure(value):
+        case .failure(let value):
           completer(.error(value))
         }
       }
@@ -36,9 +38,9 @@ extension DataRequest {
     return Completable.create { completer in
       let inFlight = self.responseByContentType(mediaTypeDecoders: mediaTypeDecoders, queue: queue) { (response: DataResponse<Empty>) in
         switch response.result {
-        case .success(_):
+        case .success:
           completer(.completed)
-        case let .failure(value):
+        case .failure(let value):
           completer(.error(value))
         }
       }
@@ -50,7 +52,7 @@ extension DataRequest {
   }
 
   @discardableResult
-  func responseByContentType<D>(mediaTypeDecoders: MediaTypeDecoders, queue: DispatchQueue? = nil, completionHandler: @escaping (DataResponse<D>) -> Void) -> Self where D : Decodable {
+  func responseByContentType<D>(mediaTypeDecoders: MediaTypeDecoders, queue: DispatchQueue? = nil, completionHandler: @escaping (DataResponse<D>) -> Void) -> Self where D: Decodable {
 
     let responseSerializer = DataResponseSerializer<D> { _, response, data, error -> Result<D> in
 
@@ -100,7 +102,7 @@ extension DataRequest {
       }
     }
 
-    return self.response(queue: queue, responseSerializer: responseSerializer, completionHandler: completionHandler)
+    return response(queue: queue, responseSerializer: responseSerializer, completionHandler: completionHandler)
   }
 
 }

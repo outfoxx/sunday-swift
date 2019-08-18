@@ -2,12 +2,14 @@
 //  HTTP.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/18/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 
 
 public struct HTTP {
@@ -27,7 +29,7 @@ public struct HTTP {
   public enum StatusCode: Int {
     case `continue` = 100
     case switchingProtocols = 101
-    
+
     case ok = 200
     case created = 201
     case accepted = 202
@@ -95,7 +97,7 @@ public struct HTTP {
 
 extension URL {
 
-  public enum Scheme : String {
+  public enum Scheme: String {
     case http
     case https
   }

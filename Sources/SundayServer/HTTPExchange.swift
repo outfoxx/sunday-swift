@@ -1,13 +1,16 @@
 //
 //  HTTPExchange.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/17/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import Sunday
 import RxSwift
+import Sunday
 
 
 public extension HTTP {
@@ -31,12 +34,12 @@ public extension HTTP {
       self.rawHeaders = rawHeaders
       self.body = body
     }
-    
+
   }
 
   struct Response {
 
-    public struct Status : CustomStringConvertible {
+    public struct Status: CustomStringConvertible {
       public let code: StatusCode
       public let info: String
 

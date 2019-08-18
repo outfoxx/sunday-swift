@@ -1,13 +1,16 @@
 //
 //  RoutableParam.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/28/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import Sunday
 import PotentCodables
+import Sunday
 
 
 public protocol StringInitializable {
@@ -22,15 +25,15 @@ public struct Param<T> {
   public let name: String
   public let converter: Converter
 
-  public static func prop( _ name: String) -> Param<Any> {
-    return Param<Any>(name: name) { route, req, res in
+  public static func prop(_ name: String) -> Param<Any> {
+    return Param<Any>(name: name) { _, _, res in
       guard let value = res.properties[name] else { return nil }
       return value
     }
   }
 
-  public static func prop<U>( _ name: String, _ type: U.Type) -> Param<U> {
-    return Param<U>(name: name) { route, req, res in
+  public static func prop<U>(_ name: String, _ type: U.Type) -> Param<U> {
+    return Param<U>(name: name) { _, _, res in
       guard let value = res.properties[name] as? U else { return nil }
       return value
     }
@@ -40,8 +43,8 @@ public struct Param<T> {
     return path(name, String.self)
   }
 
-  public static func path<U>(_ name: String, _ type: U.Type) -> Param<U> where U : StringInitializable {
-    return Param<U>(name: name) { route, req, res in
+  public static func path<U>(_ name: String, _ type: U.Type) -> Param<U> where U: StringInitializable {
+    return Param<U>(name: name) { route, _, _ in
       guard let value = route.parameters[name] else { return nil }
       return U(String(describing: value))
     }
@@ -51,15 +54,15 @@ public struct Param<T> {
     return query(name, String.self)
   }
 
-  public static func query<U>(_ name: String, _ type: U.Type) -> Param<U> where U : StringInitializable {
-    return Param<U>(name: name) { route, req, res in
+  public static func query<U>(_ name: String, _ type: U.Type) -> Param<U> where U: StringInitializable {
+    return Param<U>(name: name) { _, req, _ in
       guard let value = req.url.queryItems?.filter({ $0.name == name }).first?.value else { return nil }
       return U(value)
     }
   }
 
-  public static func query<U>(_ name: String, _ type: Array<U>.Type) -> Param<[U]> where U : StringInitializable {
-    return Param<[U]>(name: name) { route, req, res in
+  public static func query<U>(_ name: String, _ type: [U].Type) -> Param<[U]> where U: StringInitializable {
+    return Param<[U]>(name: name) { _, req, _ in
       guard let values = req.url.queryItems?.filter({ $0.name == name }).compactMap({ $0.value }) else { return nil }
       return values.compactMap { U($0) }
     }
@@ -69,8 +72,8 @@ public struct Param<T> {
     return fragment(name, String.self)
   }
 
-  public static func fragment<U>(_ name: String, _ type: U.Type) -> Param<U> where U : StringInitializable {
-    return Param<U>(name: name) { route, req, res in
+  public static func fragment<U>(_ name: String, _ type: U.Type) -> Param<U> where U: StringInitializable {
+    return Param<U>(name: name) { _, req, _ in
       guard let value = req.url.fragment else { return nil }
       return U(value)
     }
@@ -80,8 +83,8 @@ public struct Param<T> {
     return body(Data.self)
   }
 
-  public static func body<T>(_ type: T.Type) -> Param<T> where T : Decodable {
-    return Param<T>(name: "@body") { route, req, res in
+  public static func body<T>(_ type: T.Type) -> Param<T> where T: Decodable {
+    return Param<T>(name: "@body") { _, req, res in
       guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(type, from: body)
@@ -89,7 +92,7 @@ public struct Param<T> {
   }
 
   public static func body<T>(ref: T.Type) -> Param<T> {
-    return Param<T>(name: "@body") { route, req, res in
+    return Param<T>(name: "@body") { _, req, res in
       guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(Ref.self, from: body).as(T.self)
@@ -97,7 +100,7 @@ public struct Param<T> {
   }
 
   public static func body<T>(embebbedRef: T.Type) -> Param<T> {
-    return Param<T>(name: "@body") { route, req, res in
+    return Param<T>(name: "@body") { _, req, res in
       guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(EmbeddedRef.self, from: body).as(T.self)
@@ -106,15 +109,15 @@ public struct Param<T> {
 
 }
 
-extension Bool : StringInitializable {}
+extension Bool: StringInitializable {}
 
-extension Int : StringInitializable {}
+extension Int: StringInitializable {}
 
-extension Float : StringInitializable {}
+extension Float: StringInitializable {}
 
-extension String : StringInitializable {}
+extension String: StringInitializable {}
 
-extension UUID : StringInitializable {
+extension UUID: StringInitializable {
   @inlinable public init?(_ source: String) {
     self.init(uuidString: source)
   }

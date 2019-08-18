@@ -1,8 +1,11 @@
 //
 //  RoutableRequestDecoding.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 7/5/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -11,7 +14,7 @@ import Sunday
 
 /// Decodes request bodies using a decoder selected via the provided `scheme`.
 ///
-public struct RequestDecoding : Routable {
+public struct RequestDecoding: Routable {
 
   /// Scheme use to decode request bodies
   ///
@@ -45,7 +48,7 @@ public struct RequestDecoding : Routable {
   public init(scheme: Scheme = .negotiated(default: nil), decoders: MediaTypeDecoders = .default, @RoutableBuilder buildRoutable: () -> Routable) {
     self.scheme = scheme
     self.decoders = decoders
-    self.routable = buildRoutable()
+    routable = buildRoutable()
   }
 
   public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {

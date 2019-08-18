@@ -2,21 +2,23 @@
 //  RequestTests.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/28/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import XCTest
 import Alamofire
-import PromiseKit
 import PotentCodables
+import PromiseKit
 @testable import Sunday
 @testable import SundayServer
+import XCTest
 
 
 class RequestTests: ParameterizedTest {
 
-  override class var parameterSets : [Any] {
+  override class var parameterSets: [Any] {
     return [
       (MediaType.json, MediaType.json),
       (MediaType.json, MediaType.cbor),
@@ -40,8 +42,8 @@ class RequestTests: ParameterizedTest {
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
         Path("/echo") {
-          POST(.body(AnyValue.self)) { req, res, body in
-            return res.send(status: .ok, value: body)
+          POST(.body(AnyValue.self)) { _, res, body in
+            res.send(status: .ok, value: body)
           }
         }
       }
@@ -76,7 +78,7 @@ class RequestTests: ParameterizedTest {
 
 }
 
-struct TestObject : Codable, Equatable {
+struct TestObject: Codable, Equatable {
   let a: Int
   let b: Double
   let c: Date

@@ -2,25 +2,27 @@
 //  MediaTypeEncoders.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/27/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
-import PotentCodables
+import Foundation
 import PotentCBOR
+import PotentCodables
 import PotentJSON
 
 
 public protocol MediaTypeEncoder {
-  func encode<T>(_ value: T) throws -> Data where T : Encodable
+  func encode<T>(_ value: T) throws -> Data where T: Encodable
 }
 
 public class MediaTypeEncoders {
 
   public static let `default` = MediaTypeEncoders.Builder().registerDefault().build()
-  
+
   public struct Builder {
 
     private var registered: [MediaType: MediaTypeEncoder]
@@ -72,7 +74,7 @@ public class MediaTypeEncoders {
     }
 
     public func merged(_ values: [MediaType: MediaTypeEncoder]) -> Builder {
-      return Builder(registered: self.registered.merging(values, uniquingKeysWith: { _, last in last }))
+      return Builder(registered: registered.merging(values, uniquingKeysWith: { _, last in last }))
     }
 
     public func build() -> MediaTypeEncoders {
@@ -97,23 +99,23 @@ public class MediaTypeEncoders {
     }
     return encoder
   }
-  
+
 }
 
 
-extension JSON.Encoder : MediaTypeEncoder {}
+extension JSON.Encoder: MediaTypeEncoder {}
 
 
-extension CBOR.Encoder : MediaTypeEncoder {}
+extension CBOR.Encoder: MediaTypeEncoder {}
 
 
-public struct DataEncoder : MediaTypeEncoder {
+public struct DataEncoder: MediaTypeEncoder {
 
-  enum Error : Swift.Error {
+  enum Error: Swift.Error {
     case translationNotSupported
   }
 
-  public func encode<T>(_ value: T) throws -> Data where T : Encodable {
+  public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let data = value as? Data else {
       throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .octetStream, error: Error.translationNotSupported))
     }
@@ -123,9 +125,9 @@ public struct DataEncoder : MediaTypeEncoder {
 }
 
 
-public struct TextEncoder : MediaTypeEncoder {
+public struct TextEncoder: MediaTypeEncoder {
 
-  enum Error : Swift.Error {
+  enum Error: Swift.Error {
     case translationNotSupported
     case encodingFailed
   }
@@ -136,7 +138,7 @@ public struct TextEncoder : MediaTypeEncoder {
     self.encoding = encoding
   }
 
-  public func encode<T>(_ value: T) throws -> Data where T : Encodable {
+  public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let string = value as? String else {
       throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .plain, error: Error.translationNotSupported))
     }

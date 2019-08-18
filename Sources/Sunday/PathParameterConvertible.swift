@@ -2,8 +2,10 @@
 //  PathParameterConvertible.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/18/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -18,7 +20,7 @@ protocol CustomPathConvertible {
  * Standard PathParameterConvertible types
  */
 
-extension UUID : CustomPathConvertible {
+extension UUID: CustomPathConvertible {
 
   var pathDescription: String {
     return uuidString

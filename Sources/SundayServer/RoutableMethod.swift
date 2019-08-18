@@ -1,15 +1,18 @@
 //
 //  RoutableMethod.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/28/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
 import Sunday
 
 
-public struct Method : Routable {
+public struct Method: Routable {
 
   public let method: HTTP.Method
   public let handler: RouteHandler
@@ -20,7 +23,7 @@ public struct Method : Routable {
   }
 
   public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
-    guard route.unmatched.isEmpty && method == request.method else { return nil }
+    guard route.unmatched.isEmpty, method == request.method else { return nil }
     return (route, handler)
   }
 
@@ -30,7 +33,7 @@ public struct Method : Routable {
 func convert<T>(_ param: Param<T>, _ route: Route, _ request: HTTPRequest, _ response: HTTPResponse) throws -> T {
   let converted: T?
   do {
-     converted = try param.converter(route, request, response)
+    converted = try param.converter(route, request, response)
   }
   catch {
     throw RoutingError.parameterConversionFailed(name: param.name, error: error)
@@ -64,8 +67,8 @@ public func METHOD<A1>(_ method: HTTP.Method,
                        _ a1: Param<A1>,
                        _ handler: @escaping (HTTPRequest, HTTPResponse, A1) throws -> Void) -> Routable {
   return Method(method: method) { route, request, response in
-    return try handler(request, response,
-                       try convert(a1, route, request, response))
+    try handler(request, response,
+                try convert(a1, route, request, response))
   }
 }
 
@@ -74,9 +77,9 @@ public func METHOD<A1, A2>(_ method: HTTP.Method,
                            _ a1: Param<A1>, _ a2: Param<A2>,
                            _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2) throws -> Void) -> Routable {
   return Method(method: method) { route, request, response in
-    return try handler(request, response,
-                       try convert(a1, route, request, response),
-                       try convert(a2, route, request, response))
+    try handler(request, response,
+                try convert(a1, route, request, response),
+                try convert(a2, route, request, response))
   }
 }
 
@@ -85,10 +88,10 @@ public func METHOD<A1, A2, A3>(_ method: HTTP.Method,
                                _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>,
                                _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3) throws -> Void) -> Routable {
   return Method(method: method) { route, request, response in
-    return try handler(request, response,
-                       try convert(a1, route, request, response),
-                       try convert(a2, route, request, response),
-                       try convert(a3, route, request, response))
+    try handler(request, response,
+                try convert(a1, route, request, response),
+                try convert(a2, route, request, response),
+                try convert(a3, route, request, response))
   }
 }
 
@@ -97,11 +100,11 @@ public func METHOD<A1, A2, A3, A4>(_ method: HTTP.Method,
                                    _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>,
                                    _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4) throws -> Void) -> Routable {
   return Method(method: method) { route, request, response in
-    return try handler(request, response,
-                       try convert(a1, route, request, response),
-                       try convert(a2, route, request, response),
-                       try convert(a3, route, request, response),
-                       try convert(a4, route, request, response))
+    try handler(request, response,
+                try convert(a1, route, request, response),
+                try convert(a2, route, request, response),
+                try convert(a3, route, request, response),
+                try convert(a4, route, request, response))
   }
 }
 
@@ -110,12 +113,12 @@ public func METHOD<A1, A2, A3, A4, A5>(_ method: HTTP.Method,
                                        _ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>, _ a5: Param<A5>,
                                        _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4, A5) throws -> Void) -> Routable {
   return Method(method: method) { route, request, response in
-    return try handler(request, response,
-                       try convert(a1, route, request, response),
-                       try convert(a2, route, request, response),
-                       try convert(a3, route, request, response),
-                       try convert(a4, route, request, response),
-                       try convert(a5, route, request, response))
+    try handler(request, response,
+                try convert(a1, route, request, response),
+                try convert(a2, route, request, response),
+                try convert(a3, route, request, response),
+                try convert(a4, route, request, response),
+                try convert(a5, route, request, response))
   }
 }
 

@@ -2,8 +2,10 @@
 //  ParameterizedTest.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 7/10/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import XCTest
@@ -11,7 +13,7 @@ import XCTest
 
 class ParameterizedTest: XCTestCase {
 
-  override class var defaultTestSuite : XCTestSuite {
+  override class var defaultTestSuite: XCTestSuite {
     let testSuite = XCTestSuite(forTestCaseClass: self)
     parameterSets.forEach { parameterSet in
       testInvocations.forEach { invocation in
@@ -24,11 +26,10 @@ class ParameterizedTest: XCTestCase {
     return testSuite
   }
 
-  open class var parameterSets : [Any] {
+  open class var parameterSets: [Any] {
     return []
   }
 
-  open func setUp(with parameters: Any) {
-  }
+  open func setUp(with parameters: Any) {}
 
 }

@@ -2,18 +2,20 @@
 //  ParameterEncodingEncoder.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/7/19.
-//  Copyright © 2019 Outfox, Inc. All rights reserved.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 import PotentCodables
 
 
-public struct ParameterEncodingEncoder : MediaTypeEncoder {
+public struct ParameterEncodingEncoder: MediaTypeEncoder {
 
-  enum Error : Swift.Error {
+  enum Error: Swift.Error {
     case encodedValueNotDictionary
   }
 
@@ -27,7 +29,7 @@ public struct ParameterEncodingEncoder : MediaTypeEncoder {
     self.encoding = encoding
   }
 
-  public func encode<T>(_ value: T) throws -> Data where T : Encodable {
+  public func encode<T>(_ value: T) throws -> Data where T: Encodable {
 
     guard let parameters = try encoder.encodeTree(value).unwrappedValues as? [String: Any] else {
       throw Error.encodedValueNotDictionary

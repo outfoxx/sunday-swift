@@ -1,8 +1,11 @@
 //
 //  HTTPHeaderParser.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 6/17/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -17,7 +20,7 @@ extension HTTP {
     let version: HTTP.Version
   }
 
-  public enum TransferType : String {
+  public enum TransferType: String {
     case identity
     case chunked
   }
@@ -27,7 +30,7 @@ extension HTTP {
 /// Parser for HTTP requests
 public struct HTTPRequestParser {
 
-  public enum Error : Swift.Error {
+  public enum Error: Swift.Error {
     case invalidRequestLineData
     case invalidHeaderData
     case invalidContentLength
@@ -46,7 +49,7 @@ public struct HTTPRequestParser {
     case body
   }
 
-  private static let newlineData = Data([0xd, 0xa])
+  private static let newlineData = Data([0xD, 0xA])
   private static let headerSeparator = Character(":").asciiValue!
 
   private var state = State.line
@@ -64,12 +67,12 @@ public struct HTTPRequestParser {
 
     func finish() throws -> ParsedRequest? {
       precondition(line != nil, "HTTP must have a request line")
-      defer { state = .line; line = nil; headers = nil; body = nil; entity = nil; }
+      defer { state = .line; line = nil; headers = nil; body = nil; entity = nil }
       return ParsedRequest(line: line!, headers: headers ?? [], body: entity)
     }
 
     func popBytes(count: Int) -> Data {
-      let bytes = buffer[0..<count]
+      let bytes = buffer[0 ..< count]
       buffer = Data(buffer.suffix(from: count))
       return bytes
     }
@@ -79,7 +82,7 @@ public struct HTTPRequestParser {
       guard let foundNewline = buffer.range(of: Self.newlineData) else {
         return nil
       }
-      return (buffer[0..<foundNewline.lowerBound], foundNewline.upperBound)
+      return (buffer[0 ..< foundNewline.lowerBound], foundNewline.upperBound)
     }
 
     func popLineBytes() -> Data? {
@@ -121,7 +124,7 @@ public struct HTTPRequestParser {
         }
 
         self.line = line
-        self.state = .headers
+        state = .headers
 
       case .headers:
         guard let lineBytes = popLineBytes() else {
@@ -139,7 +142,7 @@ public struct HTTPRequestParser {
           // switch to body parsing mode
           self.headers = headers
           self.body = body
-          self.state = .body
+          state = .body
         }
         else {
 
@@ -206,7 +209,7 @@ public struct HTTPRequestParser {
             pushHeader(name: HTTP.StdHeaders.contentLength, value: String(entity?.count ?? 0).data(using: .ascii)!)
 
             // parse trailing headers (if any)
-            self.state = .headers
+            state = .headers
 
           }
           else {
@@ -271,7 +274,7 @@ private func parseRequestURI(from uri: String) -> URL? {
   return URL(string: uri)
 }
 
-private func parseHTTPVersion(from str: String) -> HTTP.Version?  {
+private func parseHTTPVersion(from str: String) -> HTTP.Version? {
   guard str.hasPrefix("HTTP/") else { return nil }
   let ver = str.dropFirst(5).split(separator: ".")
   guard ver.count == 2, let major = Int(ver[0]), let minor = Int(ver[1]) else { return nil }

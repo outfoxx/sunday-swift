@@ -2,8 +2,10 @@
 //  Description.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/16/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -28,7 +30,7 @@ public struct DescriptionBuilder {
   }
 
   public init(_ type: Any.Type) {
-    self.name = String(describing: type)
+    name = String(describing: type)
   }
 
   public func add(_ value: Any?, named name: String) -> DescriptionBuilder {

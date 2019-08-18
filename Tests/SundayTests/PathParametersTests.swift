@@ -2,13 +2,15 @@
 //  PathParametersTests.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 7/28/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import XCTest
 import Alamofire
 @testable import Sunday
+import XCTest
 
 
 class PathParametersTest: XCTestCase {
@@ -18,7 +20,7 @@ class PathParametersTest: XCTestCase {
     let variables: Parameters = [
       "reallyLongVariable": 1,
       "deviceId": 123,
-      "messageId": 456
+      "messageId": 456,
     ]
 
     let encodedPath = try! PathParameters.encode(path, with: variables)

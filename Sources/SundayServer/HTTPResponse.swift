@@ -1,8 +1,11 @@
 //
-//  File.swift
-//  
+//  HTTPResponse.swift
+//  Sunday
 //
-//  Created by Kevin Wooten on 7/10/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -104,8 +107,8 @@ public protocol HTTPResponse: AnyObject {
   func send(status: HTTP.Response.Status, body: Data)
   func send(status: HTTP.Response.Status, text: String)
   func send(status: HTTP.Response.Status, headers: [String: [String]], body: Data)
-  func send<V>(status: HTTP.Response.Status, value: V) where V : Encodable
-  func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V : Encodable
+  func send<V>(status: HTTP.Response.Status, value: V) where V: Encodable
+  func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable
 
 }
 
@@ -147,7 +150,7 @@ extension HTTPResponse {
         case .secure(let secure): return (.secure, secure)
         case .discard(let discard): return (.discard, discard)
         }
-      } + [(.name, name), (.value, value)])
+    } + [(.name, name), (.value, value)])
 
     guard let cookie = HTTPCookie(properties: options) else {
       return
@@ -181,11 +184,11 @@ extension HTTPResponse {
     send(body: body)
   }
 
-  func send<V>(status: HTTP.Response.Status, value: V) where V : Encodable {
+  func send<V>(status: HTTP.Response.Status, value: V) where V: Encodable {
     send(status: status, headers: [:], value: value)
   }
 
-  func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V : Encodable {
+  func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {
     send(status: .notAcceptable, text: "Encoding Response Failed - No Encoders")
   }
 

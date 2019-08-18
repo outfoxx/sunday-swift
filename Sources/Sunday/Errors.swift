@@ -2,8 +2,10 @@
 //  Errors.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/27/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -23,7 +25,7 @@ public enum ResponseSerializationFailureReason {
   case missingValue
 }
 
-public enum SundayError : Swift.Error {
+public enum SundayError: Swift.Error {
   case parameterEncodingFailed(reason: ParameterEncodingFailureReason)
   case responseSerializationFailed(reason: ResponseSerializationFailureReason)
   case unexpectedEmptyResponse

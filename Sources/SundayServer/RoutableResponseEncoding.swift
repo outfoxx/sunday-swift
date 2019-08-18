@@ -1,8 +1,11 @@
 //
 //  RoutableResponseEncoding.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 7/5/19.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -11,7 +14,7 @@ import Sunday
 
 /// Encodes response values using an encoder selected via the provided `scheme`.
 ///
-public struct ResponseEncoding : Routable {
+public struct ResponseEncoding: Routable {
 
   /// Scheme use to encode response values
   ///
@@ -46,7 +49,7 @@ public struct ResponseEncoding : Routable {
   public init(scheme: Scheme = .negotiated(default: nil), encoders: MediaTypeEncoders = .default, @RoutableBuilder buildRoutable: () -> Routable) {
     self.scheme = scheme
     self.encoders = encoders
-    self.routable = buildRoutable()
+    routable = buildRoutable()
   }
 
   public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
@@ -57,10 +60,10 @@ public struct ResponseEncoding : Routable {
 
     // Determine the acceptable response types using the scheme
     let acceptableTypes: [MediaType]
-    switch self.scheme {
+    switch scheme {
     case .negotiated(let defaultType):
       let defaultTypes = defaultType != nil ? [defaultType!] : []
-      acceptableTypes = (MediaType.from(accept: request.headers[HTTP.StdHeaders.accept] ?? [])) + defaultTypes
+      acceptableTypes = MediaType.from(accept: request.headers[HTTP.StdHeaders.accept] ?? []) + defaultTypes
 
     case .always(let defaultType):
       acceptableTypes = [defaultType]
@@ -112,7 +115,7 @@ class EncodingHTTPResponse: HTTPResponse {
 
   var state: HTTPResponseState { response.state }
 
-  var properties: [String : Any] {
+  var properties: [String: Any] {
     get { return response.properties }
     set { response.properties = newValue }
   }
@@ -129,7 +132,7 @@ class EncodingHTTPResponse: HTTPResponse {
     return response.setContentType(contentType)
   }
 
-  func start(status: HTTP.Response.Status, headers: [String : [String]]) {
+  func start(status: HTTP.Response.Status, headers: [String: [String]]) {
     response.start(status: status, headers: headers)
   }
 
@@ -145,7 +148,7 @@ class EncodingHTTPResponse: HTTPResponse {
     return response.finish(headers: headers)
   }
 
-  func send<V>(status: HTTP.Response.Status, headers: [String : [String]], value: V) where V : Encodable {
+  func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {
     guard let contentType = MediaType(response.header(forName: HTTP.StdHeaders.contentType) ?? "") else {
       return send(status: .notAcceptable, text: "Response Content-Type Not Present")
     }
@@ -161,7 +164,7 @@ class EncodingHTTPResponse: HTTPResponse {
 
       start(status: status, headers: headers)
       send(body: data)
-      
+
     }
     catch {
       return send(status: .internalServerError, text: "Response Encoding Failed: \(error)")

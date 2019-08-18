@@ -2,24 +2,26 @@
 //  EventSource.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/20/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 import RxSwift
 
 
-fileprivate let validNewlines = ["\r\n", "\n", "\r"]
-fileprivate let validNewlineSequences = validNewlines.map { "\($0)\($0)".data(using: .utf8)! }
+private let validNewlines = ["\r\n", "\n", "\r"]
+private let validNewlineSequences = validNewlines.map { "\($0)\($0)".data(using: .utf8)! }
 
-fileprivate let logger = logging.for(category: "event-source")
+private let logger = logging.for(category: "event-source")
 
 
 open class EventSource {
 
-  public enum State : String, CaseIterable {
+  public enum State: String, CaseIterable {
     case connecting
     case open
     case closed
@@ -27,8 +29,8 @@ open class EventSource {
 
   public typealias RequestFactory = () throws -> DataRequest
 
-  fileprivate(set) public var readyState = State.closed
-  fileprivate(set) public var retryTime = 3000
+  public fileprivate(set) var readyState = State.closed
+  public fileprivate(set) var retryTime = 3000
 
   private let requestFactory: RequestFactory
   private var request: Request?
@@ -49,10 +51,10 @@ open class EventSource {
 
     self.requestFactory = requestFactory
     self.queue = queue
-    self.receivedString = nil
-    self.receivedDataBuffer = Data()
+    receivedString = nil
+    receivedDataBuffer = Data()
 
-    self.readyState = .closed
+    readyState = .closed
   }
 
   public static func defaultSessionConfiguration() -> URLSessionConfiguration {
@@ -74,11 +76,11 @@ open class EventSource {
     do {
 
       request = try requestFactory()
-        .stream(closure: self.receivedData)
-        .response(completionHandler: self.receivedResponse)
+        .stream(closure: receivedData)
+        .response(completionHandler: receivedResponse)
 
     }
-    catch let error {
+    catch {
       logger.error("Error creating event source request: \(error)")
     }
   }
@@ -95,7 +97,7 @@ open class EventSource {
 
   fileprivate func receivedMessageToClose(_ response: HTTPURLResponse?) -> Bool {
 
-    guard let response = response  else {
+    guard let response = response else {
       return false
     }
 
@@ -129,15 +131,15 @@ open class EventSource {
   }
 
   open func addEventListener(_ event: String, handler: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
-    self.eventListeners[event] = handler
+    eventListeners[event] = handler
   }
 
   open func removeEventListener(_ event: String) {
-    self.eventListeners.removeValue(forKey: event)
+    eventListeners.removeValue(forKey: event)
   }
 
   open func events() -> [String] {
-    return Array(self.eventListeners.keys)
+    return Array(eventListeners.keys)
   }
 
   // MARK: Handlers
@@ -190,10 +192,10 @@ open class EventSource {
 
       logger.debug("Closed: \(error)")
 
-      let nanoseconds = Double(self.retryTime) / 1000.0 * Double(NSEC_PER_SEC)
+      let nanoseconds = Double(retryTime) / 1000.0 * Double(NSEC_PER_SEC)
       let delayTime = DispatchTime.now() + Double(Int64(nanoseconds)) / Double(NSEC_PER_SEC)
 
-      queue.asyncAfter(deadline: delayTime, execute: self.connect)
+      queue.asyncAfter(deadline: delayTime, execute: connect)
     }
 
     queue.async {
@@ -351,7 +353,7 @@ open class EventSource {
 }
 
 
-public class ObservableEventSource<D: Decodable> : EventSource {
+public class ObservableEventSource<D: Decodable>: EventSource {
 
 
   private let eventDecoder: MediaTypeDecoder
@@ -367,14 +369,14 @@ public class ObservableEventSource<D: Decodable> : EventSource {
 
       // Add handler for all events
 
-      self.onMessage { (id, event, data) in
+      self.onMessage { _, event, data in
 
         // Convert "data" value to JSON
         guard let data = (data ?? "{}").data(using: .utf8) else {
           logger.error("Unable to parse event data")
           return
         }
-        
+
         // Parse JSON and pass event on
 
         do {

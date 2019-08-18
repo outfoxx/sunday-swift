@@ -2,18 +2,20 @@
 //  MediaTypeDecoders.swift
 //  Sunday
 //
-//  Created by Kevin Wooten on 6/26/18.
-//  Copyright © 2018 Outfox, Inc. All rights reserved.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Alamofire
+import Foundation
 import PotentCBOR
 import PotentJSON
 
 
 public protocol MediaTypeDecoder {
-  func decode<T>(_ type: T.Type, from data: Data) throws -> T where T : Decodable
+  func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable
 }
 
 
@@ -68,7 +70,7 @@ public struct MediaTypeDecoders {
     }
 
     public func merged(_ values: [MediaType: MediaTypeDecoder]) -> Builder {
-      return Builder(registered: self.registered.merging(values, uniquingKeysWith: { _, last in last }))
+      return Builder(registered: registered.merging(values, uniquingKeysWith: { _, last in last }))
     }
 
     public func build() -> MediaTypeDecoders {
@@ -77,8 +79,8 @@ public struct MediaTypeDecoders {
 
   }
 
-  private var registered = [MediaType : MediaTypeDecoder]()
-  
+  private var registered = [MediaType: MediaTypeDecoder]()
+
   public func find(for mediaType: MediaType) throws -> MediaTypeDecoder {
     guard let decoder = registered.first(where: { key, _ in key ~= mediaType })?.value else {
       throw SundayError.responseSerializationFailed(reason: .unsupportedContentType(mediaType))
@@ -89,20 +91,20 @@ public struct MediaTypeDecoders {
 }
 
 
-extension JSON.Decoder : MediaTypeDecoder {}
+extension JSON.Decoder: MediaTypeDecoder {}
 
 
-extension CBOR.Decoder : MediaTypeDecoder {}
+extension CBOR.Decoder: MediaTypeDecoder {}
 
 
-public struct DataDecoder : MediaTypeDecoder {
+public struct DataDecoder: MediaTypeDecoder {
 
 
-  enum Error : Swift.Error {
+  enum Error: Swift.Error {
     case translationNotSupported
   }
 
-  public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T : Decodable {
+  public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
     guard type == Data.self else {
       throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .octetStream, error: Error.translationNotSupported))
     }
