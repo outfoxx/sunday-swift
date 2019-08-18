@@ -40,8 +40,8 @@ class RequestTests: ParameterizedTest {
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
         Path("/echo") {
-          POST(.body(AnyValue.self)) { body in
-            return .ok(value: body)
+          POST(.body(AnyValue.self)) { req, res, body in
+            return res.send(status: .ok, value: body)
           }
         }
       }

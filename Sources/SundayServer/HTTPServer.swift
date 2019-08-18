@@ -12,23 +12,28 @@ import Sunday
 import RxSwift
 
 
+public protocol HTTPServer: AnyObject {
+
+  typealias Dispatcher = (HTTPRequest, HTTPResponse) throws -> Void
+
+  var port: UInt16 { get }
+
+  var queue: DispatchQueue { get }
+
+}
+
+
 @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
-open class HTTPServer : NSObject {
+open class NetworkHTTPServer : NSObject, HTTPServer {
 
-  public enum Async : Swift.Error {
-    case dispatch(() -> Void)
-  }
-
-  public typealias Dispatcher = (HTTPServer, HTTP.Request) throws -> HTTP.Response
-
+  public let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])
   private let listener: NWListener
-  private let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])
   private let mgrQueue = DispatchQueue(label: "HTTP Server Queue", attributes: [])
   private let dispatcher: Dispatcher
-  private var connections = [String : HTTPConnection]()
+  private var connections = [String : NetworkHTTPConnection]()
 
-  public var port: NWEndpoint.Port {
-    return listener.port!
+  public var port: UInt16 {
+    return listener.port?.rawValue ?? 0
   }
 
   public private(set) var state: NWListener.State? = nil
@@ -87,10 +92,12 @@ open class HTTPServer : NSObject {
 
   func connect(with connection: NWConnection) {
 
-    let httpConnection = HTTPConnection(server: self,
-                                        transport: connection,
-                                        dispatcher: self.dispatcher,
-                                        log: logging.for(category: "HTTP Connection"))
+    let httpConnection = NetworkHTTPConnection(transport: connection,
+                                               server: self,
+                                               id: UUID().uuidString,
+                                               log: logging.for(category: "HTTP Connection"),
+                                               dispatcher: self.dispatcher)
+
     mgrQueue.sync {
       connections[httpConnection.id] = httpConnection
     }

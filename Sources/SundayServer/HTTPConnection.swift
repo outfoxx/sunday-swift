@@ -17,52 +17,129 @@ private let maxHTTPChunkLength = 1024 * 128
 
 /// HTTPConnection represents an active HTTP connection
 ///
-@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
-public final class HTTPConnection {
+public class HTTPConnection {
 
-  enum RequestState {
-    case parsingHeader
-    case readingBody
+  class Request: HTTPRequest {
+
+    let server: HTTPServer
+    let raw: HTTP.Request
+    var parameters: [String : String]
+
+    init(server: HTTPServer, raw: HTTP.Request, parameters: [String: String]) {
+      self.server = server
+      self.raw = raw
+      self.parameters = parameters
+    }
+
   }
 
-  enum ResponseState {
-    case sendingHeader
-    case sendingBody
+  class Response: HTTPResponse {
+
+    let server: HTTPServer
+    let connection: HTTPConnection
+    var state: HTTPResponseState = .initial
+    var headers: HTTP.Headers = [:]
+    var properties: [String : Any] = [:]
+
+    init(server: HTTPServer, connection: HTTPConnection) {
+      self.server = server
+      self.connection = connection
+
+      // Add server header
+      headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle.target.infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
+      // we don't support keep-alive connection for now, just force it to be closed
+      headers[HTTP.StdHeaders.connection] = ["close"]
+    }
+
+    func headers(forName name: String) -> [String] {
+      return headers[name] ?? []
+    }
+
+    func setHeaders(_ values: [String], forName name: String) {
+      headers[name] = values
+    }
+    
+    func start(status: HTTP.Response.Status, headers: [String : [String]]) {
+      precondition(state == .initial)
+
+      var headers = headers.merging(self.headers) { first, _ in first }
+
+      let nextState: HTTPResponseState
+      if headers[HTTP.StdHeaders.transferType]?.first == "chunked" {
+        nextState = .sendingChunks
+      }
+      else if headers[HTTP.StdHeaders.contentLength] != nil {
+        // Message body length determined by Content-Length
+        nextState = .sendingBody
+      }
+      else {
+        // Message body length determined by closing connection
+        nextState = .sendingBody
+        headers[HTTP.StdHeaders.connection] = ["close"]
+      }
+
+      defer { state = nextState }
+
+      let responseHeaderParts = [
+        "HTTP/1.1 \(status)",
+        headers.map { (key, values) in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }.joined(separator: "\r\n"),
+        "\r\n"
+      ]
+
+      let responseHeader = responseHeaderParts.joined(separator: "\r\n")
+      connection.send(data: responseHeader.data(using: .nonLossyASCII)!, context: "sending response header")
+    }
+
+    func send(body: Data) {
+      precondition(state == .sendingBody)
+      defer { state = .complete }
+
+      connection.send(data: body, context: "sending body data") { error in
+        if error != nil || self.header(forName: HTTP.StdHeaders.connection) == "close" {
+          self.connection.close()
+        }
+      }
+    }
+
+    func send(chunk: Data) {
+      precondition(state == .sendingChunks)
+
+      var chunk = "\(String(chunk.count, radix: 16))\r\n".data(using: .ascii)!
+      chunk.append(chunk)
+      chunk.append("\r\n".data(using: .ascii)!)
+      connection.send(data: chunk, context: "sending body chunk")
+    }
+
+    func finish(headers: HTTP.Headers) {
+      precondition(state == .sendingChunks)
+
+      connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] error in
+        guard let self = self else { return }
+        self.connection.close()
+      }
+    }
+
   }
 
-  public weak var server: HTTPServer?
-  public let id: String = UUID().uuidString
-  public let transport: NWConnection
-  public let dispatcher: HTTPServer.Dispatcher
-  public let log: OSLog
+  weak var server: HTTPServer?
+  let id: String
+  let log: OSLog
+  let dispatcher: HTTPServer.Dispatcher
+  var requestParser = HTTPRequestParser()
 
-  private(set) var requestState: RequestState = .parsingHeader
-  private(set) var responseState: ResponseState = .sendingHeader
-
-  private var requestParser = HTTPRequestParser()
-
-  public init(
-    server: HTTPServer,
-    transport: NWConnection,
-    dispatcher: @escaping HTTPServer.Dispatcher,
-    log: OSLog
-  ) {
+  public init(server: HTTPServer, id: String, log: OSLog, dispatcher: @escaping HTTPServer.Dispatcher) {
     self.server = server
-    self.transport = transport
-    self.dispatcher = dispatcher
+    self.id = id
     self.log = log
-
-    self.transport.receive(minimumIncompleteLength: minHTTPReqeustLength, maximumLength: maxHTTPChunkLength,
-                           completion: handleReceive(content:context:isComplete:error:))
+    self.dispatcher = dispatcher
   }
 
-  private func handleReceive(content: Data?, context: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) {
+  public func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
     guard let server = server, error == nil, isComplete == false else {
       if let error = error {
         log.error("network connection error: \(error)")
       }
-      transport.cancel()
-      return
+      return close()
     }
 
     do {
@@ -70,10 +147,9 @@ public final class HTTPConnection {
       guard
         let content = content,
         let parsedRequest = try requestParser.process(content)
-      else {
-        transport.receive(minimumIncompleteLength: 1, maximumLength: maxHTTPChunkLength,
-                          completion: handleReceive(content:context:isComplete:error:))
-        return
+        else {
+          receive(minimum: 1, maximum: maxHTTPChunkLength, completion: handleReceive(content:isComplete:error:))
+          return
       }
 
       // generate convenience headers as strings
@@ -85,28 +161,18 @@ public final class HTTPConnection {
         headers.updateValue(currentValues, forKey: header.name)
       }
 
-       let request = HTTP.Request(method: parsedRequest.line.method,
-                                  url: parsedRequest.line.uri,
-                                  version: parsedRequest.line.version,
-                                  headers: headers,
-                                  rawHeaders: parsedRequest.headers,
-                                  body: parsedRequest.body)
+      let request = Request(server: server,
+                            raw: HTTP.Request(method: parsedRequest.line.method,
+                                              url: parsedRequest.line.uri,
+                                              version: parsedRequest.line.version,
+                                              headers: headers,
+                                              rawHeaders: parsedRequest.headers,
+                                              body: parsedRequest.body),
+                            parameters: [:])
 
+      let response = Response(server: server, connection: self)
 
-      do {
-
-        let response = try dispatcher(server, request)
-
-        self.send(response: response)
-      }
-      catch {
-        if case HTTPServer.Async.dispatch(let block) = error {
-          transport.queue?.async(execute: block)
-        }
-        else {
-          self.send(error: error)
-        }
-      }
+      try dispatcher(request, response)
     }
     catch {
       log.error("http processing error: \(error)")
@@ -114,100 +180,56 @@ public final class HTTPConnection {
     }
   }
 
-  public func close() {
-    transport.cancel()
+  open func send(data: Data, context: String, completion: @escaping (Error?) -> Void = { _ in }) {
+    fatalError("Not Implemented")
   }
 
-  private func send(error: Swift.Error) {
-    send(response: .internalServerError(message: String(describing: error)))
+  open func receive(minimum: Int, maximum: Int, completion: @escaping (Data?,Bool,Error?) -> Void) {
+    fatalError("Not Implemented")
   }
 
-  private func send(response: HTTP.Response) {
-    var status = response.status
-    var headers = response.headers
-
-    // Determine how the response body will be sent using the response's entity
-
-    let sendBody: ((@escaping (Error?) -> Void) -> Void)?
-
-    switch response.entity {
-    case .data(let data):
-      // standard HTTP response body using `Content-Length`
-
-      headers[HTTP.StdHeaders.contentLength] = ["\(data.count)"]
-      sendBody = { finalizer in
-        self.send(data: data, context: "sending body", completion: finalizer)
-      }
-
-    case .stream(let stream):
-      headers[HTTP.StdHeaders.transferType] = ["chunked"]
-      sendBody = { finalizer in
-        _ = stream.subscribe(
-          onNext: { data in
-            self.sendChunk(data: data)
-          },
-          onError: { error in
-            self.log.error("error streaming response entity: \(error)")
-            finalizer(error)
-          },
-          onCompleted: {
-            self.sendChunk(data: Data(), completion: finalizer)
-          })
-      }
-
-    case .encoded:
-      status = .notAcceptable
-      headers[HTTP.StdHeaders.contentType] = [MediaType.plain.value]
-
-      let data = "Content Negotiation Failed".data(using: .utf8)!
-      sendBody = { finalizer in
-        self.send(data: data, context: "sending error body", completion: finalizer)
-      }
-
-    case .none:
-      sendBody = { finalizer in
-        self.send(data: Data(), context: "sending empty body", completion: finalizer)
-      }
-      break
-    }
-
-    // we don't support keep-alive connection for now, just force it to be closed
-    headers[HTTP.StdHeaders.connection] = ["close"]
-
-    if headers[HTTP.StdHeaders.server]?.count ?? 0 == 0 {
-      headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle.target.infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
-    }
-
-    let responseHeaderParts = [
-      "HTTP/1.1 \(status)",
-      headers.map { (key, values) in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }.joined(separator: "\r\n"),
-      "\r\n"
-    ]
-
-    let responseHeader = responseHeaderParts.joined(separator: "\r\n").data(using: .nonLossyASCII)!
-    send(data: responseHeader, context: "sending response header")
-
-    if let sendBody = sendBody {
-      sendBody { error in
-        self.transport.cancel()
-      }
-    }
+  open func close() {
+    fatalError("Not Implemented")
   }
 
-  private func sendChunk(data: Data, completion: ((Error?) -> Void)? = nil) {
-    var chunk = "\(String(data.count, radix: 16))\r\n".data(using: .ascii)!
-    chunk.append(data)
-    chunk.append("\r\n".data(using: .ascii)!)
-    send(data: chunk, context: "sending body chunk", completion: completion)
+}
+
+
+@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
+public final class NetworkHTTPConnection: HTTPConnection {
+
+  let transport: NWConnection
+
+  public init(transport: NWConnection, server: HTTPServer,
+              id: String, log: OSLog, dispatcher: @escaping HTTPServer.Dispatcher) {
+    self.transport = transport
+    super.init(server: server, id: id, log: log, dispatcher: dispatcher)
+
+    self.transport.receive(minimumIncompleteLength: minHTTPReqeustLength, maximumLength: maxHTTPChunkLength,
+                           completion: handleReceive(content:context:isComplete:error:))
   }
 
-  private func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
+  private func handleReceive(content: Data?, context: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) {
+    super.handleReceive(content: content, isComplete: isComplete, error: error)
+  }
+
+  public override func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
     transport.send(content: data, completion: .contentProcessed { error in
       if let error = error {
         self.log.error("send error while '\(context)': \(error)")
       }
       completion?(error)
     })
+  }
+
+  public override func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {
+    transport.receive(minimumIncompleteLength: minimum, maximumLength: maximum) { data, context, isComplete, error in
+      completion(data, isComplete, error)
+    }
+  }
+
+  public override func close() {
+    transport.cancel()
   }
 
 }

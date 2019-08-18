@@ -49,20 +49,15 @@ public struct ResponseEncoding : Routable {
     self.routable = buildRoutable()
   }
 
-  public func route(request: HTTP.Request, path: String, variables: [String : Any]) throws -> HTTP.Response? {
+  public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
     // Attempt request routing and check for handled response
-    guard let response = try routable.route(request: request, path: path, variables: variables) else {
+    guard let routed = try routable.route(route, request: request) else {
       return nil
-    }
-
-    // Skip handling anything that isn't a value entity response
-    guard case .encoded(let generator) = response.entity else {
-      return response
     }
 
     // Determine the acceptable response types using the scheme
     let acceptableTypes: [MediaType]
-    switch scheme {
+    switch self.scheme {
     case .negotiated(let defaultType):
       let defaultTypes = defaultType != nil ? [defaultType!] : []
       acceptableTypes = (MediaType.from(accept: request.headers[HTTP.StdHeaders.accept] ?? [])) + defaultTypes
@@ -71,35 +66,25 @@ public struct ResponseEncoding : Routable {
       acceptableTypes = [defaultType]
     }
 
-    // Negotiate the response's content type and associated encoder, if negotiation fails the response
+    // Negotiate the response's content type and associated encoder, if negotiation fails the routing
     // is passed on; allowing any encoders further up in the stream to attempt to encode the value.
-    guard let (contentType, encoder) = negotiate(request: request, acceptableTypes: acceptableTypes) else {
-      return response
+    guard let (contentType, _) = negotiate(acceptableTypes: acceptableTypes) else {
+      return routed
     }
 
-    // Update/replace content-type header
-    var headers = response.headers
-    headers[HTTP.StdHeaders.contentType] = [contentType.value]
+    let handler: RouteHandler = { route, request, response in
 
-    do {
-      // Encode the value and return a new response
+      // Update/replace content-type header
+      response.setContentType(contentType)
 
-      let data = try generator(encoder)
+      try routed.handler(route, request, EncodingHTTPResponse(response: response, encoders: self.encoders))
 
-      return HTTP.Response(status: response.status,
-                           headers: headers,
-                           entity: .data(data))
     }
-    catch {
-      // Encoding failed, report it in HTTP response
 
-      let responseData = "Value Encoding Failed: \(error)".data(using: .utf8) ?? Data()
-      headers[HTTP.StdHeaders.contentType] = [MediaType.plain.value]
-      return HTTP.Response(status: .internalServerError, headers: headers, entity: .data(responseData))
-    }
+    return (routed.route, handler)
   }
 
-  private func negotiate(request: HTTP.Request, acceptableTypes: [MediaType]) -> (MediaType, MediaTypeEncoder)? {
+  private func negotiate(acceptableTypes: [MediaType]) -> (MediaType, MediaTypeEncoder)? {
 
     for acceptableType in acceptableTypes {
       if let encoder = try? encoders.find(for: acceptableType) {
@@ -108,6 +93,79 @@ public struct ResponseEncoding : Routable {
     }
 
     return nil
+  }
+
+}
+
+
+class EncodingHTTPResponse: HTTPResponse {
+
+  let response: HTTPResponse
+  let encoders: MediaTypeEncoders
+
+  init(response: HTTPResponse, encoders: MediaTypeEncoders) {
+    self.response = response
+    self.encoders = encoders
+  }
+
+  var server: HTTPServer { response.server }
+
+  var state: HTTPResponseState { response.state }
+
+  var properties: [String : Any] {
+    get { return response.properties }
+    set { response.properties = newValue }
+  }
+
+  func headers(forName name: String) -> [String] {
+    return response.headers(forName: name)
+  }
+
+  func setHeaders(_ values: [String], forName name: String) {
+    return response.setHeaders(values, forName: name)
+  }
+
+  func setContentType(_ contentType: MediaType) {
+    return response.setContentType(contentType)
+  }
+
+  func start(status: HTTP.Response.Status, headers: [String : [String]]) {
+    response.start(status: status, headers: headers)
+  }
+
+  func send(body: Data) {
+    response.send(body: body)
+  }
+
+  func send(chunk: Data) {
+    response.send(chunk: chunk)
+  }
+
+  func finish(headers: HTTP.Headers) {
+    return response.finish(headers: headers)
+  }
+
+  func send<V>(status: HTTP.Response.Status, headers: [String : [String]], value: V) where V : Encodable {
+    guard let contentType = MediaType(response.header(forName: HTTP.StdHeaders.contentType) ?? "") else {
+      return send(status: .notAcceptable, text: "Response Content-Type Not Present")
+    }
+
+    do {
+
+      let encoder = try encoders.find(for: contentType)
+
+      let data = try encoder.encode(value)
+
+      var headers = headers
+      headers[HTTP.StdHeaders.contentLength] = [data.count.description]
+
+      start(status: status, headers: headers)
+      send(body: data)
+      
+    }
+    catch {
+      return send(status: .internalServerError, text: "Response Encoding Failed: \(error)")
+    }
   }
 
 }

@@ -15,7 +15,7 @@ public extension HTTP {
   struct Request {
 
     public let method: HTTP.Method
-    public let url: URL
+    public let url: URLComponents
     public let version: HTTP.Version
     public let headers: HTTP.Headers
     public let rawHeaders: HTTP.RawHeaders
@@ -25,7 +25,7 @@ public extension HTTP {
                 headers: HTTP.Headers, rawHeaders: HTTP.RawHeaders,
                 body: Data?) {
       self.method = method
-      self.url = url
+      self.url = URLComponents(url: url, resolvingAgainstBaseURL: true)!
       self.version = version
       self.headers = headers
       self.rawHeaders = rawHeaders
@@ -106,58 +106,7 @@ public extension HTTP {
 
     }
 
-    public enum Entity {
-      case data(Data)
-      case stream(Observable<Data>)
-      case encoded((MediaTypeEncoder) throws -> Data)
-      case none
-
-      public static func value<T : Encodable>(_ value: T) -> Entity {
-        return Self.encoded({ encoder in try encoder.encode(value) })
-      }
-    }
-
-    public let status: Status
-    public let headers: HTTP.Headers
-    public let entity: Entity
-
-    public init(status: Status, headers: HTTP.Headers, entity: Entity) {
-      self.status = status
-      self.headers = headers
-      self.entity = entity
-    }
-
-    public static func ok(data: Data? = nil, headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .ok, headers: headers, entity: data.flatMap { .data($0) } ?? .none)
-    }
-
-    public static func ok<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
-      return Response(status: .ok, headers: headers, entity: .value(value))
-    }
-
-    public static func created(data: Data? = nil, headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .created, headers: headers, entity: data.flatMap { .data($0) } ?? .none)
-    }
-
-    public static func created<T>(value: T, headers: HTTP.Headers = [:]) -> Response where T : Encodable {
-      return Response(status: .created, headers: headers, entity: .value(value))
-    }
-
-    public static func noContent(headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .noContent, headers: headers, entity: .none)
-    }
-
-    public static func notFound(message: String? = nil, headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .notFound, headers: headers, entity: message.flatMap { .data($0.data(using: .utf8) ?? Data()) } ?? .none)
-    }
-
-    public static func badRequest(message: String? = nil, headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .badRequest, headers: headers, entity: message.flatMap { .data($0.data(using: .utf8) ?? Data()) } ?? .none)
-    }
-
-    public static func internalServerError(message: String? = nil, headers: HTTP.Headers = [:]) -> Response {
-      return Response(status: .internalServerError, headers: headers, entity: message.flatMap { .data($0.data(using: .utf8) ?? Data()) } ?? .none)
-    }
+    private init() {}
 
   }
 

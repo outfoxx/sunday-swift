@@ -133,6 +133,10 @@ public struct MediaType {
     return MediaType(type: type, tree: tree, subtype: subtype, suffix: suffix, parameters: parameters)
   }
 
+  public func with(_ value: String, forParameter name: StandardParameterName) -> MediaType {
+    return with(parameters: [name.rawValue: value])
+  }
+
   public var value: String {
     let type = self.type.rawValue
     let tree = self.tree.rawValue
@@ -170,11 +174,7 @@ extension MediaType : Codable {
     guard let source = MediaType(value) else {
       throw Error.invalid
     }
-    self.type = source.type
-    self.tree = source.tree
-    self.subtype = source.subtype
-    self.suffix = source.suffix
-    self.parameters = source.parameters
+    self = source
   }
 
   public func encode(to encoder: Encoder) throws {

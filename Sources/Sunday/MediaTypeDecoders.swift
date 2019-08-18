@@ -8,9 +8,8 @@
 
 import Foundation
 import Alamofire
-import PotentCodables
-import class PotentCodables.JSONDecoder
-import class PotentCodables.CBORDecoder
+import PotentCBOR
+import PotentJSON
 
 
 public protocol MediaTypeDecoder {
@@ -43,22 +42,22 @@ public struct MediaTypeDecoders {
     }
 
     public func registerJSON() -> Builder {
-      let decoder = JSONDecoder()
+      let decoder = JSON.Decoder()
       decoder.dateDecodingStrategy = .millisecondsSince1970
       return registerJSON(decoder: decoder)
     }
 
-    public func registerJSON(decoder: JSONDecoder) -> Builder {
+    public func registerJSON(decoder: JSON.Decoder) -> Builder {
       return register(decoder: decoder, forTypes: .json, .jsonStructured)
     }
 
     public func registerCBOR() -> Builder {
-      let decoder = CBORDecoder()
+      let decoder = CBOR.Decoder()
       decoder.untaggedDateDecodingStrategy = .millisecondsSince1970
       return registerCBOR(decoder: decoder)
     }
 
-    public func registerCBOR(decoder: CBORDecoder) -> Builder {
+    public func registerCBOR(decoder: CBOR.Decoder) -> Builder {
       return register(decoder: decoder, forTypes: .cbor)
     }
 
@@ -90,10 +89,10 @@ public struct MediaTypeDecoders {
 }
 
 
-extension JSONDecoder : MediaTypeDecoder {}
+extension JSON.Decoder : MediaTypeDecoder {}
 
 
-extension CBORDecoder : MediaTypeDecoder {}
+extension CBOR.Decoder : MediaTypeDecoder {}
 
 
 public struct DataDecoder : MediaTypeDecoder {

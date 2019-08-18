@@ -48,59 +48,60 @@ public struct RequestDecoding : Routable {
     self.routable = buildRoutable()
   }
 
-  public func route(request: HTTP.Request, path: String, variables: [String : Any]) throws -> HTTP.Response? {
-
-    var variables = variables
-
-    if request.body != nil {
-
-      // Determine content-type based on scheme
-
-      let contentType: MediaType
-      switch scheme {
-      case .negotiated(let defaultType):
-
-        // Find content-type header
-
-        if let foundContentTypeHeaders = request.headers[HTTP.StdHeaders.contentType], let foundContentTypeHeader = foundContentTypeHeaders.first {
-
-          // Parse content-type header
-
-          guard let foundContentType = MediaType(foundContentTypeHeader) else {
-            let data = "Content-Type Header Invalid".data(using: .utf8)!
-            return HTTP.Response(status: .notAcceptable,
-                                 headers: [HTTP.StdHeaders.contentType: [MediaType.plain.value]],
-                                 entity: .data(data))
-          }
-
-          contentType = foundContentType
-        }
-        else if let defaultType = defaultType {
-
-          // Fallback to provided default
-
-          contentType = defaultType
-        }
-        else {
-
-          // Reply with negotiation error
-
-          let data = "No Content-Type Header".data(using: .utf8)!
-          return HTTP.Response(status: .notAcceptable,
-                               headers: [HTTP.StdHeaders.contentType: [MediaType.plain.value]],
-                               entity: .data(data))
-        }
-
-      case .always(let defaultType):
-
-        contentType = defaultType
-
-      }
-
-      variables["@body-decoder"] = try decoders.find(for: contentType)
+  public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
+    guard let routed = try routable.route(route, request: request) else {
+      return nil
     }
 
-    return try routable.route(request: request, path: path, variables: variables)
+    let handler: RouteHandler = { route, request, response in
+
+      if request.body != nil {
+
+        // Determine content-type based on scheme
+
+        let contentType: MediaType
+
+        switch self.scheme {
+        case .negotiated(let defaultType):
+
+          // Find content-type header
+
+          if let foundContentTypeHeaders = request.headers[HTTP.StdHeaders.contentType], let foundContentTypeHeader = foundContentTypeHeaders.first {
+
+            // Parse content-type header
+
+            guard let foundContentType = MediaType(foundContentTypeHeader) else {
+              return response.send(status: .notAcceptable, text: "Content-Type Header Invalid")
+            }
+
+            contentType = foundContentType
+          }
+          else if let defaultType = defaultType {
+
+            // Fallback to provided default
+
+            contentType = defaultType
+          }
+          else {
+
+            // Reply with negotiation error
+
+            return response.send(status: .notAcceptable, text: "No Content-Type Header")
+          }
+
+        case .always(let defaultType):
+
+          contentType = defaultType
+
+        }
+
+        response.properties["@body-decoder"] = try self.decoders.find(for: contentType)
+      }
+
+      try routed.handler(route, request, response)
+    }
+
+    return (routed.route, handler)
   }
 
 }

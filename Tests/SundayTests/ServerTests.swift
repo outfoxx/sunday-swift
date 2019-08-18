@@ -7,7 +7,7 @@
 
 import XCTest
 import Alamofire
-import class PotentCodables.JSONDecoder
+import PotentJSON
 @testable import Sunday
 @testable import SundayServer
 
@@ -25,22 +25,22 @@ class HTTPServerTests: XCTestCase {
     Path("/{type}") {
       ContentNegotiation {
 
-        GET(.path("type")) { type in
-          .ok(value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
+        GET(.path("type")) { req, res, type in
+          res.send(status: .ok, value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
         }
 
-        POST(.path("type"), .body(Item.self)) { type, body in
-          .created(value: body)
+        POST(.path("type"), .body(Item.self)) { req, res, type, body in
+          res.send(status: .created, value: body)
         }
 
-        Path("{id}") {
+        Path("/{id}") {
 
-          GET(.path("id", Int.self)) { id in
-            .ok(value: Item(name: "abc", cost: 12.80))
+          GET(.path("id", Int.self)) { req, res, id in
+            res.send(status: .ok, value: Item(name: "abc", cost: 12.80))
           }
 
-          DELETE(.path("id", Int.self)) { id in
-            .noContent()
+          DELETE(.path("id", Int.self)) { req, res, id in
+            res.send(status: .noContent)
           }
         }
 
@@ -191,6 +191,20 @@ class HTTPServerTests: XCTestCase {
     }
 
     waitForExpectations(timeout: 2)
+  }
+
+  func testChunked() {
+
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/chunked") {
+          PUT(.body()) { req, res, tyoe in
+
+          }
+        }
+      }
+    }
+
   }
 
 }

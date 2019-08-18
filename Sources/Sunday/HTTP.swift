@@ -85,7 +85,9 @@ public struct HTTP {
     public static let server = "server"
     public static let transferType = "transfer-type"
     public static let userAgent = "user-agent"
-    
+    public static let cookie = "cookie"
+    public static let setCookie = "set-cookie"
+
   }
 
 }

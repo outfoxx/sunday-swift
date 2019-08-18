@@ -22,16 +22,21 @@ public struct Path : Routable {
     self.routable = buildRoutable()
   }
 
-  public func route(request: HTTP.Request, path: String, variables: [String: Any]) throws -> HTTP.Response? {
-    guard let match = matcher.firstMatch(in: path) else { return nil }
+  public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
+    guard let match = matcher.firstMatch(in: route.unmatched) else { return nil }
 
-    let path = match.captures.last! ?? ""
-    var variables = variables
+    let matched = match.captures.dropLast().compactMap { $0 }.joined(separator: "")
+    let unmatched = match.captures.last! ?? ""
+    var paraeters = route.parameters
+
     for (name, value) in zip(variableNames, match.captures.dropLast()) {
-      variables[name] = value!
+      paraeters[name] = value!
     }
 
-    return try routable.route(request: request, path: path, variables: variables)
+    return try routable.route(Route(matched: matched,
+                                    unmatched: unmatched,
+                                    parameters: paraeters),
+                              request: request)
   }
 
   private static let variableMatcher = Regex(#"\{([_a-zA-Z][_a-zA-Z0-9]*)\}?"#)
@@ -50,16 +55,14 @@ public struct Path : Routable {
 
 public struct CatchAll : Routable {
 
-  public typealias Handler = (HTTP.Request, String, [String: Any]) throws -> HTTP.Response?
+  private let handler: RouteHandler
 
-  private let handler: Handler
-
-  public init(handler: @escaping Handler) {
+  public init(handler: @escaping RouteHandler) {
     self.handler = handler
   }
 
-  public func route(request: HTTP.Request, path: String, variables: [String: Any]) throws -> HTTP.Response? {
-    return try handler(request, path, variables)
+  public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
+    return (route, handler)
   }
 
 }
@@ -67,20 +70,18 @@ public struct CatchAll : Routable {
 
 public struct Trace : Routable {
 
-  public typealias Handler = (HTTP.Request, String, [String: Any]) throws -> HTTP.Response?
-
   private let routable: Routable
 
   public init(@RoutableBuilder routableBuilder: () -> Routable) {
     self.routable = routableBuilder()
   }
 
-  public func route(request: HTTP.Request, path: String, variables: [String: Any]) throws -> HTTP.Response? {
-    guard let response = try routable.route(request: request, path: path, variables: variables) else {
+  public func route(_ route: Route, request: HTTPRequest) throws -> RouteResult? {
+    guard let result = try routable.route(route, request: request) else {
       return nil
     }
     print("Routed: \(request.url)")
-    return response
+    return result
   }
 
 }

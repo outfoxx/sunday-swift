@@ -10,7 +10,7 @@ import Network
 
 
 @available(macOS 10.14, iOS 13, tvOS 13, watchOS 6, *)
-open class RoutingHTTPServer: HTTPServer {
+open class RoutingHTTPServer: NetworkHTTPServer {
 
   private var _routable: Routable!
 
@@ -19,17 +19,19 @@ open class RoutingHTTPServer: HTTPServer {
   }
 
   public init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil) throws {
-    try super.init(port: port, localOnly: localOnly, serviceName: serviceName) { server, request in
-      let server = server as! RoutingHTTPServer
+    try super.init(port: port, localOnly: localOnly, serviceName: serviceName) { request, response in
+      let routingServer = request.server as! RoutingHTTPServer
       do {
-        let variables: [String: Any] = ["@server": server]
-        guard let response = try server.routable.route(request: request, path: request.url.path, variables: variables) else {
-          return .notFound(message: "No method handler found")
+        let route = Route(matched: "", unmatched: request.url.path, parameters: [:])
+        guard let routed = try routingServer.routable.route(route, request: request) else {
+          return response.send(status: .notFound, text: "No method handler found")
         }
-        return response
+
+         try routed.handler(routed.route, request, response)
+
       }
       catch {
-        return .internalServerError(message: String(describing: error))
+        response.send(status: .internalServerError, text: "\(error)")
       }
     }
   }
