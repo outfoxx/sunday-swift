@@ -12,7 +12,7 @@ import Foundation
 import Network
 
 
-@available(macOS 10.14, iOS 13, tvOS 13, watchOS 6, *)
+@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 open class RoutingHTTPServer: NetworkHTTPServer {
 
   private var _routable: Routable!
