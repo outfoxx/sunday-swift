@@ -49,7 +49,7 @@ public class HTTPConnection {
       self.connection = connection
 
       // Add server header
-      headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle.target.infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
+      headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle(for: HTTPConnection.self).infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
       // we don't support keep-alive connection for now, just force it to be closed
       headers[HTTP.StdHeaders.connection] = ["close"]
     }

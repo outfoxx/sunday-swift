@@ -12,4 +12,4 @@ import Foundation
 import OSLogTrace
 
 
-internal let logging = OSLogManager.for(subsystem: Bundle.target.bundleIdentifier!)
+internal let logging = OSLogManager.for(subsystem: "Sunday")
