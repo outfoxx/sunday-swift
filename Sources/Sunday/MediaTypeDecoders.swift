@@ -99,6 +99,7 @@ extension CBOR.Decoder: MediaTypeDecoder {}
 
 public struct DataDecoder: MediaTypeDecoder {
 
+  public static let `default` = DataDecoder()
 
   enum Error: Swift.Error {
     case translationNotSupported
