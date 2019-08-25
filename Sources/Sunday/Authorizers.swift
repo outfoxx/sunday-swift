@@ -12,13 +12,13 @@ import Alamofire
 import Foundation
 
 
-class HeaderTokenAuthorizer: RequestAdapter {
+public class HeaderTokenAuthorizer: RequestAdapter {
 
   private let header: String
   private let tokenType: String
   private let token: String
 
-  init(tokenType: String, token: String, header: String = HTTP.StdHeaders.authorization) {
+  public init(tokenType: String, token: String, header: String = HTTP.StdHeaders.authorization) {
     self.header = header
     self.tokenType = tokenType
     self.token = token
@@ -26,7 +26,7 @@ class HeaderTokenAuthorizer: RequestAdapter {
 
   // MARK: RequestAdapter
 
-  func adapt(_ urlRequest: URLRequest) throws -> URLRequest {
+  public func adapt(_ urlRequest: URLRequest) throws -> URLRequest {
 
     var urlRequest = urlRequest
 
