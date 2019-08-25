@@ -52,12 +52,3 @@ public struct EndpointTarget {
   }
 
 }
-
-
-public protocol RequestEncoder {
-  func encode<T>(_ value: T) -> Data
-}
-
-public protocol RequestDecoder {
-  func decode<T>(from: Data) -> T
-}
