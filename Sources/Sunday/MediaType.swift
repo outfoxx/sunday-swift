@@ -79,8 +79,8 @@ public struct MediaType {
     return headers.flatMap { header in header.components(separatedBy: ",") }.compactMap { MediaType($0) }
   }
 
-  private static let fullRegex = Regex("^((?:[a-z]+|\\*))\\/(x(?:-|\\\\.)|(?:(?:vnd|prs)\\.)|\\*)?([a-z\\-\\.]+|\\*)(?:\\+([a-z]+))?( *(?:; *(?:(?:[\\w\\.-]+) *= *(?:[\\w\\.-]+)) *)*)$", options: [.ignoreCase])
-  private static let paramRegex = Regex(" *; *([\\w\\.-]+) *= *([\\w\\.-]+)", options: [.ignoreCase])
+  private static let fullRegex = Regex(##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##, options: [.ignoreCase])
+  private static let paramRegex = Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
 
   public init?(_ string: String) {
     guard let match = Self.fullRegex.firstMatch(in: string) else { return nil }

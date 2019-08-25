@@ -70,6 +70,8 @@ class MediaTypeTests: XCTestCase {
                    "Test parsing")
     XCTAssertEqual(MediaType(type: .application, tree: .obsolete, subtype: "www-form-urlencoded"), MediaType("application/x-www-form-urlencoded"),
                    "Test parsing with non-standard tree")
+    XCTAssertEqual(MediaType(type: .application, tree: .obsolete, subtype: "x509-ca-cert"), MediaType("application/x-x509-ca-cert"),
+                   "Test parsing with non-standard tree and complexs subtype")
     XCTAssertEqual(MediaType(type: .application, tree: .vendor, subtype: "yaml", parameters: ["charset": "utf-8", "something": "else"]), MediaType("application/vnd.yaml;charset=utf-8;something=else"),
                    "Test parsing with multiple parameters")
     XCTAssertEqual(MediaType(type: .application, tree: .vendor, subtype: "yaml", parameters: ["charset": "utf-8", "something": "else"]), MediaType("APPLICATION/VND.YAML;CHARSET=UTF-8;SOMETHING=ELSE"),
