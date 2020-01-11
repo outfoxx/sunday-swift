@@ -49,13 +49,15 @@ class HTTPServerTests: XCTestCase {
       }
     }
   }
+  static var serverURL: URL!
 
   let session = URLSession.create(configuration: .default)
 
   override class func setUp() {
     super.setUp()
 
-    XCTAssertTrue(server.start())
+    serverURL = server.start()
+    XCTAssertNotNil(serverURL)
   }
 
   func testPOST() throws {
@@ -67,7 +69,7 @@ class HTTPServerTests: XCTestCase {
       let cost: Double
     }
 
-    var urlRequest = URLRequest(url: URL(string: "http://localhost:\(Self.server.port)/something")!)
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: HTTPServerTests.serverURL)!)
     urlRequest.httpMethod = "POST"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
@@ -110,9 +112,7 @@ class HTTPServerTests: XCTestCase {
 
     let listX = expectation(description: "GET (list)")
 
-    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something")!
-
-    var urlRequest = URLRequest(url: urlComponenets.url!)
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: HTTPServerTests.serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -154,9 +154,7 @@ class HTTPServerTests: XCTestCase {
 
     let itemX = expectation(description: "GET (item)")
 
-    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something/123")!
-
-    var urlRequest = URLRequest(url: urlComponenets.url!)
+    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: HTTPServerTests.serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -197,9 +195,7 @@ class HTTPServerTests: XCTestCase {
 
     let deleteX = expectation(description: "DELETE")
 
-    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something/123")!
-
-    var urlRequest = URLRequest(url: urlComponenets.url!)
+    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: HTTPServerTests.serverURL)!)
     urlRequest.httpMethod = "DELETE"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 

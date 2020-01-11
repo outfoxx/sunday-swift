@@ -47,13 +47,15 @@ class RequestTests: ParameterizedTest {
         }
       }
     }
-    XCTAssertTrue(server.start())
+
+    let url = server.start()
+    XCTAssertNotNil(url)
 
     let x = expectation(description: "echo repsonse")
 
     let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
 
-    let baseURL = URLTemplate(template: "http://localhost:\(server.port)/")
+    let baseURL = URLTemplate(template: url!.absoluteString)
 
     let reqMgr = NetworkRequestManager(baseURL: baseURL)
 
