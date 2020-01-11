@@ -21,7 +21,7 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", from: "1.6.1"),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", from: "1.6.2"),
     .package(url: "https://github.com/outfoxx/OSLogTrace.git", from: "1.1.1"),
     .package(url: "https://github.com/mxcl/PromiseKit.git", from: "6.10.0"),
     .package(url: "https://github.com/PromiseKit/Foundation.git", from: "3.3.3"),
