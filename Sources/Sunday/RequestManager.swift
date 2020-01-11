@@ -8,28 +8,40 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
+import Foundation
 import RxSwift
 
 
 public protocol RequestManager {
 
-  var target: EndpointTarget { get }
+  var baseURL: URLTemplate { get }
 
   func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
-                             contentType: MediaType?, acceptTypes: [MediaType]?, headers: HTTP.Headers?) throws -> DataRequest
+                             contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                             headers: HTTP.Headers?) throws -> Single<URLRequest>
 
-  func fetch<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String,
-                                         pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
-                                         contentType: MediaType?, acceptTypes: [MediaType]?, headers: HTTP.Headers?) throws -> Single<D>
+  func response(request: URLRequest) -> Single<(response: HTTPURLResponse, data: Data?)>
 
-  func fetch<B: Encodable>(method: HTTP.Method, pathTemplate: String,
-                           pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
-                           contentType: MediaType?, acceptTypes: [MediaType]?, headers: HTTP.Headers?) throws -> Completable
+  func response(request: URLRequest, options: URLSession.RequestOptions) -> Single<(response: HTTPURLResponse, data: Data?)>
 
-  func events(requestFactory: @escaping () throws -> DataRequest) -> EventSource
+  func response<B: Encodable>(method: HTTP.Method, pathTemplate: String,
+                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+                              contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                              headers: HTTP.Headers?) throws -> Single<(response: HTTPURLResponse, data: Data?)>
 
-  func stream<D: Decodable>(requestFactory: @escaping () throws -> DataRequest) -> Observable<D>
+  func result<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String,
+                                          pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+                                          contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                                          headers: HTTP.Headers?) throws -> Single<D>
+
+  func result<B: Encodable>(method: HTTP.Method, pathTemplate: String,
+                            pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+                            contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                            headers: HTTP.Headers?) throws -> Completable
+
+  func events(from: Single<URLRequest>) -> EventSource
+
+  func events<D: Decodable>(from: Single<URLRequest>) throws -> Observable<D>
 
 }

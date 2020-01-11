@@ -16,7 +16,13 @@ public enum ParameterEncodingFailureReason {
   case serializationFailed(contentType: MediaType, error: Error?)
 }
 
-public enum ResponseSerializationFailureReason {
+public enum RequestEncodingFailureReason {
+  case noSupportedContentType([MediaType])
+  case unsupportedContentType(MediaType)
+  case serializationFailed(contentType: MediaType, error: Error?)
+}
+
+public enum ResponseDecodingFailureReason {
   case invalidContentType(String)
   case unsupportedContentType(MediaType)
   case inputDataNilOrZeroLength
@@ -25,12 +31,20 @@ public enum ResponseSerializationFailureReason {
   case missingValue
 }
 
+public enum ResponseValidationFailureReason {
+  case unacceptableStatusCode(response: HTTPURLResponse, data: Data?)
+}
+
 public enum SundayError: Swift.Error {
   case parameterEncodingFailed(reason: ParameterEncodingFailureReason)
-  case responseSerializationFailed(reason: ResponseSerializationFailureReason)
+  case requestEncodingFailed(reason: RequestEncodingFailureReason)
+  case responseDecodingFailed(reason: ResponseDecodingFailureReason)
+  case responseValidationFailed(reason: ResponseValidationFailureReason)
   case unexpectedEmptyResponse
   case unexpectedDataResponse
   case notFound
-  case invalidURL
+  case invalidURL(URLComponents? = nil)
   case invalidTemplate
+  case unknownNetworkError
+  case invalidHTTPResponse
 }

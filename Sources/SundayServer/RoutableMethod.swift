@@ -241,3 +241,33 @@ public func DELETE<A1, A2, A3, A4, A5>(_ a1: Param<A1>, _ a2: Param<A2>, _ a3: P
                                        _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4, A5) throws -> Void) -> Routable {
   return METHOD(.delete, a1, a2, a3, a4, a5, handler)
 }
+
+
+public func HEAD(_ handler: @escaping (HTTPRequest, HTTPResponse) throws -> Void) -> Routable {
+  return METHOD(.head, handler)
+}
+
+public func HEAD<A1>(_ a1: Param<A1>,
+                     _ handler: @escaping (HTTPRequest, HTTPResponse, A1) throws -> Void) -> Routable {
+  return METHOD(.head, a1, handler)
+}
+
+public func HEAD<A1, A2>(_ a1: Param<A1>, _ a2: Param<A2>,
+                         _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2) throws -> Void) -> Routable {
+  return METHOD(.head, a1, a2, handler)
+}
+
+public func HEAD<A1, A2, A3>(_ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>,
+                             _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3) throws -> Void) -> Routable {
+  return METHOD(.head, a1, a2, a3, handler)
+}
+
+public func HEAD<A1, A2, A3, A4>(_ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>,
+                                 _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4) throws -> Void) -> Routable {
+  return METHOD(.head, a1, a2, a3, a4, handler)
+}
+
+public func HEAD<A1, A2, A3, A4, A5>(_ a1: Param<A1>, _ a2: Param<A2>, _ a3: Param<A3>, _ a4: Param<A4>, _ a5: Param<A5>,
+                                     _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4, A5) throws -> Void) -> Routable {
+  return METHOD(.head, a1, a2, a3, a4, a5, handler)
+}

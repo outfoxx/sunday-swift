@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import Foundation
 
 
@@ -84,6 +83,7 @@ public struct HTTP {
     public static let connection = "connection"
     public static let contentLength = "content-length"
     public static let contentType = "content-type"
+    public static let location = "location"
     public static let server = "server"
     public static let transferType = "transfer-type"
     public static let userAgent = "user-agent"
@@ -93,6 +93,9 @@ public struct HTTP {
   }
 
 }
+
+
+public typealias Parameters = [String: Any]
 
 
 extension URL {

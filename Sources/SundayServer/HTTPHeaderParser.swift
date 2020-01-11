@@ -268,7 +268,7 @@ private func parseRequestURI(from uri: String) -> URL? {
   if uri == "*" {
     var comps = URLComponents()
     comps.path = uri
-    return try? comps.asURL()
+    return comps.url
   }
 
   return URL(string: uri)

@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 @testable import Sunday
 import XCTest
 

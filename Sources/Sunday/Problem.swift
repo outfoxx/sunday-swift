@@ -20,17 +20,17 @@ import PotentCodables
  */
 public struct Problem: Error {
 
-  let status: Int
+  public let status: Int
 
-  let title: String
+  public let title: String
 
-  let detail: String?
+  public let detail: String?
 
-  let instance: String?
+  public let instance: String?
 
-  let type: URL?
+  public let type: URL?
 
-  let extended: [String: AnyValue]?
+  public let extended: [String: AnyValue]?
 
 }
 
@@ -57,5 +57,12 @@ extension Problem: CustomStringConvertible {
 
     return output.joined(separator: "\n")
   }
+
+}
+
+
+public extension MediaType {
+
+  static let problem = MediaType(type: .application, tree: .standard, subtype: "problem", suffix: .json)
 
 }

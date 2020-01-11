@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import PotentJSON
 @testable import Sunday
 @testable import SundayServer
@@ -51,6 +50,8 @@ class HTTPServerTests: XCTestCase {
     }
   }
 
+  let session = URLSession.create(configuration: .default)
+
   override class func setUp() {
     super.setUp()
 
@@ -60,36 +61,47 @@ class HTTPServerTests: XCTestCase {
   func testPOST() throws {
 
     let postX = expectation(description: "POST")
-    SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .post,
-                                   parameters: ["name": "ghi", "cost": 19.20],
-                                   encoding: JSONEncoding.default, headers: ["Accept": "application/json"])
-      .response { response in
-        defer { postX.fulfill() }
 
-        guard response.error == nil else {
-          XCTFail("Request failed: \(response.error!)")
-          return
-        }
+    struct Params: Codable {
+      let name: String
+      let cost: Double
+    }
 
-        guard let data = response.data else {
-          XCTFail("No response data")
-          return
-        }
+    var urlRequest = URLRequest(url: URL(string: "http://localhost:\(Self.server.port)/something")!)
+    urlRequest.httpMethod = "POST"
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
+    urlRequest.httpBody = try JSONEncoder.default.encode(Params(name: "ghi", cost: 19.20))
 
-        guard response.response?.statusCode == 201 else {
-          let message = String(data: data, encoding: .utf8)!
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
-          return
-        }
+    _ = session.response(request: urlRequest)
+      .subscribe(
+        onSuccess: { (response, data) in
+          defer { postX.fulfill() }
 
-        do {
-          let item = try JSONDecoder.default.decode(Item.self, from: data)
-          XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
+          guard let data = data else {
+            XCTFail("No response data")
+            return
+          }
+
+          guard response.statusCode == 201 else {
+            let message = String(data: data, encoding: .utf8)!
+            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
+            return
+          }
+
+          do {
+            let item = try JSONDecoder.default.decode(Item.self, from: data)
+            XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
+          }
+          catch {
+            XCTFail("Decode/Compare failed: \(error)")
+          }
+        },
+        onError: { error in
+          defer { postX.fulfill() }
+          XCTFail("Request failed: \(error)")
         }
-        catch {
-          XCTFail("Decode/Compare failed: \(error)")
-        }
-      }
+      )
 
     waitForExpectations(timeout: 2)
   }
@@ -97,36 +109,43 @@ class HTTPServerTests: XCTestCase {
   func testGETList() {
 
     let listX = expectation(description: "GET (list)")
-    SessionManager.default.request("http://localhost:\(Self.server.port)/something", method: .get,
-                                   headers: ["Accept": "application/json"])
-      .response { response in
-        defer { listX.fulfill() }
 
-        guard response.error == nil else {
-          XCTFail("Request failed: \(response.error!)")
-          return
-        }
+    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something")!
 
-        guard let data = response.data else {
-          XCTFail("No response data")
-          return
-        }
+    var urlRequest = URLRequest(url: urlComponenets.url!)
+    urlRequest.httpMethod = "GET"
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-        guard response.response?.statusCode == 200 else {
-          let message = String(data: data, encoding: .utf8)!
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
-          return
-        }
+    _ = session.response(request: urlRequest)
+      .subscribe(
+        onSuccess: { (response, data) in
+          defer { listX.fulfill() }
 
-        do {
-          let items = try JSONDecoder.default.decode([Item].self, from: data)
-          XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
-          XCTAssertTrue(items.contains(Item(name: "def", cost: 6.40)))
+          guard let data = data else {
+            XCTFail("No response data")
+            return
+          }
+
+          guard response.statusCode == 200 else {
+            let message = String(data: data, encoding: .utf8)!
+            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
+            return
+          }
+
+          do {
+            let items = try JSONDecoder.default.decode([Item].self, from: data)
+            XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
+            XCTAssertTrue(items.contains(Item(name: "def", cost: 6.40)))
+          }
+          catch {
+            XCTFail("Decode/Compare failed: \(error)")
+          }
+        },
+        onError: { error in
+          defer { listX.fulfill() }
+          XCTFail("Request failed: \(error)")
         }
-        catch {
-          XCTFail("Decode/Compare failed: \(error)")
-        }
-      }
+      )
 
     waitForExpectations(timeout: 2)
   }
@@ -134,35 +153,42 @@ class HTTPServerTests: XCTestCase {
   func testGETItem() {
 
     let itemX = expectation(description: "GET (item)")
-    SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .get,
-                                   headers: ["Accept": "application/json"])
-      .response { response in
-        defer { itemX.fulfill() }
 
-        guard response.error == nil else {
-          XCTFail("Request failed: \(response.error!)")
-          return
-        }
+    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something/123")!
 
-        guard let data = response.data else {
-          XCTFail("No response data")
-          return
-        }
+    var urlRequest = URLRequest(url: urlComponenets.url!)
+    urlRequest.httpMethod = "GET"
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-        guard response.response?.statusCode == 200 else {
-          let message = String(data: data, encoding: .utf8)!
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
-          return
-        }
+    _ = session.response(request: urlRequest)
+      .subscribe(
+        onSuccess: { (response, data) in
+          defer { itemX.fulfill() }
 
-        do {
-          let item = try JSONDecoder.default.decode(Item.self, from: data)
-          XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
+          guard let data = data else {
+            XCTFail("No response data")
+            return
+          }
+
+          guard response.statusCode == 200 else {
+            let message = String(data: data, encoding: .utf8)!
+            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
+            return
+          }
+
+          do {
+            let item = try JSONDecoder.default.decode(Item.self, from: data)
+            XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
+          }
+          catch {
+            XCTFail("Decode/Compare failed: \(error)")
+          }
+        },
+        onError: { error in
+          defer { itemX.fulfill() }
+          XCTFail("Request failed: \(error)")
         }
-        catch {
-          XCTFail("Decode/Compare failed: \(error)")
-        }
-      }
+      )
 
     waitForExpectations(timeout: 2)
   }
@@ -170,28 +196,36 @@ class HTTPServerTests: XCTestCase {
   func testDELETE() {
 
     let deleteX = expectation(description: "DELETE")
-    SessionManager.default.request("http://localhost:\(Self.server.port)/something/123", method: .delete)
-      .response { response in
-        defer { deleteX.fulfill() }
 
-        guard response.error == nil else {
-          XCTFail("Request failed: \(response.error!)")
-          return
+    var urlComponenets = URLComponents(string: "http://localhost:\(Self.server.port)/something/123")!
+
+    var urlRequest = URLRequest(url: urlComponenets.url!)
+    urlRequest.httpMethod = "DELETE"
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
+
+    _ = session.response(request: urlRequest)
+      .subscribe(
+        onSuccess: { (response, data) in
+          defer { deleteX.fulfill() }
+
+          guard let data = data else {
+            XCTFail("No response data")
+            return
+          }
+
+          guard response.statusCode == 204 else {
+            let message = String(data: data, encoding: .utf8)!
+            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
+            return
+          }
+
+          XCTAssertEqual(data.count, 0)
+        },
+        onError: { error in
+          defer { deleteX.fulfill() }
+          XCTFail("Request failed: \(error)")
         }
-
-        guard let data = response.data else {
-          XCTFail("No response data")
-          return
-        }
-
-        guard response.response?.statusCode == 204 else {
-          let message = String(data: data, encoding: .utf8)!
-          XCTFail("Invalid response status code: \(response.response!.statusCode) - \(message)")
-          return
-        }
-
-        XCTAssertEqual(data.count, 0)
-      }
+      )
 
     waitForExpectations(timeout: 2)
   }

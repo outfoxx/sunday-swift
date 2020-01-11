@@ -1,5 +1,5 @@
 //
-//  RxSwiftExtensions.swift
+//  Observables.swift
 //  Sunday
 //
 //  Copyright © 2018 Outfox, inc.
@@ -50,3 +50,4 @@ extension PrimitiveSequence where Trait == CompletableTrait, Element == Swift.Ne
   }
 
 }
+

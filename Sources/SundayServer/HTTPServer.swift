@@ -18,8 +18,6 @@ public protocol HTTPServer: AnyObject {
 
   typealias Dispatcher = (HTTPRequest, HTTPResponse) throws -> Void
 
-  var port: UInt16 { get }
-
   var queue: DispatchQueue { get }
 
 }
@@ -29,35 +27,28 @@ public protocol HTTPServer: AnyObject {
 open class NetworkHTTPServer: NSObject, HTTPServer {
 
   public let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])
+
   private let listener: NWListener
   private let mgrQueue = DispatchQueue(label: "HTTP Server Queue", attributes: [])
   private let dispatcher: Dispatcher
   private var connections = [String: NetworkHTTPConnection]()
 
-  public var port: UInt16 {
-    return listener.port?.rawValue ?? 0
-  }
-
   public private(set) var state: NWListener.State?
   @objc public private(set) dynamic var isReady: Bool = false
 
-  public init(port: NWEndpoint.Port = .any, localOnly: Bool = true, serviceName: String? = nil, dispatcher: @escaping Dispatcher) throws {
+  public init(port: NWEndpoint.Port = .any, localOnly: Bool = true,
+              serviceName: String? = nil, serviceType: String? = nil, dispatcher: @escaping Dispatcher) throws {
     self.dispatcher = dispatcher
 
     listener = try NWListener(using: .tcp, on: port)
 
     super.init()
 
-    if let serviceName = serviceName {
-      listener.service = NWListener.Service(name: serviceName, type: "_http._tcp")
-    }
     listener.parameters.acceptLocalOnly = localOnly
-
     listener.newConnectionHandler = { [weak self] connection in
       guard let self = self else { return }
       self.connect(with: connection)
     }
-
     listener.stateUpdateHandler = { [weak self] state in
       guard let self = self else { return }
       switch state {
@@ -68,14 +59,36 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
       }
     }
 
+    if let serviceType = serviceType {
+      let serviceName = serviceName ?? String(format: "%qx", UInt64.random(in: 0...UInt64.max))
+      listener.service = NWListener.Service(name: serviceName, type: serviceType)
+    }
+
   }
 
-  public func start(timeout: TimeInterval = 5) -> Bool {
-    let sema = DispatchSemaphore(value: 0)
+  public func start(timeout: TimeInterval = 30) -> URL? {
 
+    let starter = DispatchGroup()
+
+    let locator: ServiceLocator?
+    if let service = listener.service {
+
+      starter.enter()
+
+      locator = ServiceLocator(instance: service.name ?? "",
+                               type: service.type,
+                               domain: service.domain ?? "",
+                               signal: { starter.leave() })
+    }
+    else {
+
+      locator = nil
+    }
+
+    starter.enter()
     let obs = observe(\.isReady, options: [.initial, .new]) { _, change in
       if change.newValue! {
-        sema.signal()
+        starter.leave()
       }
     }
 
@@ -83,9 +96,12 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
 
       listener.start(queue: queue)
 
-      switch sema.wait(timeout: .now() + timeout) {
-      case .success: return true
-      case .timedOut: return false
+      switch starter.wait(timeout: .now() + timeout) {
+      case .success:
+        return locator?.located.first.flatMap { URL(string: "http://\($0.hostName):\($0.port)") } ??
+          URL(string: "http://localhost:\(listener.port!)")!
+
+      case .timedOut: return nil
       }
 
     }

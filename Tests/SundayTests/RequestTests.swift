@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import PotentCodables
 import PromiseKit
 @testable import Sunday
@@ -54,14 +53,14 @@ class RequestTests: ParameterizedTest {
 
     let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
 
-    let target = EndpointTarget(baseURL: "http://localhost:\(server.port)/")
+    let baseURL = URLTemplate(template: "http://localhost:\(server.port)/")
 
-    let reqMgr = NetworkRequestManager(target: target, sessionManager: .default)
+    let reqMgr = NetworkRequestManager(baseURL: baseURL)
 
     try reqMgr
-      .fetch(method: .post, pathTemplate: "echo",
-             pathParameters: nil, queryParameters: nil, body: sourceObject,
-             contentType: contentType, acceptTypes: [acceptType], headers: nil)
+      .result(method: .post, pathTemplate: "echo",
+              pathParameters: nil, queryParameters: nil, body: sourceObject,
+              contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
       .promise()
       .done { (returnedObject: TestObject) in
         XCTAssertEqual(sourceObject, returnedObject)

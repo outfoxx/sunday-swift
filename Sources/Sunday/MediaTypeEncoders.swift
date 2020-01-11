@@ -8,10 +8,9 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import Foundation
-import PotentCBOR
 import PotentCodables
+import PotentCBOR
 import PotentJSON
 
 
@@ -19,7 +18,8 @@ public protocol MediaTypeEncoder {
   func encode<T>(_ value: T) throws -> Data where T: Encodable
 }
 
-public class MediaTypeEncoders {
+
+public struct MediaTypeEncoders {
 
   public static let `default` = MediaTypeEncoders.Builder().registerDefault().build()
 
@@ -39,8 +39,13 @@ public class MediaTypeEncoders {
       return registerURL().registerData().registerJSON().registerCBOR()
     }
 
-    public func registerURL(encoder: AnyValueEncoder = .default, encoding: URLEncoding = .default) -> Builder {
-      return register(encoder: ParameterEncodingEncoder(encoder: encoder, encoding: encoding), forTypes: .wwwFormUrlEncoded)
+    public func registerURL(arrayEndcoding: URLEncoder.ArrayEncoding = .bracketed,
+                            boolEncoding: URLEncoder.BoolEncoding = .numeric,
+                            dateEncoding: URLEncoder.DateEncoding = .millisecondsSince1970,
+                            encoder: AnyValueEncoder = .default) -> Builder {
+      return register(encoder: URLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
+                                          dateEncoding: dateEncoding, encoder: encoder),
+                      forTypes: .wwwFormUrlEncoded)
     }
 
     public func registerData() -> Builder {
@@ -83,19 +88,15 @@ public class MediaTypeEncoders {
 
   }
 
-  private var registered = [MediaType: MediaTypeEncoder]()
+  private let registered: [MediaType: MediaTypeEncoder]
 
-  private init(registered: [MediaType: MediaTypeEncoder]) {
-    self.registered = registered
-  }
-
-  public func register(encoding: MediaTypeEncoder, forTypes types: MediaType...) {
-    types.forEach { registered[$0] = encoding }
+  public func supports(for mediaType: MediaType) -> Bool {
+    return registered.keys.contains(mediaType)
   }
 
   public func find(for mediaType: MediaType) throws -> MediaTypeEncoder {
     guard let encoder = registered.first(where: { key, _ in key ~= mediaType })?.value else {
-      throw SundayError.parameterEncodingFailed(reason: .unsupportedContentType(mediaType))
+      throw SundayError.requestEncodingFailed(reason: .unsupportedContentType(mediaType))
     }
     return encoder
   }
@@ -119,7 +120,8 @@ public struct DataEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let data = value as? Data else {
-      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .octetStream, error: Error.translationNotSupported))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .octetStream,
+                                                                           error: Error.translationNotSupported))
     }
     return data
   }
@@ -142,10 +144,12 @@ public struct TextEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let string = value as? String else {
-      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .plain, error: Error.translationNotSupported))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .plain,
+                                                                           error: Error.translationNotSupported))
     }
     guard let encoded = string.data(using: encoding) else {
-      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .plain, error: Error.encodingFailed))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .plain,
+                                                                           error: Error.encodingFailed))
     }
     return encoded
   }

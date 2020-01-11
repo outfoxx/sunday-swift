@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import Foundation
 import PotentCBOR
 import PotentJSON
@@ -79,11 +78,15 @@ public struct MediaTypeDecoders {
 
   }
 
-  private var registered = [MediaType: MediaTypeDecoder]()
+  private let registered: [MediaType: MediaTypeDecoder]
+
+  public func supports(for mediaType: MediaType) -> Bool {
+    return registered.keys.contains(mediaType)
+  }
 
   public func find(for mediaType: MediaType) throws -> MediaTypeDecoder {
     guard let decoder = registered.first(where: { key, _ in key ~= mediaType })?.value else {
-      throw SundayError.responseSerializationFailed(reason: .unsupportedContentType(mediaType))
+      throw SundayError.responseDecodingFailed(reason: .unsupportedContentType(mediaType))
     }
     return decoder
   }
@@ -107,7 +110,8 @@ public struct DataDecoder: MediaTypeDecoder {
 
   public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
     guard type == Data.self else {
-      throw SundayError.responseSerializationFailed(reason: .serializationFailed(contentType: .octetStream, error: Error.translationNotSupported))
+      throw SundayError.responseDecodingFailed(reason: .serializationFailed(contentType: .octetStream,
+                                                                            error: Error.translationNotSupported))
     }
     return (data as! T)
   }

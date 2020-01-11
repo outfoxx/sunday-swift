@@ -8,7 +8,6 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Alamofire
 import Foundation
 import RxSwift
 
@@ -21,40 +20,42 @@ private let logger = logging.for(category: "event-source")
 
 open class EventSource {
 
+  public enum Error: Swift.Error {
+    case invalidState
+  }
+
   public enum State: String, CaseIterable {
     case connecting
     case open
     case closed
   }
 
-  public typealias RequestFactory = () throws -> DataRequest
-
   public fileprivate(set) var readyState = State.closed
   public fileprivate(set) var retryTime = 3000
 
-  private let requestFactory: RequestFactory
-  private var request: Request?
+  private let data$: Observable<StreamResponseEvent>
+  private var data$Disposer: Disposable?
   private var receivedString: String?
   private var onOpenCallback: (() -> Void)?
-  private var onErrorCallback: ((Error?) -> Void)?
+  private var onErrorCallback: ((Swift.Error?) -> Void)?
   private var onMessageCallback: ((String?, String?, String?) -> Void)?
   private var eventListeners = [String: (String?, String?, String?) -> Void]()
   private var queue: DispatchQueue
-  private var errorBeforeSetErrorCallBack: Error?
+  private var errorBeforeSetErrorCallBack: Swift.Error?
   private var receivedDataBuffer: Data
   private var lastEventId: String?
 
   private var event = [String: String]()
 
 
-  public init(queue: DispatchQueue = DispatchQueue.global(qos: .background), requestFactory: @escaping RequestFactory) {
+  public init(data$: Observable<StreamResponseEvent>, queue: DispatchQueue = .global(qos: .background)) {
 
-    self.requestFactory = requestFactory
+    self.data$ = data$
     self.queue = queue
-    receivedString = nil
-    receivedDataBuffer = Data()
+    self.receivedString = nil
+    self.receivedDataBuffer = Data()
 
-    readyState = .closed
+    self.readyState = .closed
   }
 
   public static func defaultSessionConfiguration() -> URLSessionConfiguration {
@@ -70,19 +71,29 @@ open class EventSource {
   // Mark: Connect
 
   open func connect() {
+    if readyState == .connecting || readyState == .open {
+      return
+    }
 
     readyState = .connecting
 
-    do {
-
-      request = try requestFactory()
-        .stream(closure: receivedData)
-        .response(completionHandler: receivedResponse)
-
-    }
-    catch {
-      logger.error("Error creating event source request: \(error)")
-    }
+    data$Disposer = data$
+      .map { event in
+        switch event {
+        case .connect(let response):
+          try self.receivedHeaders(response)
+        case .data(let data):
+          try self.receivedData(data)
+        }
+      }
+      .subscribe(
+        onError: { error in
+          self.receivedError(error: error)
+        },
+        onCompleted: {
+          self.receivedComplete()
+        }
+      )
   }
 
   // Mark: Close
@@ -91,22 +102,8 @@ open class EventSource {
 
     readyState = .closed
 
-    request?.cancel()
-    request = nil
-  }
-
-  fileprivate func receivedMessageToClose(_ response: HTTPURLResponse?) -> Bool {
-
-    guard let response = response else {
-      return false
-    }
-
-    if response.statusCode == 204 {
-      close()
-      return true
-    }
-
-    return false
+    data$Disposer?.dispose()
+    data$Disposer = nil
   }
 
   // Mark: EventListeners
@@ -116,7 +113,7 @@ open class EventSource {
     self.onOpenCallback = onOpenCallback
   }
 
-  open func onError(_ onErrorCallback: @escaping (Error?) -> Void) {
+  open func onError(_ onErrorCallback: @escaping (Swift.Error?) -> Void) {
 
     self.onErrorCallback = onErrorCallback
 
@@ -144,31 +141,30 @@ open class EventSource {
 
   // MARK: Handlers
 
-  fileprivate func receivedData(_ data: Data) {
+  fileprivate func receivedHeaders(_ response: HTTPURLResponse) throws {
+    guard readyState == .connecting else {
+      close()
+      throw Error.invalidState
+    }
 
-    switch readyState {
-    case .connecting:
+    readyState = .open
 
-      readyState = .open
+    logger.debug("Opened")
 
-      logger.debug("Opened")
+    onOpenCallback.flatMap { queue.async(execute: $0) }
+  }
 
-      if let onOpenCallback = onOpenCallback {
-        queue.async(execute: onOpenCallback)
-      }
+  fileprivate func receivedData(_ data: Data) throws {
+    guard readyState == .open else {
+      close()
+      throw Error.invalidState
+    }
 
-    case .open:
-
-      break
-
-    default:
-
-      logger.debug("Ignored Data, invalid state: \(readyState)")
-
+    guard !data.isEmpty else {
       return
     }
 
-    logger.debug("Received Data")
+    logger.debug("Received data, count=\(data.count)")
 
     receivedDataBuffer.append(data)
 
@@ -176,19 +172,9 @@ open class EventSource {
     parseEventStream(eventStream)
   }
 
-  fileprivate func receivedResponse(_ dataResponse: DefaultDataResponse) {
+  fileprivate func receivedError(error: Swift.Error) {
 
-    readyState = .closed
-
-    if receivedMessageToClose(dataResponse.response) {
-
-      logger.debug("Closed")
-
-      return
-    }
-
-    let error = dataResponse.error
-    if error == nil || (error as? URLError)?.code != .cancelled {
+    if (error as? URLError)?.code != .cancelled {
 
       logger.debug("Closed: \(error)")
 
@@ -209,6 +195,15 @@ open class EventSource {
 
     }
 
+  }
+
+  fileprivate func receivedComplete() {
+
+    close()
+
+    logger.debug("Closed")
+
+    return
   }
 
   // MARK: Helpers
@@ -279,6 +274,8 @@ open class EventSource {
 
       if let data = parsedEvent.data, let onMessage = onMessageCallback {
 
+        logger.debug("onMessage: event=\(parsedEvent.event ?? ""), id=\(parsedEvent.id ?? "")")
+
         queue.async {
           onMessage(self.lastEventId, parsedEvent.event, data)
         }
@@ -286,6 +283,9 @@ open class EventSource {
       }
 
       if let event = parsedEvent.event, let data = parsedEvent.data, let eventHandler = eventListeners[event] {
+
+        logger.debug("listener: event=\(parsedEvent.event ?? ""), id=\(parsedEvent.id ?? "")")
+
         queue.async {
           eventHandler(self.lastEventId, event, data)
         }
@@ -359,9 +359,9 @@ public class ObservableEventSource<D: Decodable>: EventSource {
   private let eventDecoder: MediaTypeDecoder
 
 
-  public init(eventDecoder: MediaTypeDecoder, queue: DispatchQueue, requestFactory: @escaping RequestFactory) {
+  public init(data$: Observable<StreamResponseEvent>, eventDecoder: MediaTypeDecoder, queue: DispatchQueue) {
     self.eventDecoder = eventDecoder
-    super.init(queue: queue, requestFactory: requestFactory)
+    super.init(data$: data$, queue: queue)
   }
 
   public func observe() -> Observable<D> {
@@ -372,7 +372,7 @@ public class ObservableEventSource<D: Decodable>: EventSource {
       self.onMessage { _, event, data in
 
         // Convert "data" value to JSON
-        guard let data = (data ?? "{}").data(using: .utf8) else {
+        guard let data = #"{"type": "\#(event ?? "")", "value": \#(data ?? "nil") }"#.data(using: .utf8) else {
           logger.error("Unable to parse event data")
           return
         }
