@@ -9,7 +9,6 @@
 //
 
 import PotentCodables
-import PromiseKit
 @testable import Sunday
 @testable import SundayServer
 import XCTest
@@ -59,20 +58,20 @@ class RequestTests: ParameterizedTest {
 
     let reqMgr = NetworkRequestManager(baseURL: baseURL)
 
-    try reqMgr
+    _ = try reqMgr
       .result(method: .post, pathTemplate: "echo",
               pathParameters: nil, queryParameters: nil, body: sourceObject,
               contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
-      .promise()
-      .done { (returnedObject: TestObject) in
-        XCTAssertEqual(sourceObject, returnedObject)
-      }
-      .catch { error in
-        XCTFail("Request failed: \(error)")
-      }
-      .finally {
-        x.fulfill()
-      }
+      .subscribe(
+        onSuccess: { (returnedObject: TestObject) in
+          XCTAssertEqual(sourceObject, returnedObject)
+          x.fulfill()
+        },
+        onError: { error in
+          XCTFail("Request failed: \(error)")
+          x.fulfill()
+        }
+      )
 
     waitForExpectations(timeout: 500.0, handler: nil)
   }
