@@ -12,9 +12,6 @@ import Foundation
 import RxSwift
 
 
-private let validNewlines = ["\r\n", "\n", "\r"]
-private let validNewlineSequences = validNewlines.map { "\($0)\($0)".data(using: .utf8)! }
-
 private let logger = logging.for(category: "event-source")
 
 
@@ -30,10 +27,10 @@ open class EventSource {
     case closed
   }
 
-  public fileprivate(set) var readyState = State.closed
+  public fileprivate(set) var state = State.closed
   public fileprivate(set) var retryTime = 3000
 
-  private let data$: Observable<StreamResponseEvent>
+  private let requestor: (HTTP.Headers) -> Observable<StreamResponseEvent>
   private var data$Disposer: Disposable?
   private var receivedString: String?
   private var onOpenCallback: (() -> Void)?
@@ -41,21 +38,18 @@ open class EventSource {
   private var onMessageCallback: ((String?, String?, String?) -> Void)?
   private var eventListeners = [String: (String?, String?, String?) -> Void]()
   private var queue: DispatchQueue
-  private var errorBeforeSetErrorCallBack: Swift.Error?
   private var receivedDataBuffer: Data
   private var lastEventId: String?
 
   private var event = [String: String]()
 
 
-  public init(data$: Observable<StreamResponseEvent>, queue: DispatchQueue = .global(qos: .background)) {
+  public init(queue: DispatchQueue = .global(qos: .background), requestor: @escaping (HTTP.Headers) -> Observable<StreamResponseEvent>) {
 
-    self.data$ = data$
+    self.requestor = requestor
     self.queue = queue
     self.receivedString = nil
     self.receivedDataBuffer = Data()
-
-    self.readyState = .closed
   }
 
   public static func defaultSessionConfiguration() -> URLSessionConfiguration {
@@ -71,36 +65,42 @@ open class EventSource {
   // Mark: Connect
 
   open func connect() {
-    if readyState == .connecting || readyState == .open {
+    if state == .connecting || state == .open {
       return
     }
 
-    readyState = .connecting
+    state = .connecting
 
-    data$Disposer = data$
-      .map { event in
-        switch event {
-        case .connect(let response):
-          try self.receivedHeaders(response)
-        case .data(let data):
-          try self.receivedData(data)
+    var headers = HTTP.Headers()
+    if let lastEventId = lastEventId {
+      headers[lastEventIdHeader] = [lastEventId]
+    }
+    
+    data$Disposer =
+      requestor(headers)
+        .map { event in
+          switch event {
+          case .connect(let response):
+            try self.receivedHeaders(response)
+          case .data(let data):
+            try self.receivedData(data)
+          }
         }
-      }
-      .subscribe(
-        onError: { error in
-          self.receivedError(error: error)
-        },
-        onCompleted: {
-          self.receivedComplete()
-        }
-      )
+        .subscribe(
+          onError: { error in
+            self.receivedError(error: error)
+          },
+          onCompleted: {
+            self.receivedComplete()
+          }
+        )
   }
 
   // Mark: Close
 
   open func close() {
 
-    readyState = .closed
+    state = .closed
 
     data$Disposer?.dispose()
     data$Disposer = nil
@@ -116,11 +116,6 @@ open class EventSource {
   open func onError(_ onErrorCallback: @escaping (Swift.Error?) -> Void) {
 
     self.onErrorCallback = onErrorCallback
-
-    if let errorBeforeSet = errorBeforeSetErrorCallBack {
-      self.onErrorCallback!(errorBeforeSet)
-      errorBeforeSetErrorCallBack = nil
-    }
   }
 
   open func onMessage(_ onMessageCallback: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
@@ -142,12 +137,12 @@ open class EventSource {
   // MARK: Handlers
 
   fileprivate func receivedHeaders(_ response: HTTPURLResponse) throws {
-    guard readyState == .connecting else {
+    guard state == .connecting else {
       close()
       throw Error.invalidState
     }
 
-    readyState = .open
+    state = .open
 
     logger.debug("Opened")
 
@@ -155,7 +150,7 @@ open class EventSource {
   }
 
   fileprivate func receivedData(_ data: Data) throws {
-    guard readyState == .open else {
+    guard state == .open else {
       close()
       throw Error.invalidState
     }
@@ -168,38 +163,33 @@ open class EventSource {
 
     receivedDataBuffer.append(data)
 
-    let eventStream = extractEventsFromBuffer()
-    parseEventStream(eventStream)
+    let eventStrings = extractEventStringsFromBuffer()
+    parseEventStrings(eventStrings)
   }
 
   fileprivate func receivedError(error: Swift.Error) {
 
-    if (error as? URLError)?.code != .cancelled {
-
-      logger.debug("Closed: \(error)")
-
-      let nanoseconds = Double(retryTime) / 1000.0 * Double(NSEC_PER_SEC)
-      let delayTime = DispatchTime.now() + Double(Int64(nanoseconds)) / Double(NSEC_PER_SEC)
-
-      queue.asyncAfter(deadline: delayTime, execute: connect)
+    guard (error as? URLError)?.code != .cancelled else {
+      return
     }
 
-    queue.async {
+    logger.debug("Error: \(error)")
 
-      if let errorCallback = self.onErrorCallback {
-        errorCallback(error)
-      }
-      else {
-        self.errorBeforeSetErrorCallBack = error
-      }
+    scheduleReconnect()
 
+    if let onErrorCallback = onErrorCallback {
+        queue.async { onErrorCallback(error) }
     }
-
   }
 
   fileprivate func receivedComplete() {
-
-    close()
+    
+    if state != .closed {
+      
+      scheduleReconnect()
+      
+      return
+    }
 
     logger.debug("Closed")
 
@@ -207,20 +197,28 @@ open class EventSource {
   }
 
   // MARK: Helpers
+  
+  fileprivate func scheduleReconnect() {
 
-  fileprivate func extractEventsFromBuffer() -> [String] {
+    let nanoseconds = Double(retryTime) / 1000.0 * Double(NSEC_PER_SEC)
+    let delayTime = DispatchTime.now() + Double(Int64(nanoseconds)) / Double(NSEC_PER_SEC)
 
-    var events = [String]()
+    queue.asyncAfter(deadline: delayTime, execute: connect)
+  }
+
+  fileprivate func extractEventStringsFromBuffer() -> [String] {
+
+    var eventStrings = [String]()
 
     // Find first occurrence of delimiter
     var searchRange: Range<Int> = 0 ..< receivedDataBuffer.count
-    while let delimterRange = searchForDelimiterInRange(searchRange) {
+    while let delimterRange = searchForSeparatorInRange(searchRange) {
 
       let dataRange = Range(uncheckedBounds: (searchRange.lowerBound, delimterRange.upperBound))
 
       let dataChunk = receivedDataBuffer.subdata(in: dataRange)
 
-      events.append(String(data: dataChunk, encoding: .utf8)!)
+      eventStrings.append(String(data: dataChunk, encoding: .utf8)!)
 
       // Search for next occurrence of delimiter
       searchRange = Range(uncheckedBounds: (delimterRange.upperBound, searchRange.upperBound))
@@ -229,12 +227,12 @@ open class EventSource {
     // Remove the found events from the buffer
     receivedDataBuffer.replaceSubrange(0 ..< searchRange.lowerBound, with: Data())
 
-    return events
+    return eventStrings
   }
 
-  fileprivate func searchForDelimiterInRange(_ searchRange: Range<Int>) -> Range<Int>? {
+  fileprivate func searchForSeparatorInRange(_ searchRange: Range<Int>) -> Range<Int>? {
 
-    for delimiter in validNewlineSequences {
+    for delimiter in validSeparatorSequences {
 
       if let foundRange = receivedDataBuffer.range(of: delimiter, options: [], in: searchRange) {
         return foundRange
@@ -245,32 +243,26 @@ open class EventSource {
     return nil
   }
 
-  fileprivate func parseEventStream(_ events: [String]) {
+  fileprivate func parseEventStrings(_ eventStrings: [String]) {
 
-    var parsedEvents: [(id: String?, event: String?, data: String?)] = Array()
-
-    for event in events {
-      if event.isEmpty {
+    for eventString in eventStrings {
+      if eventString.isEmpty {
         continue
       }
 
-      if event.hasPrefix(":") {
-        continue
-      }
-
-      if (event as String).contains("retry:") {
-        if let reconnectTime = parseRetryTime(event) {
-          retryTime = reconnectTime
+      let parsedEvent = parseEvent(eventString)
+      
+      if let retry = parsedEvent.retry {
+        
+        guard parsedEvent.data == nil, parsedEvent.id == nil, parsedEvent.event == nil else {
+          logger.debug("ignoring invalid retry timeout message")
+          continue
         }
-        continue
+        
+        self.retryTime = Int(retry.trimmingCharacters(in: .whitespaces)) ?? self.retryTime
       }
-
-      parsedEvents.append(parseEvent(event))
-    }
-
-    for parsedEvent in parsedEvents {
-
-      lastEventId = parsedEvent.id
+      
+      lastEventId = parsedEvent.id ?? lastEventId
 
       if let data = parsedEvent.data, let onMessage = onMessageCallback {
 
@@ -293,61 +285,34 @@ open class EventSource {
     }
   }
 
-  fileprivate func parseEvent(_ eventString: String) -> (id: String?, event: String?, data: String?) {
+  fileprivate func parseEvent(_ eventString: String) -> (id: String?, event: String?, data: String?, retry: String?) {
 
     var id: String?
     var event: String?
     var data: String?
+    var retry: String?
 
     for line in eventString.components(separatedBy: .newlines) {
 
-      let (key, value) = parseLine(line)
+      let fields = line.split(separator: ":", maxSplits: 1)
+      let key = fields[0]
+      let value = fields.count == 2 ? String(fields[1]) : nil
 
-      if let key = key {
-        switch key {
-        case "id":
-          id = value
-        case "event":
-          event = value
-        case "data":
-          data = (data ?? "") + "\n" + (value ?? "")
-        default:
-          break
-        }
-      }
-    }
-
-    return (id, event, data)
-  }
-
-  fileprivate func parseLine(_ line: String) -> (String?, String?) {
-
-    var key: NSString?, value: NSString?
-    let scanner = Scanner(string: line)
-    scanner.scanUpTo(":", into: &key)
-    scanner.scanString(":", into: nil)
-
-    for newline in validNewlines {
-      if scanner.scanUpTo(newline, into: &value) {
+      switch key {
+      case "id":
+        id = value
+      case "event":
+        event = value
+      case "data":
+        data = (data ?? "") + "\n" + (value ?? "")
+      case "retry":
+        retry = value
+      default:
         break
       }
     }
 
-    return (key as String?, value as String?)
-  }
-
-  fileprivate func parseRetryTime(_ eventString: String) -> Int? {
-
-    var reconnectTime: Int?
-    let separators = CharacterSet(charactersIn: ":")
-    if let milli = eventString.components(separatedBy: separators).last {
-      let milliseconds = milli.trimmingCharacters(in: .whitespaces)
-
-      if let intMiliseconds = Int(milliseconds) {
-        reconnectTime = intMiliseconds
-      }
-    }
-    return reconnectTime
+    return (id, event, data, retry)
   }
 
 }
@@ -359,9 +324,9 @@ public class ObservableEventSource<D: Decodable>: EventSource {
   private let eventDecoder: MediaTypeDecoder
 
 
-  public init(data$: Observable<StreamResponseEvent>, eventDecoder: MediaTypeDecoder, queue: DispatchQueue) {
+  public init(eventDecoder: MediaTypeDecoder, queue: DispatchQueue, requestor: @escaping (HTTP.Headers) -> Observable<StreamResponseEvent>) {
     self.eventDecoder = eventDecoder
-    super.init(data$: data$, queue: queue)
+    super.init(queue: queue, requestor: requestor)
   }
 
   public func observe() -> Observable<D> {
@@ -400,3 +365,9 @@ public class ObservableEventSource<D: Decodable>: EventSource {
   }
 
 }
+
+
+private let validNewlines = ["\r\n", "\n", "\r"]
+private let validSeparatorSequences = validNewlines.map { "\($0)\($0)".data(using: .utf8)! }
+
+private let lastEventIdHeader = "Last-Event-Id"

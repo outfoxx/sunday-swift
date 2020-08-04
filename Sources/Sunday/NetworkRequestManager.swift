@@ -213,20 +213,22 @@ public struct NetworkRequestManager: RequestManager {
 
   public func events(from request$: Single<URLRequest>) -> EventSource {
 
-    let data$ = request$.asObservable().flatMap { request in self.session.streamResponse(request: request) }
-
-    return EventSource(data$: data$, queue: requestQueue)
+    return EventSource(queue: requestQueue) { headers in
+      request$.asObservable().flatMap { request in
+        self.session.streamResponse(request: request.adding(httpHeaders: headers))
+      }
+    }
   }
 
   public func events<D: Decodable>(from request$: Single<URLRequest>) throws -> Observable<D> {
 
     let jsonDecoder = try mediaTypeDecoders.find(for: .json)
 
-    let data$ = request$.asObservable().flatMap { request in
-      return self.session.streamResponse(request: request.with(timeoutInterval: 86400))
-    }
-
-    return ObservableEventSource<D>(data$: data$, eventDecoder: jsonDecoder, queue: requestQueue).observe()
+    return ObservableEventSource<D>(eventDecoder: jsonDecoder, queue: requestQueue) { headers in
+      request$.asObservable().flatMap { request in
+        self.session.streamResponse(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+      }
+    }.observe()
   }
 
 }

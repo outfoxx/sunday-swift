@@ -33,5 +33,13 @@ public extension URLRequest {
     copy.timeoutInterval = timeoutInterval
     return copy
   }
+  
+  func adding(httpHeaders: HTTP.Headers) -> URLRequest {
+    var copy = self
+    for (headerName, headerValues) in httpHeaders {
+      headerValues.forEach { copy.addValue($0, forHTTPHeaderField: headerName) }
+    }
+    return copy
+  }
 
 }
