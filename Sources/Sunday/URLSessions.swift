@@ -21,7 +21,7 @@ public extension URLSession {
     return URLSession(configuration: configuration, delegate: localDelegate, delegateQueue: delegateQueue)
   }
 
-  struct RequestOptions: OptionSet {
+struct RequestOptions: OptionSet {
     public var rawValue: Int
 
     public init(rawValue: Int) {
