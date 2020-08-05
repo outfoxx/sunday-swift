@@ -50,7 +50,8 @@ class RequestTests: ParameterizedTest {
     let url = server.start()
     XCTAssertNotNil(url)
 
-    let x = expectation(description: "echo repsonse")
+    let completeX = expectation(description: "echo repsonse - complete")
+    let dataX = expectation(description: "echo repsonse - data")
 
     let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
 
@@ -58,22 +59,26 @@ class RequestTests: ParameterizedTest {
 
     let reqMgr = NetworkRequestManager(baseURL: baseURL)
 
-    _ = try reqMgr
+    let requestCancel = try reqMgr
       .result(method: .post, pathTemplate: "echo",
               pathParameters: nil, queryParameters: nil, body: sourceObject,
               contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
-      .subscribe(
-        onSuccess: { (returnedObject: TestObject) in
-          XCTAssertEqual(sourceObject, returnedObject)
-          x.fulfill()
+      .sink(
+        receiveCompletion: { completion in
+          if case .failure(let error) = completion {
+            XCTFail("Request failed: \(error)")
+          }
+          completeX.fulfill()
         },
-        onError: { error in
-          XCTFail("Request failed: \(error)")
-          x.fulfill()
+        receiveValue: { (returnedObject: TestObject) in
+          XCTAssertEqual(sourceObject, returnedObject)
+          dataX.fulfill()
         }
       )
 
-    waitForExpectations(timeout: 500.0, handler: nil)
+    waitForExpectations(timeout: 5.0) { _ in
+      requestCancel.cancel()
+    }
   }
 
 }

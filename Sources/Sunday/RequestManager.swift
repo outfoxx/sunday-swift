@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import RxSwift
+import Combine
 
 
 public protocol RequestManager {
@@ -19,29 +19,27 @@ public protocol RequestManager {
   func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                              contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                             headers: HTTP.Headers?) throws -> Single<URLRequest>
+                             headers: HTTP.Headers?) throws -> AnyPublisher<URLRequest, Error>
 
-  func response(request: URLRequest) -> Single<(response: HTTPURLResponse, data: Data?)>
-
-  func response(request: URLRequest, options: URLSession.RequestOptions) -> Single<(response: HTTPURLResponse, data: Data?)>
+  func response(request: URLRequest) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error>
 
   func response<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                               pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                               contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                              headers: HTTP.Headers?) throws -> Single<(response: HTTPURLResponse, data: Data?)>
+                              headers: HTTP.Headers?) throws -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error>
 
   func result<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String,
                                           pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                           contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                          headers: HTTP.Headers?) throws -> Single<D>
+                                          headers: HTTP.Headers?) throws -> AnyPublisher<D, Error>
 
   func result<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                             pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                             contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                            headers: HTTP.Headers?) throws -> Completable
+                            headers: HTTP.Headers?) throws -> AnyPublisher<Never, Error>
 
-  func events(from: Single<URLRequest>) -> EventSource
+  func events(from: AnyPublisher<URLRequest, Error>) -> EventSource
 
-  func events<D: Decodable>(from: Single<URLRequest>) throws -> Observable<D>
+  func events<D: Decodable>(from: AnyPublisher<URLRequest, Error>) throws -> AnyPublisher<D, Error>
 
 }

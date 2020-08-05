@@ -9,11 +9,13 @@
 //
 
 import Foundation
-import RxSwift
+import Combine
 
 
 public protocol NetworkRequestAdapter {
+  
+  typealias AdaptResult = AnyPublisher<URLRequest, Error>
 
-  func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> Single<URLRequest>
+  func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult
 
 }

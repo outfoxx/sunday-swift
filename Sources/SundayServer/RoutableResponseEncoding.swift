@@ -139,7 +139,11 @@ class EncodingHTTPResponse: HTTPResponse {
   func send(body: Data) {
     response.send(body: body)
   }
-
+  
+  func send(body: Data, final: Bool) {
+    response.send(body: body, final: final)
+  }
+  
   func send(chunk: Data) {
     response.send(chunk: chunk)
   }

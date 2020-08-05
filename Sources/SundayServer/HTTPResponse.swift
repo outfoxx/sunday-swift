@@ -90,10 +90,17 @@ public protocol HTTPResponse: AnyObject {
 
   /// Sends a complete response body
   ///
-  /// - Precondition: state == .initial
+  /// - Precondition: state == .sendingBody
   /// - Postcondition: state == .complete
   ///
   func send(body: Data)
+
+  /// Sends response body data
+  ///
+  /// - Precondition: state == .sendingBody
+  /// - Postcondition: state == .sendingBody || .complete
+  ///
+  func send(body: Data, final: Bool)
 
   /// Finishes a complete response body
   ///

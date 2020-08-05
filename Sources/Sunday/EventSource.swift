@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import RxSwift
+import Combine
 
 
 private let logger = logging.for(category: "event-source")
@@ -30,8 +30,8 @@ open class EventSource {
   public fileprivate(set) var state = State.closed
   public fileprivate(set) var retryTime = 3000
 
-  private let requestor: (HTTP.Headers) -> Observable<StreamResponseEvent>
-  private var data$Disposer: Disposable?
+  private let requestor: (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>
+  private var data$Cancel: AnyCancellable?
   private var receivedString: String?
   private var onOpenCallback: (() -> Void)?
   private var onErrorCallback: ((Swift.Error?) -> Void)?
@@ -44,7 +44,7 @@ open class EventSource {
   private var event = [String: String]()
 
 
-  public init(queue: DispatchQueue = .global(qos: .background), requestor: @escaping (HTTP.Headers) -> Observable<StreamResponseEvent>) {
+  public init(queue: DispatchQueue = .global(qos: .background), requestor: @escaping (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>) {
 
     self.requestor = requestor
     self.queue = queue
@@ -62,7 +62,7 @@ open class EventSource {
     return configuration
   }
 
-  // Mark: Connect
+  // MARK: Connect
 
   open func connect() {
     if state == .connecting || state == .open {
@@ -76,9 +76,8 @@ open class EventSource {
       headers[lastEventIdHeader] = [lastEventId]
     }
     
-    data$Disposer =
-      requestor(headers)
-        .map { event in
+    data$Cancel = requestor(headers)
+      .tryMap { event -> Void in
           switch event {
           case .connect(let response):
             try self.receivedHeaders(response)
@@ -86,27 +85,27 @@ open class EventSource {
             try self.receivedData(data)
           }
         }
-        .subscribe(
-          onError: { error in
-            self.receivedError(error: error)
-          },
-          onCompleted: {
-            self.receivedComplete()
-          }
-        )
+      .sink(receiveCompletion: { end in
+        switch end {
+        case .finished:
+          self.receivedComplete()
+        case .failure(let error):
+          self.receivedError(error: error)
+        }
+      }, receiveValue: {})
   }
 
-  // Mark: Close
+  // MARK: Close
 
   open func close() {
 
     state = .closed
 
-    data$Disposer?.dispose()
-    data$Disposer = nil
+    data$Cancel?.cancel()
+    data$Cancel = nil
   }
 
-  // Mark: EventListeners
+  // MARK: EventListeners
 
   open func onOpen(_ onOpenCallback: @escaping () -> Void) {
 
@@ -326,55 +325,6 @@ open class EventSource {
     }
 
     return (id, event, data, retry)
-  }
-
-}
-
-
-public class ObservableEventSource<D: Decodable>: EventSource {
-
-
-  private let eventDecoder: MediaTypeDecoder
-
-
-  public init(eventDecoder: MediaTypeDecoder, queue: DispatchQueue, requestor: @escaping (HTTP.Headers) -> Observable<StreamResponseEvent>) {
-    self.eventDecoder = eventDecoder
-    super.init(queue: queue, requestor: requestor)
-  }
-
-  public func observe() -> Observable<D> {
-    return Observable.create { observer -> Disposable in
-
-      // Add handler for all events
-
-      self.onMessage { _, event, data in
-
-        // Convert "data" value to JSON
-        guard let data = #"{"type": "\#(event ?? "")", "value": \#(data ?? "nil") }"#.data(using: .utf8) else {
-          logger.error("Unable to parse event data")
-          return
-        }
-
-        // Parse JSON and pass event on
-
-        do {
-          let event = try self.eventDecoder.decode(D.self, from: data)
-
-          observer.on(.next(event))
-        }
-        catch {
-          logger.error("Unable to decode event: \(error)")
-          return
-        }
-
-      }
-
-      self.connect()
-
-      return Disposables.create {
-        self.close()
-      }
-    }
   }
 
 }

@@ -92,13 +92,21 @@ public class HTTPConnection {
       let responseHeader = responseHeaderParts.joined(separator: "\r\n")
       connection.send(data: responseHeader.data(using: .nonLossyASCII)!, context: "sending response header")
     }
-
+    
     func send(body: Data) {
+      send(body: body, final: true)
+    }
+    
+    func send(body: Data, final: Bool = true) {
       precondition(state == .sendingBody)
-      defer { state = .complete }
+      defer {
+        if final {
+          state = .complete
+        }
+      }
       
       connection.send(data: body, context: "sending body data") { error in
-        if error != nil || self.header(forName: HTTP.StdHeaders.connection) == "close" {
+        if final, error != nil || self.header(forName: HTTP.StdHeaders.connection) == "close" {
           self.connection.close()
         }
       }
@@ -225,7 +233,7 @@ public final class NetworkHTTPConnection: HTTPConnection {
         self.log.error("send error while '\(context)': \(error)")
       }
       completion?(error)
-    })
+    })    
   }
 
   public override func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {

@@ -9,7 +9,7 @@
 //
 
 import Foundation
-import RxSwift
+import Combine
 
 
 /// Composing request adapter that applies another request adapter
@@ -28,9 +28,11 @@ public class HostMatchingAdapter: NetworkRequestAdapter {
     self.adapter = adapter
   }
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> Single<URLRequest> {
+  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
     guard hostnames.contains(urlRequest.url?.host ?? "") else {
-      return Single.just(urlRequest)
+      return Just(urlRequest)
+        .setFailureType(to: Error.self)
+        .eraseToAnyPublisher()
     }
     return adapter.adapt(requestManager: requestManager, urlRequest: urlRequest)
   }
@@ -52,13 +54,15 @@ public class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   // MARK: NetworkRequestAdapter
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> Single<URLRequest> {
+  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
 
     var urlRequest = urlRequest
 
     urlRequest.allHTTPHeaderFields?[header] = "\(tokenHeaderType) \(token)"
 
-    return Single.just(urlRequest)
+    return Just(urlRequest)
+      .setFailureType(to: Error.self)
+      .eraseToAnyPublisher()
   }
 
 }
@@ -75,13 +79,15 @@ public struct TokenAuthorization {
 }
 
 public class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
+  
+  public typealias RefreshResult = AnyPublisher<TokenAuthorization, Error>
 
   private let header: String
   private let tokenHeaderType: String
   private var authorization: TokenAuthorization?
-  private var refresh: (NetworkRequestManager) throws -> Single<TokenAuthorization>
+  private var refresh: (NetworkRequestManager) throws -> RefreshResult
 
-  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, refresh: @escaping (NetworkRequestManager) throws -> Single<TokenAuthorization>) {
+  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, refresh: @escaping (NetworkRequestManager) throws -> RefreshResult) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
     self.refresh = refresh
@@ -95,7 +101,7 @@ public class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   // MARK: NetworkRequestManager
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> Single<URLRequest> {
+  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
     guard let authorization = authorization, authorization.expires > Date() else {
       do {
         return try refresh(requestManager)
@@ -103,13 +109,16 @@ public class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
             self.authorization = authorization
             return self.update(urlRequest: urlRequest, accessToken: authorization.token)
           }
+          .eraseToAnyPublisher()
       }
       catch {
-        return Single.error(error)
+        return Fail(error: error).eraseToAnyPublisher()
       }
     }
 
-    return Single.just(update(urlRequest: urlRequest, accessToken: authorization.token))
+    return Just(update(urlRequest: urlRequest, accessToken: authorization.token))
+      .setFailureType(to: Error.self)
+      .eraseToAnyPublisher()
   }
 
 }
