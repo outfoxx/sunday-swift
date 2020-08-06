@@ -96,7 +96,7 @@ public class HTTPConnection {
     func send(body: Data) {
       precondition(state == .sendingBody)
       defer { state = .complete }
-
+      
       connection.send(data: body, context: "sending body data") { error in
         if error != nil || self.header(forName: HTTP.StdHeaders.connection) == "close" {
           self.connection.close()
@@ -107,15 +107,18 @@ public class HTTPConnection {
     func send(chunk: Data) {
       precondition(state == .sendingChunks)
 
-      var chunk = "\(String(chunk.count, radix: 16))\r\n".data(using: .ascii)!
-      chunk.append(chunk)
-      chunk.append("\r\n".data(using: .ascii)!)
-      connection.send(data: chunk, context: "sending body chunk")
+      var encodedChunk = "\(String(chunk.count, radix: 16))\r\n".data(using: .ascii)!
+      encodedChunk.append(chunk)
+      encodedChunk.append("\r\n".data(using: .ascii)!)
+      connection.send(data: encodedChunk, context: "sending body chunk")
     }
 
     func finish(trailers: HTTP.Headers) {
       precondition(state == .sendingChunks)
+      defer { state = .complete }
 
+      send(chunk: Data())
+      
       connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] _ in
         guard let self = self else { return }
         self.connection.close()
