@@ -89,6 +89,7 @@ public struct HTTP {
     public static let userAgent = "user-agent"
     public static let cookie = "cookie"
     public static let setCookie = "set-cookie"
+    public static let expect = "expect"
 
   }
 
