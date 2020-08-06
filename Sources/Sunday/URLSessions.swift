@@ -73,10 +73,10 @@ struct RequestOptions: OptionSet {
     }
   }
 
-  func streamResponse(request: URLRequest) -> Observable<StreamResponseEvent> {
+  func dataStream(request: URLRequest) -> Observable<StreamResponseEvent> {
 
     guard let delegate = self.delegate as? SessionDelegate else {
-      fatalError("URLSession.streamResponse provided by Sunday requires the SundayURLSessionDelegate on URLSession")
+      fatalError("URLSession.dataStream provided by Sunday requires the SundayURLSessionDelegate on URLSession")
     }
 
     return Observable.create { observer in

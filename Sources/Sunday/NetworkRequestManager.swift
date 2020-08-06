@@ -215,7 +215,7 @@ public struct NetworkRequestManager: RequestManager {
 
     return EventSource(queue: requestQueue) { headers in
       request$.asObservable().flatMap { request in
-        self.session.streamResponse(request: request.adding(httpHeaders: headers))
+        self.session.dataStream(request: request.adding(httpHeaders: headers))
       }
     }
   }
@@ -226,7 +226,7 @@ public struct NetworkRequestManager: RequestManager {
 
     return ObservableEventSource<D>(eventDecoder: jsonDecoder, queue: requestQueue) { headers in
       request$.asObservable().flatMap { request in
-        self.session.streamResponse(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+        self.session.dataStream(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
       }
     }.observe()
   }
