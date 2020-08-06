@@ -15,6 +15,4 @@ public protocol EndpointManager {
 
   var requestManager: RequestManager { get }
 
-  init(requestManager: RequestManager)
-
 }
