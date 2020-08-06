@@ -63,7 +63,7 @@ public struct HTTPRequestParser {
   /// Process available segment of header data
   ///  - Parameter data: the data to process
   ///  - Returns: parsed headers elements
-  mutating func process(_ data: Data) throws -> ParsedRequest? {
+  mutating func process(_ data: Data, connection: HTTPConnection) throws -> ParsedRequest? {
 
     func finish() throws -> ParsedRequest? {
       precondition(line != nil, "HTTP must have a request line")
@@ -137,6 +137,10 @@ public struct HTTPRequestParser {
           // determine body type or finish with no body data
           guard let headers = headers, let body = detectRequestBodyType(headers: headers) else {
             return try finish()
+          }
+          
+          if headers.contains(where: { $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)! }) {
+            connection.send(data: "HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".data(using: .utf8)!, context: "Sending continuation for expectation")
           }
 
           // switch to body parsing mode

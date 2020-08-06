@@ -152,7 +152,7 @@ public class HTTPConnection {
 
       guard
         let content = content,
-        let parsedRequest = try requestParser.process(content)
+        let parsedRequest = try requestParser.process(content, connection: self)
       else {
         receive(minimum: 1, maximum: maxHTTPChunkLength, completion: handleReceive(content:isComplete:error:))
         return

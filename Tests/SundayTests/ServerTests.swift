@@ -34,7 +34,11 @@ class HTTPServerTests: XCTestCase {
         POST(.path("type"), .body(Item.self)) { _, res, _, body in
           res.send(status: .created, value: body)
         }
-
+        
+        PUT(.path("type"), .body(Item.self)) { req, res, _, body in
+          res.send(status: .created, value: body)
+        }
+        
         Path("/{id}") {
 
           GET(.path("id", Int.self)) { _, res, _ in
@@ -223,6 +227,55 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
+    waitForExpectations(timeout: 2)
+  }
+
+  func testPUTExpect() throws {
+    
+    let putX = expectation(description: "PUT")
+    
+    struct Params: Codable {
+      let name: String
+      let cost: Double
+    }
+    
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: HTTPServerTests.serverURL)!)
+    urlRequest.httpMethod = "PUT"
+    urlRequest.addValue("100-continue", forHTTPHeaderField: "expect")
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
+    urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
+    urlRequest.httpBody = try JSONEncoder.default.encode(Params(name: "ghi", cost: 19.20))
+    
+    _ = session.response(request: urlRequest)
+      .subscribe(
+        onSuccess: { (response, data) in
+          defer { putX.fulfill() }
+          
+          guard let data = data else {
+            XCTFail("No response data")
+            return
+          }
+          
+          guard response.statusCode == 201 else {
+            let message = String(data: data, encoding: .utf8)!
+            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
+            return
+          }
+          
+          do {
+            let item = try JSONDecoder.default.decode(Item.self, from: data)
+            XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
+          }
+          catch {
+            XCTFail("Decode/Compare failed: \(error)")
+          }
+        },
+        onError: { error in
+          defer { putX.fulfill() }
+          XCTFail("Request failed: \(error)")
+        }
+      )
+    
     waitForExpectations(timeout: 2)
   }
 
