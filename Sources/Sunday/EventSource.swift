@@ -295,8 +295,16 @@ open class EventSource {
     for line in eventString.components(separatedBy: .newlines) {
 
       let fields = line.split(separator: ":", maxSplits: 1)
+      guard !fields.isEmpty else {
+        continue
+      }
+      
       let key = fields[0]
-      let value = fields.count == 2 ? String(fields[1]) : nil
+      var value = fields.count == 2 ? String(fields[1]) : ""
+      
+      if value.first == " " {
+        value = String(value.dropFirst())
+      }
 
       switch key {
       case "id":
@@ -304,7 +312,12 @@ open class EventSource {
       case "event":
         event = value
       case "data":
-        data = (data ?? "") + "\n" + (value ?? "")
+        if let cur = data {
+          data = cur + "\n" + value
+        }
+        else {
+          data = value
+        }
       case "retry":
         retry = value
       default:
