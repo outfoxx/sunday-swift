@@ -68,7 +68,7 @@ public class HTTPConnection {
       var headers = headers.merging(self.headers) { first, _ in first }
 
       let nextState: HTTPResponseState
-      if headers[HTTP.StdHeaders.transferType]?.first == "chunked" {
+      if headers[HTTP.StdHeaders.transferEncoding]?.first == "chunked" {
         nextState = .sendingChunks
       }
       else if headers[HTTP.StdHeaders.contentLength] != nil {

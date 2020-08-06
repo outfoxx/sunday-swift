@@ -20,7 +20,7 @@ extension HTTP {
     let version: HTTP.Version
   }
 
-  public enum TransferType: String {
+  public enum TransferEncoding: String {
     case identity
     case chunked
   }
@@ -57,7 +57,7 @@ public struct HTTPRequestParser {
 
   private var line: HTTP.RequestLine?
   private var headers: HTTP.RawHeaders?
-  private var body: (HTTP.TransferType, Int?)?
+  private var body: (HTTP.TransferEncoding, Int?)?
   private var entity: Data?
 
   /// Process available segment of header data
@@ -232,15 +232,15 @@ public struct HTTPRequestParser {
   }
 }
 
-private func detectRequestBodyType(headers: HTTP.RawHeaders) -> (HTTP.TransferType, Int?)? {
-  let transferType = headers.first { $0.name == HTTP.StdHeaders.transferType }
+private func detectRequestBodyType(headers: HTTP.RawHeaders) -> (HTTP.TransferEncoding, Int?)? {
+  let transferEncoding = headers.first { $0.name == HTTP.StdHeaders.transferEncoding }
     .flatMap { String(data: $0.value, encoding: .utf8) }
-    .flatMap { HTTP.TransferType(rawValue: $0) }
+    .flatMap { HTTP.TransferEncoding(rawValue: $0) }
   let contentLength = headers.first { $0.name == HTTP.StdHeaders.contentLength }
     .flatMap { String(data: $0.value, encoding: .utf8) }
     .flatMap { UInt($0) }
 
-  if transferType == .chunked {
+  if transferEncoding == .chunked {
     return (.chunked, nil)
   }
   else if let contentLength = contentLength, contentLength != 0 {
