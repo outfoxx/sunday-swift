@@ -144,8 +144,8 @@ class EncodingHTTPResponse: HTTPResponse {
     response.send(chunk: chunk)
   }
 
-  func finish(headers: HTTP.Headers) {
-    return response.finish(headers: headers)
+  func finish(trailers: HTTP.Headers) {
+    return response.finish(trailers: trailers)
   }
 
   func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {

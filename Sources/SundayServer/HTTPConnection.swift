@@ -113,7 +113,7 @@ public class HTTPConnection {
       connection.send(data: chunk, context: "sending body chunk")
     }
 
-    func finish(headers: HTTP.Headers) {
+    func finish(trailers: HTTP.Headers) {
       precondition(state == .sendingChunks)
 
       connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] _ in

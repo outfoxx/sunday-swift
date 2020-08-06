@@ -99,9 +99,9 @@ public protocol HTTPResponse: AnyObject {
   ///
   /// - Precondition: state == .sendingChunks
   /// - Parameters:
-  ///   - headers: Addition HTTP headers to send in trailer
+  ///   - trailers: Additional HTTP headers to send in trailer
   ///
-  func finish(headers: HTTP.Headers)
+  func finish(trailers: HTTP.Headers)
 
   func send(status: HTTP.Response.Status)
   func send(status: HTTP.Response.Status, body: Data)
