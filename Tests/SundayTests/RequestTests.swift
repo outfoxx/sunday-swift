@@ -59,10 +59,10 @@ class RequestTests: ParameterizedTest {
 
     let reqMgr = NetworkRequestManager(baseURL: baseURL)
 
-    let requestCancel = try reqMgr
-      .result(method: .post, pathTemplate: "echo",
-              pathParameters: nil, queryParameters: nil, body: sourceObject,
-              contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
+    let requestCancel =
+      reqMgr.result(method: .post, pathTemplate: "echo",
+                    pathParameters: nil, queryParameters: nil, body: sourceObject,
+                    contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
       .sink(
         receiveCompletion: { completion in
           if case .failure(let error) = completion {

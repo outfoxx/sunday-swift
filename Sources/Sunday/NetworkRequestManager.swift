@@ -39,58 +39,66 @@ public struct NetworkRequestManager: RequestManager {
   public func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                                     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                    headers: HTTP.Headers?) throws -> AnyPublisher<URLRequest, Error> {
-
-    var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
-
-    // Encode & add query parameters to url
-    if let queryParameters = queryParameters, !queryParameters.isEmpty {
-      guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? URLEncoder else {
-        fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of URLEncoder")
+                                    headers: HTTP.Headers?) -> AnyPublisher<URLRequest, Error> {
+    Deferred { () -> AnyPublisher<URLRequest, Error> in
+      do {
+        var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
+        
+        // Encode & add query parameters to url
+        if let queryParameters = queryParameters, !queryParameters.isEmpty {
+          guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? URLEncoder else {
+            fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of URLEncoder")
+          }
+          
+          var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+          urlComponents.percentEncodedQuery = urlQueryEncoder.encodeQueryString(parameters: queryParameters)
+          
+          guard let queryUrl = urlComponents.url else {
+            throw SundayError.invalidURL(urlComponents)
+          }
+          
+          url = queryUrl
+        }
+        
+        // Build basic request
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method.rawValue
+        
+        // Add headers
+        headers?.forEach { key, values in
+          values.forEach { value in
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+          }
+        }
+        
+        // Determine & add accept header
+        if let supportedAcceptTypes = acceptTypes?.filter({ mediaTypeDecoders.supports(for: $0) }) {
+          
+          let accept = supportedAcceptTypes.map { $0.value }.joined(separator: " , ")
+          
+          urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
+        }
+        
+        // Encode & add body data
+        if let body = body {
+          
+          // Determine content type
+          guard let contentType = contentTypes?.first(where: { mediaTypeEncoders.supports(for: $0) }) else {
+            throw SundayError.requestEncodingFailed(reason: .noSupportedContentType(contentTypes ?? []))
+          }
+          
+          urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
+          urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
+        }
+        
+        return adapter?.adapt(requestManager: self, urlRequest: urlRequest).eraseToAnyPublisher() ??
+          Just(urlRequest).setFailureType(to: Error.self).eraseToAnyPublisher()
       }
-
-      var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-      urlComponents.percentEncodedQuery = urlQueryEncoder.encodeQueryString(parameters: queryParameters)
-
-      guard let queryUrl = urlComponents.url else {
-        throw SundayError.invalidURL(urlComponents)
-      }
-
-      url = queryUrl
-    }
-
-    // Build basic request
-    var urlRequest = URLRequest(url: url)
-    urlRequest.httpMethod = method.rawValue
-
-    // Add headers
-    headers?.forEach { key, values in
-      values.forEach { value in
-        urlRequest.setValue(value, forHTTPHeaderField: key)
+      catch {
+        return Fail(error: error).eraseToAnyPublisher()
       }
     }
-
-    // Determine & add accept header
-    if let supportedAcceptTypes = acceptTypes?.filter({ mediaTypeDecoders.supports(for: $0) }) {
-
-      let accept = supportedAcceptTypes.map { $0.value }.joined(separator: " , ")
-
-      urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
-    }
-
-    // Encode & add body data
-    if let body = body {
-
-      // Determine content type
-      guard let contentType = contentTypes?.first(where: { mediaTypeEncoders.supports(for: $0) }) else {
-        throw SundayError.requestEncodingFailed(reason: .noSupportedContentType(contentTypes ?? []))
-      }
-
-      urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
-      urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
-    }
-
-    return adapter?.adapt(requestManager: self, urlRequest: urlRequest) ?? Just(urlRequest).setFailureType(to: Error.self).eraseToAnyPublisher()
+    .eraseToAnyPublisher()
   }
 
   public func response(request: URLRequest) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
@@ -103,11 +111,11 @@ public struct NetworkRequestManager: RequestManager {
                                      queryParameters: Parameters?,
                                      body: B?,
                                      contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                     headers: HTTP.Headers?) throws -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
-    return try request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
-                       queryParameters: queryParameters,
-                       body: body,
-                       contentTypes: contentTypes, acceptTypes: acceptTypes, headers: headers)
+                                     headers: HTTP.Headers?) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
+    return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
+                   queryParameters: queryParameters,
+                   body: body,
+                   contentTypes: contentTypes, acceptTypes: acceptTypes, headers: headers)
       .flatMap { request in
         return self.session.dataTaskValidatedPublisher(request: request)
       }
@@ -161,7 +169,7 @@ public struct NetworkRequestManager: RequestManager {
     return problem
   }
 
-  public func result<D: Decodable>(request: URLRequest) throws -> AnyPublisher<D, Error> {
+  public func result<D: Decodable>(request: URLRequest) -> AnyPublisher<D, Error> {
     return response(request: request)
       .tryMap { try self.parse(response: $0.response, data: $0.data) }
       .mapError { self.parse(error: $0) }
@@ -173,19 +181,19 @@ public struct NetworkRequestManager: RequestManager {
                                                  queryParameters: Parameters?,
                                                  body: B?,
                                                  contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                                 headers: HTTP.Headers?) throws -> AnyPublisher<D, Error> {
-    return try response(method: method,
-                        pathTemplate: pathTemplate, pathParameters: pathParameters,
-                        queryParameters: queryParameters,
-                        body: body,
-                        contentTypes: contentTypes, acceptTypes: acceptTypes,
-                        headers: headers)
+                                                 headers: HTTP.Headers?) -> AnyPublisher<D, Error> {
+    return response(method: method,
+                    pathTemplate: pathTemplate, pathParameters: pathParameters,
+                    queryParameters: queryParameters,
+                    body: body,
+                    contentTypes: contentTypes, acceptTypes: acceptTypes,
+                    headers: headers)
       .tryMap { try self.parse(response: $0.response, data: $0.data) }
       .mapError { self.parse(error: $0) }
       .eraseToAnyPublisher()
   }
 
-  public func result(request: URLRequest) throws -> AnyPublisher<Never, Error> {
+  public func result(request: URLRequest) -> AnyPublisher<Never, Error> {
     return response(request: request)
       .tryMap { (response, data) in try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
@@ -198,13 +206,13 @@ public struct NetworkRequestManager: RequestManager {
                                    queryParameters: Parameters?,
                                    body: B?,
                                    contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                   headers: HTTP.Headers?) throws -> AnyPublisher<Never, Error> {
-    return try response(method: method,
-                        pathTemplate: pathTemplate, pathParameters: pathParameters,
-                        queryParameters: queryParameters,
-                        body: body,
-                        contentTypes: contentTypes, acceptTypes: acceptTypes,
-                        headers: headers)
+                                   headers: HTTP.Headers?) -> AnyPublisher<Never, Error> {
+    return response(method: method,
+                    pathTemplate: pathTemplate, pathParameters: pathParameters,
+                    queryParameters: queryParameters,
+                    body: body,
+                    contentTypes: contentTypes, acceptTypes: acceptTypes,
+                    headers: headers)
       .tryMap { (response, data) in try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
       .ignoreOutput()
@@ -221,16 +229,26 @@ public struct NetworkRequestManager: RequestManager {
     }
   }
 
-  public func events<D: Decodable>(from request$: AnyPublisher<URLRequest, Error>) throws -> AnyPublisher<D, Error> {
-
-    let jsonDecoder = try mediaTypeDecoders.find(for: .json)
-
-    return EventPublisher<D>(decoder: jsonDecoder, queue: requestQueue) { headers in
-      
-      request$.flatMap { request in
-        self.session.dataTaskStreamPublisher(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+  public func events<D: Decodable>(from request$: AnyPublisher<URLRequest, Error>) -> AnyPublisher<D, Error> {
+    Deferred { () -> AnyPublisher<D, Error> in
+      do {
+        
+        let jsonDecoder = try mediaTypeDecoders.find(for: .json)
+        
+        return EventPublisher<D>(decoder: jsonDecoder, queue: requestQueue) { headers in
+          
+          request$.flatMap { request in
+            self.session.dataTaskStreamPublisher(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+          }
+          .eraseToAnyPublisher()
+          
+        }
+        .eraseToAnyPublisher()
+        
       }
-      .eraseToAnyPublisher()
+      catch {
+        return Fail(error: error).eraseToAnyPublisher()
+      }
       
     }
     .eraseToAnyPublisher()
@@ -247,16 +265,16 @@ extension NetworkRequestManager {
 
   public func result<B: Encodable>(method: HTTP.Method, path: String, body: B? = nil,
                                    contentType: MediaType? = nil,
-                                   acceptTypes: [MediaType]? = nil) throws -> AnyPublisher<Never, Error> {
-    return try result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
-                      contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
+                                   acceptTypes: [MediaType]? = nil) -> AnyPublisher<Never, Error> {
+    return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
+                  contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
   }
 
   public func result<B: Encodable, D: Decodable>(method: HTTP.Method, path: String, body: B? = nil,
                                                  contentType: MediaType? = nil,
-                                                 acceptTypes: [MediaType]? = nil) throws -> AnyPublisher<D, Error> {
-    return try result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
-                      contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
+                                                 acceptTypes: [MediaType]? = nil) -> AnyPublisher<D, Error> {
+    return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
+                  contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
   }
 
 }
