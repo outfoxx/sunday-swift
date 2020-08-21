@@ -238,21 +238,8 @@ public enum ServerTrustPolicy {
     // MARK: - Private - Trust Validation
 
     private func trustIsValid(_ trust: SecTrust) -> Bool {
-
-      var isValid = false
-
-      var result = SecTrustResultType.invalid
-      let status = SecTrustEvaluate(trust, &result)
-
-      if status == errSecSuccess {
-
-        let unspecified = SecTrustResultType.unspecified
-        let proceed = SecTrustResultType.proceed
-
-        isValid = result == unspecified || result == proceed
-      }
-
-      return isValid
+      var error: CFError? = nil
+      return SecTrustEvaluateWithError(trust, &error)
     }
 
     // MARK: - Private - Certificate Data
