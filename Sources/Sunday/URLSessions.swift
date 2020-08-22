@@ -111,7 +111,7 @@ private extension URLSession.DataTaskStreamPublisher {
       
     }
     
-    private var lock = os_unfair_lock_s()
+    private var lock = NSRecursiveLock()
     private var parent: URLSession.DataTaskStreamPublisher?
     private var subscriber: S?
     
@@ -125,9 +125,9 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     func request(_ demand: Subscribers.Demand) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
       
       guard demand > 0, let parent = self.parent else {
@@ -145,11 +145,11 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     func handleResponse(response: HTTPURLResponse) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-      
+
       guard demand > 0, let subscriber = subscriber else {
         return
       }
@@ -158,11 +158,11 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     func handleData(data: Data) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-      
+
       guard demand > 0, let subscriber = subscriber else {
         return
       }
@@ -171,11 +171,11 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     func handleComplete(error: Error?) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-      
+
       guard demand > 0, let subscriber = subscriber else {
         return
       }
@@ -201,11 +201,11 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     func cancel() {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-      
+
       _cancel()
     }
     

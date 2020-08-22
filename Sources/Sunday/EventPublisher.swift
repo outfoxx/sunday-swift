@@ -35,7 +35,7 @@ private extension EventPublisher {
   
   final class Subscription<S: Subscriber>: Combine.Subscription where S.Input == Output, S.Failure == Failure {
     
-    private var lock = os_unfair_lock_s()
+    private var lock = NSRecursiveLock()
     private var parent: EventPublisher?
     private var subscriber: S?
 
@@ -48,9 +48,9 @@ private extension EventPublisher {
     }
     
     func request(_ demand: Subscribers.Demand) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
       
       guard let parent = self.parent else {
@@ -68,11 +68,11 @@ private extension EventPublisher {
     }
     
     func handleMessage(id: String?, event: String?, data: String?) {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-    
+
       guard demand > 0, let parent = parent, let subscriber = self.subscriber else {
         return
       }
@@ -97,11 +97,11 @@ private extension EventPublisher {
     }
     
     func cancel() {
-      os_unfair_lock_lock(&lock)
+      lock.lock()
       defer {
-        os_unfair_lock_unlock(&lock)
+        lock.unlock()
       }
-      
+
       source?.close()
       
       parent = nil
