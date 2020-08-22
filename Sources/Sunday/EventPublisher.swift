@@ -12,7 +12,7 @@ import Combine
 private let logger = logging.for(category: "event-publisher")
 
 
-struct EventPublisher<Output: Decodable>: Publisher {
+public struct EventPublisher<Output: Decodable>: Publisher {
   
   public typealias Failure = Error
   

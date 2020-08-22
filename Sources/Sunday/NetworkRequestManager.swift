@@ -39,7 +39,7 @@ public struct NetworkRequestManager: RequestManager {
   public func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                                     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                    headers: HTTP.Headers?) -> AnyPublisher<URLRequest, Error> {
+                                    headers: HTTP.Headers?) -> RequestPublisher {
     Deferred { () -> AnyPublisher<URLRequest, Error> in
       do {
         var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
@@ -101,7 +101,7 @@ public struct NetworkRequestManager: RequestManager {
     .eraseToAnyPublisher()
   }
 
-  public func response(request: URLRequest) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
+  public func response(request: URLRequest) -> RequestResponsePublisher {
 
     return session.dataTaskValidatedPublisher(request: request).eraseToAnyPublisher()
   }
@@ -111,7 +111,7 @@ public struct NetworkRequestManager: RequestManager {
                                      queryParameters: Parameters?,
                                      body: B?,
                                      contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                     headers: HTTP.Headers?) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
+                                     headers: HTTP.Headers?) -> RequestResponsePublisher {
     return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
                    queryParameters: queryParameters,
                    body: body,
@@ -169,7 +169,7 @@ public struct NetworkRequestManager: RequestManager {
     return problem
   }
 
-  public func result<D: Decodable>(request: URLRequest) -> AnyPublisher<D, Error> {
+  public func result<D: Decodable>(request: URLRequest) -> RequestResultPublisher<D> {
     return response(request: request)
       .tryMap { try self.parse(response: $0.response, data: $0.data) }
       .mapError { self.parse(error: $0) }
@@ -181,7 +181,7 @@ public struct NetworkRequestManager: RequestManager {
                                                  queryParameters: Parameters?,
                                                  body: B?,
                                                  contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                                 headers: HTTP.Headers?) -> AnyPublisher<D, Error> {
+                                                 headers: HTTP.Headers?) -> RequestResultPublisher<D> {
     return response(method: method,
                     pathTemplate: pathTemplate, pathParameters: pathParameters,
                     queryParameters: queryParameters,
@@ -193,7 +193,7 @@ public struct NetworkRequestManager: RequestManager {
       .eraseToAnyPublisher()
   }
 
-  public func result(request: URLRequest) -> AnyPublisher<Never, Error> {
+  public func result(request: URLRequest) -> RequestCompletePublisher {
     return response(request: request)
       .tryMap { (response, data) in try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
@@ -206,7 +206,7 @@ public struct NetworkRequestManager: RequestManager {
                                    queryParameters: Parameters?,
                                    body: B?,
                                    contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                   headers: HTTP.Headers?) -> AnyPublisher<Never, Error> {
+                                   headers: HTTP.Headers?) -> RequestCompletePublisher {
     return response(method: method,
                     pathTemplate: pathTemplate, pathParameters: pathParameters,
                     queryParameters: queryParameters,
@@ -219,7 +219,7 @@ public struct NetworkRequestManager: RequestManager {
       .eraseToAnyPublisher()
   }
 
-  public func events(from request$: AnyPublisher<URLRequest, Error>) -> EventSource {
+  public func events(from request$: RequestPublisher) -> EventSource {
 
     return EventSource(queue: requestQueue) { headers in
       request$.flatMap { request in
@@ -229,7 +229,7 @@ public struct NetworkRequestManager: RequestManager {
     }
   }
 
-  public func events<D: Decodable>(from request$: AnyPublisher<URLRequest, Error>) -> AnyPublisher<D, Error> {
+  public func events<D: Decodable>(from request$: RequestPublisher) -> RequestEventPublisher<D> {
     Deferred { () -> AnyPublisher<D, Error> in
       do {
         
@@ -265,14 +265,14 @@ extension NetworkRequestManager {
 
   public func result<B: Encodable>(method: HTTP.Method, path: String, body: B? = nil,
                                    contentType: MediaType? = nil,
-                                   acceptTypes: [MediaType]? = nil) -> AnyPublisher<Never, Error> {
+                                   acceptTypes: [MediaType]? = nil) -> RequestCompletePublisher {
     return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
                   contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
   }
 
   public func result<B: Encodable, D: Decodable>(method: HTTP.Method, path: String, body: B? = nil,
                                                  contentType: MediaType? = nil,
-                                                 acceptTypes: [MediaType]? = nil) -> AnyPublisher<D, Error> {
+                                                 acceptTypes: [MediaType]? = nil) -> RequestResultPublisher<D> {
     return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
                   contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
   }
