@@ -14,5 +14,16 @@ import Foundation
 public protocol EndpointManager {
 
   var requestManager: RequestManager { get }
+  
+  func close(cancelOutstandingRequests: Bool)
 
+}
+
+
+extension EndpointManager {
+  
+  public func close(cancelOutstandingRequests: Bool) {
+    requestManager.close(cancelOutstandingRequests: cancelOutstandingRequests)
+  }
+  
 }

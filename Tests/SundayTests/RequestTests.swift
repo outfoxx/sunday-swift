@@ -58,6 +58,7 @@ class RequestTests: ParameterizedTest {
     let baseURL = URLTemplate(template: url!.absoluteString)
 
     let reqMgr = NetworkRequestManager(baseURL: baseURL)
+    defer { reqMgr.close() }
 
     let requestCancel =
       reqMgr.result(method: .post, pathTemplate: "echo",
