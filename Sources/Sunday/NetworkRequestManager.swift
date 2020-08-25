@@ -254,6 +254,15 @@ public struct NetworkRequestManager: RequestManager {
     .eraseToAnyPublisher()
   }
 
+  public func close(cancelOutstandingRequests: Bool = true) {
+    if cancelOutstandingRequests {
+      session.invalidateAndCancel()
+    }
+    else {
+      session.finishTasksAndInvalidate()
+    }
+  }
+  
 }
 
 
