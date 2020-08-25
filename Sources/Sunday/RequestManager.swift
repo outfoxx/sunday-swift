@@ -41,5 +41,7 @@ public protocol RequestManager {
   func events(from: RequestPublisher) -> EventSource
 
   func events<D: Decodable>(from: RequestPublisher) -> RequestEventPublisher<D>
+  
+  func close(cancelOutstandingRequest: Bool)
 
 }
