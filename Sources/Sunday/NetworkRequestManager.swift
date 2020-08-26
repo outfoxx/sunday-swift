@@ -12,7 +12,7 @@ import Foundation
 import Combine
 
 
-public struct NetworkRequestManager: RequestManager {  
+public class NetworkRequestManager: RequestManager {
 
   public let baseURL: URLTemplate
   public let session: URLSession
@@ -33,14 +33,17 @@ public struct NetworkRequestManager: RequestManager {
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
-
+  }
+  
+  deinit {
+    session.invalidateAndCancel()
   }
 
   public func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                                     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                                     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
                                     headers: HTTP.Headers?) -> RequestPublisher {
-    Deferred { () -> AnyPublisher<URLRequest, Error> in
+    Deferred { [self] () -> AnyPublisher<URLRequest, Error> in
       do {
         var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
         
@@ -230,7 +233,7 @@ public struct NetworkRequestManager: RequestManager {
   }
 
   public func events<D: Decodable>(from request$: RequestPublisher) -> RequestEventPublisher<D> {
-    Deferred { () -> AnyPublisher<D, Error> in
+    Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
         
         let jsonDecoder = try mediaTypeDecoders.find(for: .json)
