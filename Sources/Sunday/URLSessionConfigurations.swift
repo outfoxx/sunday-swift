@@ -24,18 +24,10 @@ public extension URLSessionConfiguration {
     config.httpShouldUsePipelining = true
     config.timeoutIntervalForRequest = requestTimeout ?? restTimeoutIntervalForRequestDefault
     config.timeoutIntervalForResource = resourceTimeout ?? restTimeoutIntervalForResourceDefault
-
-    if #available(iOS 11, macOS 10.13, tvOS 11, *) {
-      config.waitsForConnectivity = true
-    }
-
-    if #available(iOS 13, macOS 10.15, tvOS 13, *) {
-      config.allowsExpensiveNetworkAccess = true
-      config.allowsConstrainedNetworkAccess = true
-    }
-    else {
-      config.allowsCellularAccess = true
-    }
+    config.waitsForConnectivity = true
+    config.allowsExpensiveNetworkAccess = true
+    config.allowsConstrainedNetworkAccess = true
+    config.allowsCellularAccess = true
 
     return config
   }
