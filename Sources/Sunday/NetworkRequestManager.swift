@@ -75,7 +75,7 @@ public class NetworkRequestManager: RequestManager {
         }
         
         // Determine & add accept header
-        if let supportedAcceptTypes = acceptTypes?.filter({ mediaTypeDecoders.supports(for: $0) }) {
+        if let supportedAcceptTypes = acceptTypes?.filter({ mediaTypeDecoders.supports(for: $0) }), !supportedAcceptTypes.isEmpty {
           
           let accept = supportedAcceptTypes.map { $0.value }.joined(separator: " , ")
           
