@@ -15,7 +15,7 @@ import Combine
 public class NetworkRequestManager: RequestManager {
 
   public let baseURL: URLTemplate
-  public let session: URLSession
+  public let session: NetworkSession
   public let adapter: NetworkRequestAdapter?
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
@@ -27,8 +27,8 @@ public class NetworkRequestManager: RequestManager {
               requestQueue: DispatchQueue = .global(qos: .utility),
               mediaTypeEncoders: MediaTypeEncoders = .default, mediaTypeDecoders: MediaTypeDecoders = .default) {
     self.baseURL = baseURL
-    self.session = URLSession.create(configuration: sessionConfiguration,
-                                     serverTrustPolicyManager: serverTrustPolicyManager)
+    self.session = NetworkSession(configuration: sessionConfiguration,
+                                  serverTrustPolicyManager: serverTrustPolicyManager)
     self.adapter = adapter
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
@@ -36,7 +36,17 @@ public class NetworkRequestManager: RequestManager {
   }
   
   deinit {
-    session.invalidateAndCancel()
+    session.close(cancelOutstandingTasks: true)
+  }
+  
+  public func with(sessionConfiguration: URLSessionConfiguration) -> RequestManager {
+    NetworkRequestManager(baseURL: baseURL,
+                          adapter: adapter,
+                          serverTrustPolicyManager: session.serverTrustPolicyManager,
+                          sessionConfiguration: sessionConfiguration,
+                          requestQueue: requestQueue,
+                          mediaTypeEncoders: mediaTypeEncoders,
+                          mediaTypeDecoders: mediaTypeDecoders)
   }
 
   public func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
@@ -258,12 +268,7 @@ public class NetworkRequestManager: RequestManager {
   }
 
   public func close(cancelOutstandingRequests: Bool = true) {
-    if cancelOutstandingRequests {
-      session.invalidateAndCancel()
-    }
-    else {
-      session.finishTasksAndInvalidate()
-    }
+    session.close(cancelOutstandingTasks: cancelOutstandingRequests)
   }
   
 }

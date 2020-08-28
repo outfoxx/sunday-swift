@@ -1,5 +1,5 @@
 //
-//  URLSessions.swift
+//  NetworkSessionDataTaskStreamPublisher.swift
 //  Sunday
 //
 //  Copyright © 2019 Outfox, inc.
@@ -12,35 +12,7 @@ import Foundation
 import Combine
 
 
-public extension URLSession {
-
-  static func create(configuration: URLSessionConfiguration,
-                     serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
-                     delegate: URLSessionDelegate? = nil, delegateQueue: OperationQueue? = nil) -> URLSession {
-    let localDelegate =  SessionDelegate(delegate: delegate, serverTrustPolicyManager: serverTrustPolicyManager)
-    return URLSession(configuration: configuration, delegate: localDelegate, delegateQueue: delegateQueue)
-  }
-
-  func dataTaskValidatedPublisher(request: URLRequest) -> AnyPublisher<(response: HTTPURLResponse, data: Data?), Error> {
-    return dataTaskPublisher(for: request)
-      .tryMap { (data, response) in
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-          throw URLError(.badServerResponse)
-        }
-        
-        if 400 ..< 600 ~= httpResponse.statusCode {
-          throw URLError(.badServerResponse)
-        }
-
-        return (httpResponse, data)
-      }
-      .eraseToAnyPublisher()
-  }
-
-  func dataTaskStreamPublisher(request: URLRequest) -> DataTaskStreamPublisher {
-    return DataTaskStreamPublisher(session: self, request: request)
-  }
+public extension NetworkSession {
 
   enum DataTaskStreamEvent {
     case connect(HTTPURLResponse)
@@ -52,10 +24,10 @@ public extension URLSession {
     public typealias Output = DataTaskStreamEvent
     public typealias Failure = Error
     
-    private let session: URLSession
+    private let session: NetworkSession
     private let request: URLRequest
     
-    public init(session: URLSession, request: URLRequest) {
+    public init(session: NetworkSession, request: URLRequest) {
       self.session = session
       self.request = request
     }
@@ -70,7 +42,7 @@ public extension URLSession {
 }
 
 
-private extension URLSession.DataTaskStreamPublisher {
+private extension NetworkSession.DataTaskStreamPublisher {
   
   final class Subscription<S: Subscriber>: Combine.Subscription where S.Input == Output, S.Failure == Failure {
     
@@ -86,7 +58,10 @@ private extension URLSession.DataTaskStreamPublisher {
         subscription.handleComplete(error: error)
       }
       
-      public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+      public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
+                             didReceive response: URLResponse,
+                             completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+        
         guard let httpResponse = response as? HTTPURLResponse else {
           subscription.handleComplete(error: SundayError.invalidHTTPResponse)
           completionHandler(.cancel)
@@ -94,7 +69,8 @@ private extension URLSession.DataTaskStreamPublisher {
         }
         
         if 400 ..< 600 ~= httpResponse.statusCode {
-          let error = SundayError.responseValidationFailed(reason: .unacceptableStatusCode(response: httpResponse, data: nil))
+          let error = SundayError.responseValidationFailed(reason: .unacceptableStatusCode(response: httpResponse,
+                                                                                           data: nil))
           subscription.handleComplete(error: error)
           completionHandler(.cancel)
           return
@@ -112,14 +88,13 @@ private extension URLSession.DataTaskStreamPublisher {
     }
     
     private var lock = NSRecursiveLock()
-    private var parent: URLSession.DataTaskStreamPublisher?
+    private var parent: NetworkSession.DataTaskStreamPublisher?
     private var subscriber: S?
     
-    private var session: URLSession?
     private var task: URLSessionDataTask?
     private var demand: Subscribers.Demand = .none
     
-    init(parent: URLSession.DataTaskStreamPublisher, subscriber: S) {
+    init(parent: NetworkSession.DataTaskStreamPublisher, subscriber: S) {
       self.parent = parent
       self.subscriber = subscriber
     }
@@ -135,8 +110,8 @@ private extension URLSession.DataTaskStreamPublisher {
       }
       
       if task == nil {
-        session = URLSession(configuration: parent.session.configuration, delegate: Delegate(subscription: self), delegateQueue: nil)
-        task = session!.dataTask(with: parent.request)
+        task = parent.session.session.dataTask(with: parent.request)
+        parent.session.taskDelegates[task!] = Delegate(subscription: self)
       }
       
       self.demand += demand
@@ -174,13 +149,11 @@ private extension URLSession.DataTaskStreamPublisher {
       lock.lock()
       defer {
         lock.unlock()
-      }
+       }
 
-      guard demand > 0, let subscriber = subscriber else {
+      guard let subscriber = subscriber else {
         return
       }
-      
-      _cancel()
       
       if let error = error {
         subscriber.receive(completion: .failure(error))
@@ -188,16 +161,8 @@ private extension URLSession.DataTaskStreamPublisher {
       else {
         subscriber.receive(completion: .finished)
       }
-    }
-    
-    func _cancel()  {
-      task?.cancel()
-      session?.invalidateAndCancel()
       
-      parent = nil
-      subscriber = nil
-      task = nil
-      session = nil
+      cleanup()
     }
     
     func cancel() {
@@ -206,9 +171,17 @@ private extension URLSession.DataTaskStreamPublisher {
         lock.unlock()
       }
 
-      _cancel()
+      task?.cancel()
+      task = nil
+
+      cleanup()
     }
     
+    private func cleanup()  {
+      parent = nil
+      subscriber = nil
+    }
+
   }
   
 }

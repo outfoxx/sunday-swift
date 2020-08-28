@@ -34,7 +34,6 @@ class RequestTests: ParameterizedTest {
     self.acceptType = acceptType
   }
 
-  @available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
   func testAdaptiveResponseDecoding() throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {

@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  EventSourceTests.swift
 //  
 //
 //  Created by Kevin Wooten on 8/5/20.
@@ -10,7 +10,7 @@ import XCTest
 import Sunday
 import SundayServer
 
-@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
+
 class EventSourceTests: XCTestCase {
   
   static let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
@@ -46,7 +46,7 @@ class EventSourceTests: XCTestCase {
   }
   static var serverURL: URL!
 
-  let session = URLSession.create(configuration: .default)
+  let session = NetworkSession(configuration: .default)
 
   override class func setUp() {
     super.setUp()

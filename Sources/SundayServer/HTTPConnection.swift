@@ -209,7 +209,6 @@ public class HTTPConnection {
 }
 
 
-@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 public final class NetworkHTTPConnection: HTTPConnection {
 
   let transport: NWConnection

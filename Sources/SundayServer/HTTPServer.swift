@@ -22,7 +22,6 @@ public protocol HTTPServer: AnyObject {
 }
 
 
-@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 open class NetworkHTTPServer: NSObject, HTTPServer {
 
   public let queue = DispatchQueue(label: "HTTP Server Connection Queue", attributes: [.concurrent])

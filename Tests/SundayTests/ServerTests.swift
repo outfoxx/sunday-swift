@@ -20,7 +20,6 @@ struct Item: Codable, Equatable {
 }
 
 
-@available(macOS 10.14, iOS 12, tvOS 12, watchOS 5, *)
 class HTTPServerTests: XCTestCase {
 
   static let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
@@ -67,7 +66,7 @@ class HTTPServerTests: XCTestCase {
   }
   static var serverURL: URL!
 
-  let session = URLSession.create(configuration: .default)
+  let session = NetworkSession(configuration: .default)
 
   override class func setUp() {
     super.setUp()

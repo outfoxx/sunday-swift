@@ -12,7 +12,7 @@ import Foundation
 import Combine
 
 
-private let logger = logging.for(category: "event-source")
+private let logger = logging.for(category: "Event Source")
 
 
 open class EventSource {
@@ -30,7 +30,7 @@ open class EventSource {
   public fileprivate(set) var state = State.closed
   public fileprivate(set) var retryTime = 500
 
-  private let requestor: (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>
+  private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private var data$Cancel: AnyCancellable?
   private var receivedString: String?
   private var onOpenCallback: (() -> Void)?
@@ -44,22 +44,13 @@ open class EventSource {
   private var event = [String: String]()
 
 
-  public init(queue: DispatchQueue = .global(qos: .background), requestor: @escaping (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>) {
+  public init(queue: DispatchQueue = .global(qos: .background),
+              requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
 
     self.requestor = requestor
     self.queue = queue
     self.receivedString = nil
     self.receivedDataBuffer = Data()
-  }
-
-  public static func defaultSessionConfiguration() -> URLSessionConfiguration {
-
-    let configuration = URLSessionConfiguration.default
-
-    configuration.timeoutIntervalForRequest = TimeInterval(INT_MAX)
-    configuration.timeoutIntervalForResource = TimeInterval(INT_MAX)
-
-    return configuration
   }
 
   // MARK: Connect
@@ -128,7 +119,8 @@ open class EventSource {
     self.onMessageCallback = onMessageCallback
   }
 
-  open func addEventListener(_ event: String, handler: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
+  open func addEventListener(_ event: String,
+                             handler: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
     eventListeners[event] = handler
   }
 

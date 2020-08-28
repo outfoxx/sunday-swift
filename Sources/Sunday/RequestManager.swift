@@ -15,6 +15,8 @@ import Combine
 public protocol RequestManager {
 
   var baseURL: URLTemplate { get }
+  
+  func with(sessionConfiguration: URLSessionConfiguration) -> RequestManager
 
   func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,

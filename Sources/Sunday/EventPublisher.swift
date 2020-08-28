@@ -1,5 +1,5 @@
 //
-//  File.swift
+//  EventPublisher.swift
 //  
 //
 //  Created by Kevin Wooten on 8/6/20.
@@ -9,17 +9,18 @@ import Foundation
 import Combine
 
 
-private let logger = logging.for(category: "event-publisher")
+private let logger = logging.for(category: "Event Publisher")
 
 
 public struct EventPublisher<Output: Decodable>: Publisher {
   
   public typealias Failure = Error
   
-  private let requestor: (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>
+  private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private let decoder: MediaTypeDecoder
   
-  public init(decoder: MediaTypeDecoder, queue: DispatchQueue, requestor: @escaping (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>) {
+  public init(decoder: MediaTypeDecoder, queue: DispatchQueue,
+              requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
     self.requestor = requestor
     self.decoder = decoder
   }
