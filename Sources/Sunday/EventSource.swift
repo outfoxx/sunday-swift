@@ -28,7 +28,7 @@ open class EventSource {
   }
 
   public fileprivate(set) var state = State.closed
-  public fileprivate(set) var retryTime = 3000
+  public fileprivate(set) var retryTime = 500
 
   private let requestor: (HTTP.Headers) -> AnyPublisher<URLSession.DataTaskStreamEvent, Swift.Error>
   private var data$Cancel: AnyCancellable?
@@ -68,9 +68,16 @@ open class EventSource {
     if state == .connecting || state == .open {
       return
     }
+    
+    connectNow()
+  }
+  
+  private func connectNow() {
 
+    logger.debug("Connecting")
+    
     state = .connecting
-
+    
     var headers = HTTP.Headers()
     if let lastEventId = lastEventId {
       headers[lastEventIdHeader] = [lastEventId]
@@ -185,6 +192,8 @@ open class EventSource {
     
     if state != .closed {
       
+      logger.debug("Closed unexpectedly")
+
       scheduleReconnect()
       
       return
@@ -199,10 +208,11 @@ open class EventSource {
   
   fileprivate func scheduleReconnect() {
 
-    let nanoseconds = Double(retryTime) / 1000.0 * Double(NSEC_PER_SEC)
-    let delayTime = DispatchTime.now() + Double(Int64(nanoseconds)) / Double(NSEC_PER_SEC)
+    logger.debug("Scheduling reconnect after \(retryTime) milliseconds")
 
-    queue.asyncAfter(deadline: delayTime, execute: connect)
+    let delayTime = DispatchTime.now() + .milliseconds(retryTime)
+
+    queue.asyncAfter(deadline: delayTime, execute: connectNow)
   }
 
   fileprivate func extractEventStringsFromBuffer() -> [String] {
