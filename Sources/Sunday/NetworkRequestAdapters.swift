@@ -14,7 +14,7 @@ import Combine
 
 /// Composing request adapter that applies another request adapter
 /// only if the request's hostname is in a set of matching hostnames.
-public class HostMatchingAdapter: NetworkRequestAdapter {
+open class HostMatchingAdapter: NetworkRequestAdapter {
 
   private let hostnames: Set<String>
   private let adapter: NetworkRequestAdapter
@@ -40,7 +40,7 @@ public class HostMatchingAdapter: NetworkRequestAdapter {
 }
 
 
-public class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
+open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   private let header: String
   private let tokenHeaderType: String
@@ -78,7 +78,7 @@ public struct TokenAuthorization {
   }
 }
 
-public class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
+open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   
   public typealias RefreshResult = AnyPublisher<TokenAuthorization, Error>
 
