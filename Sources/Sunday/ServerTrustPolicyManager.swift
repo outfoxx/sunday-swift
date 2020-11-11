@@ -45,20 +45,6 @@ open class ServerTrustPolicyManager {
 
 // MARK: -
 
-extension URLSession {
-  private struct AssociatedKeys {
-    static var managerKey = "URLSession.ServerTrustPolicyManager"
-  }
-
-  var serverTrustPolicyManager: ServerTrustPolicyManager? {
-    get {
-      return objc_getAssociatedObject(self, &AssociatedKeys.managerKey) as? ServerTrustPolicyManager
-    }
-    set (manager) {
-      objc_setAssociatedObject(self, &AssociatedKeys.managerKey, manager, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-    }
-  }
-}
 
 // MARK: - ServerTrustPolicy
 
@@ -214,14 +200,9 @@ public enum ServerTrustPolicy {
       }
       
       if certificateChainEvaluationPassed {
-        outerLoop: for serverPublicKey in ServerTrustPolicy.publicKeys(for: serverTrust) as [AnyObject] {
-          for pinnedPublicKey in pinnedPublicKeys as [AnyObject] {
-            if serverPublicKey.isEqual(pinnedPublicKey) {
-              serverTrustIsValid = true
-              break outerLoop
-            }
-          }
-        }
+        let comparableServerKeys = Set(Self.publicKeys(for: serverTrust).compactMap { Self.data(for: $0) })
+        let comparablePinnedPublicKeys = Set(pinnedPublicKeys.compactMap { Self.data(for: $0) })
+        serverTrustIsValid = !comparableServerKeys.intersection(comparablePinnedPublicKeys).isEmpty
       }
       
     case .disableEvaluation:
@@ -291,5 +272,18 @@ public enum ServerTrustPolicy {
     
     return publicKey
   }
+  
+  private static func data(for key: SecKey) -> Data? {
+    
+    var error: Unmanaged<CFError>?
+    defer { error?.release() }
+    
+    guard let data = SecKeyCopyExternalRepresentation(key, &error) else {
+      return nil
+    }
+    
+    return data as Data
+  }
+  
 }
 
