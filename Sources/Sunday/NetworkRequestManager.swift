@@ -234,7 +234,7 @@ public class NetworkRequestManager: RequestManager {
 
     return EventSource(queue: requestQueue) { headers in
       request$.flatMap { request in
-        self.session.dataTaskStreamPublisher(request: request.adding(httpHeaders: headers))
+        self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers))
       }
       .eraseToAnyPublisher()
     }
@@ -249,7 +249,7 @@ public class NetworkRequestManager: RequestManager {
         return EventPublisher<D>(decoder: jsonDecoder, queue: requestQueue) { headers in
           
           request$.flatMap { request in
-            self.session.dataTaskStreamPublisher(request: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+            self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
           }
           .eraseToAnyPublisher()
           

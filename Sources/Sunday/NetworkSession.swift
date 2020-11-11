@@ -52,7 +52,7 @@ public class NetworkSession {
       .eraseToAnyPublisher()
   }
   
-  public func dataTaskStreamPublisher(request: URLRequest) -> DataTaskStreamPublisher {
+  public func dataTaskStreamPublisher(for request: URLRequest) -> DataTaskStreamPublisher {
     return DataTaskStreamPublisher(session: self, request: request)
   }
   
