@@ -208,9 +208,8 @@ public class NetworkRequestManager: RequestManager {
 
   public func result(request: URLRequest) -> RequestCompletePublisher {
     return response(request: request)
-      .tryMap { (response, data) in try self.parse(response: response, data: data) as Empty }
+      .tryMap { (response, data) in _ = try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
-      .ignoreOutput()
       .eraseToAnyPublisher()
   }
 
@@ -226,9 +225,8 @@ public class NetworkRequestManager: RequestManager {
                     body: body,
                     contentTypes: contentTypes, acceptTypes: acceptTypes,
                     headers: headers)
-      .tryMap { (response, data) in try self.parse(response: response, data: data) as Empty }
+      .tryMap { (response, data) in _ = try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
-      .ignoreOutput()
       .eraseToAnyPublisher()
   }
 
