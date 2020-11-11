@@ -92,15 +92,19 @@ public class NetworkRequestManager: RequestManager {
           urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
         }
         
+        // Determine content type
+        let contentType = contentTypes?.first { mediaTypeEncoders.supports(for: $0) }
+        
+        // If matched, add content type (even if body is nil, to match any expected server requirements)
+        if let contentType = contentType {
+          urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
+        }
+
         // Encode & add body data
         if let body = body {
-          
-          // Determine content type
-          guard let contentType = contentTypes?.first(where: { mediaTypeEncoders.supports(for: $0) }) else {
+          guard let contentType = contentType else {
             throw SundayError.requestEncodingFailed(reason: .noSupportedContentType(contentTypes ?? []))
           }
-          
-          urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
           urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
         }
         
