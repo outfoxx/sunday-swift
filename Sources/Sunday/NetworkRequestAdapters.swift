@@ -28,13 +28,13 @@ open class HostMatchingAdapter: NetworkRequestAdapter {
     self.adapter = adapter
   }
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
     guard hostnames.contains(urlRequest.url?.host ?? "") else {
       return Just(urlRequest)
         .setFailureType(to: Error.self)
         .eraseToAnyPublisher()
     }
-    return adapter.adapt(requestManager: requestManager, urlRequest: urlRequest)
+    return adapter.adapt(requestFactory: requestFactory, urlRequest: urlRequest)
   }
 
 }
@@ -54,7 +54,7 @@ open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   // MARK: NetworkRequestAdapter
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
 
     var urlRequest = urlRequest
 
@@ -85,9 +85,9 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   private let header: String
   private let tokenHeaderType: String
   private var authorization: TokenAuthorization?
-  private var refresh: (NetworkRequestManager) throws -> RefreshResult
+  private var refresh: (NetworkRequestFactory) throws -> RefreshResult
 
-  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, refresh: @escaping (NetworkRequestManager) throws -> RefreshResult) {
+  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, refresh: @escaping (NetworkRequestFactory) throws -> RefreshResult) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
     self.refresh = refresh
@@ -99,12 +99,12 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
     return urlRequest
   }
 
-  // MARK: NetworkRequestManager
+  // MARK: NetworkRequestFactory
 
-  public func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult {
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
     guard let authorization = authorization, authorization.expires > Date() else {
       do {
-        return try refresh(requestManager)
+        return try refresh(requestFactory)
           .map { authorization in
             self.authorization = authorization
             return self.update(urlRequest: urlRequest, accessToken: authorization.token)

@@ -56,13 +56,13 @@ class RequestTests: ParameterizedTest {
 
     let baseURL = URLTemplate(template: url!.absoluteString)
 
-    let reqMgr = NetworkRequestManager(baseURL: baseURL)
-    defer { reqMgr.close() }
+    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
+    defer { requestFactory.close() }
 
     let requestCancel =
-      reqMgr.result(method: .post, pathTemplate: "echo",
-                    pathParameters: nil, queryParameters: nil, body: sourceObject,
-                    contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
+      requestFactory.result(method: .post, pathTemplate: "echo",
+                            pathParameters: nil, queryParameters: nil, body: sourceObject,
+                            contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
       .sink(
         receiveCompletion: { completion in
           if case .failure(let error) = completion {

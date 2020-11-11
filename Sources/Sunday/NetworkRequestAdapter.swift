@@ -16,6 +16,6 @@ public protocol NetworkRequestAdapter {
   
   typealias AdaptResult = AnyPublisher<URLRequest, Error>
 
-  func adapt(requestManager: NetworkRequestManager, urlRequest: URLRequest) -> AdaptResult
+  func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult
 
 }

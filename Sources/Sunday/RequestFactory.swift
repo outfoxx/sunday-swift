@@ -1,5 +1,5 @@
 //
-//  RequestManager.swift
+//  RequestFactory.swift
 //  Sunday
 //
 //  Copyright © 2018 Outfox, inc.
@@ -12,11 +12,11 @@ import Foundation
 import Combine
 
 
-public protocol RequestManager {
+public protocol RequestFactory {
 
   var baseURL: URLTemplate { get }
   
-  func with(sessionConfiguration: URLSessionConfiguration) -> RequestManager
+  func with(sessionConfiguration: URLSessionConfiguration) -> RequestFactory
 
   func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,

@@ -1,5 +1,5 @@
 //
-//  NetworkRequestManager.swift
+//  NetworkRequestFactory.swift
 //  Sunday
 //
 //  Copyright © 2018 Outfox, inc.
@@ -12,7 +12,7 @@ import Foundation
 import Combine
 
 
-public class NetworkRequestManager: RequestManager {
+public class NetworkRequestFactory: RequestFactory {
 
   public let baseURL: URLTemplate
   public let session: NetworkSession
@@ -39,8 +39,8 @@ public class NetworkRequestManager: RequestManager {
     session.close(cancelOutstandingTasks: true)
   }
   
-  public func with(sessionConfiguration: URLSessionConfiguration) -> RequestManager {
-    NetworkRequestManager(baseURL: baseURL,
+  public func with(sessionConfiguration: URLSessionConfiguration) -> RequestFactory {
+    NetworkRequestFactory(baseURL: baseURL,
                           adapter: adapter,
                           serverTrustPolicyManager: session.serverTrustPolicyManager,
                           sessionConfiguration: sessionConfiguration,
@@ -108,7 +108,7 @@ public class NetworkRequestManager: RequestManager {
           urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
         }
         
-        return adapter?.adapt(requestManager: self, urlRequest: urlRequest).eraseToAnyPublisher() ??
+        return adapter?.adapt(requestFactory: self, urlRequest: urlRequest).eraseToAnyPublisher() ??
           Just(urlRequest).setFailureType(to: Error.self).eraseToAnyPublisher()
       }
       catch {
@@ -280,7 +280,7 @@ private let acceptableStatusCodes: Set<Int> = [200, 201, 204, 205, 206, 400, 409
 
 
 
-extension NetworkRequestManager {
+extension NetworkRequestFactory {
 
   public func result<B: Encodable>(method: HTTP.Method, path: String, body: B? = nil,
                                    contentType: MediaType? = nil,
