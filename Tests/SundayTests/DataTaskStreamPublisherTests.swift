@@ -68,7 +68,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
     var urlRequest = URLRequest(url: URL(string: "regular", relativeTo: Self.serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     
-    let requestCancel = session.dataTaskStreamPublisher(request: urlRequest)
+    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
       .sink { completion in
         defer { getChunkedCompleteX.fulfill() }
         
@@ -108,7 +108,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
     var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: Self.serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     
-    let requestCancel = session.dataTaskStreamPublisher(request: urlRequest)
+    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
       .sink(
         receiveCompletion: { completion in
           defer { getChunkedCompleteX.fulfill() }

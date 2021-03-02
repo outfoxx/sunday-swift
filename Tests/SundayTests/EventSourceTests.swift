@@ -58,7 +58,7 @@ class EventSourceTests: XCTestCase {
   func testSimpleData() throws {
     let eventSource =
       EventSource {
-        self.session.dataTaskStreamPublisher(request: URLRequest(url: URL(string: "/simple", relativeTo: Self.serverURL)!).adding(httpHeaders: $0))
+        self.session.dataTaskStreamPublisher(for: URLRequest(url: URL(string: "/simple", relativeTo: Self.serverURL)!).adding(httpHeaders: $0))
           .eraseToAnyPublisher()
       }
     
@@ -77,7 +77,7 @@ class EventSourceTests: XCTestCase {
   func testJSONData() throws {
     let eventSource =
       EventSource {
-        self.session.dataTaskStreamPublisher(request: URLRequest(url: URL(string: "/json", relativeTo: Self.serverURL)!).adding(httpHeaders: $0))
+        self.session.dataTaskStreamPublisher(for: URLRequest(url: URL(string: "/json", relativeTo: Self.serverURL)!).adding(httpHeaders: $0))
           .eraseToAnyPublisher()
       }
 
