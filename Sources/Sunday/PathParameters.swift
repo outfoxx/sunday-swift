@@ -15,6 +15,7 @@ import URITemplate
 public struct PathParameters {
 
   private static var templateCache = [String: URITemplate]()
+  private static let lock = NSRecursiveLock()
 
   public enum Error: Swift.Error {
     case missingParameterValue(name: String)
@@ -48,6 +49,7 @@ public struct PathParameters {
   }
 
   private static func template(for string: String) throws -> URITemplate {
+    lock.lock(); defer { lock.unlock() }
 
     if let template = Self.templateCache[string] {
       return template
