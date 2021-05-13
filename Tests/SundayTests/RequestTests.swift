@@ -54,7 +54,7 @@ class RequestTests: ParameterizedTest {
 
     let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
 
-    let baseURL = URLTemplate(template: url!.absoluteString)
+    let baseURL = URI.Template(template: url!.absoluteString)
 
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }

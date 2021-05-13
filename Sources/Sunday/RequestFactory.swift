@@ -14,7 +14,7 @@ import Combine
 
 public protocol RequestFactory {
 
-  var baseURL: URLTemplate { get }
+  var baseURL: URI.Template { get }
   
   func with(sessionConfiguration: URLSessionConfiguration) -> RequestFactory
   

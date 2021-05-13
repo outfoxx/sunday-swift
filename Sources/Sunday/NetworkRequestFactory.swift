@@ -15,7 +15,7 @@ import PotentCodables
 
 public class NetworkRequestFactory: RequestFactory {
 
-  public let baseURL: URLTemplate
+  public let baseURL: URI.Template
   public let session: NetworkSession
   public let adapter: NetworkRequestAdapter?
   public let requestQueue: DispatchQueue
@@ -23,7 +23,7 @@ public class NetworkRequestFactory: RequestFactory {
   public let mediaTypeDecoders: MediaTypeDecoders
   private var problemTypes: [String: Problem.Type] = [:]
 
-  public init(baseURL: URLTemplate, adapter: NetworkRequestAdapter? = nil,
+  public init(baseURL: URI.Template, adapter: NetworkRequestAdapter? = nil,
               serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
               sessionConfiguration: URLSessionConfiguration = .rest(),
               requestQueue: DispatchQueue = .global(qos: .utility),
