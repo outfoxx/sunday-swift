@@ -91,7 +91,7 @@ public struct MediaTypeEncoders {
   private let registered: [MediaType: MediaTypeEncoder]
 
   public func supports(for mediaType: MediaType) -> Bool {
-    return registered.keys.contains(mediaType)
+    return registered.keys.contains { $0 ~= mediaType }
   }
 
   public func find(for mediaType: MediaType) throws -> MediaTypeEncoder {

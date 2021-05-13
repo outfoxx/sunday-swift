@@ -34,17 +34,17 @@ class MediaTypeTests: XCTestCase {
               "Test incompatibility in parmeter values")
 
     XCTAssert(!(MediaType(type: .text, tree: .vendor, subtype: "plain", suffix: .json, parameters: ["a": "b"]) ~= MediaType(type: .text, tree: .vendor, subtype: "plain", parameters: ["a": "c"])),
-              "Test incompatibility in parmeter values")
+              "Test incompatibility in parmeter values missing suffix")
 
-    XCTAssert(MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]) ~= MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]),
+    XCTAssert(MediaType(type: .text, subtype: "html", parameters: ["custom-charset": "utf-16"]) ~= MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]),
               "Test compatibility with different parameters")
-
-    XCTAssert(MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]) ~= MediaType(type: .text, subtype: "html", parameters: ["CHARSET": "UTF-8"]),
-              "Test compatibility with different parameter cases")
 
     XCTAssert(MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]) ~= MediaType(type: .text, subtype: "html", parameters: ["test": "it"]),
               "Test compatibility with different parameters")
-
+    
+    XCTAssert(MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]) ~= MediaType(type: .text, subtype: "html", parameters: ["CHARSET": "UTF-8"]),
+              "Test compatibility with different parameter cases")
+    
     XCTAssert(!(MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-8"]) ~= MediaType(type: .text, subtype: "html", parameters: ["charset": "utf-16"])),
               "Test compatibility with different parameter values")
 
