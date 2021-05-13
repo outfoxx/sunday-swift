@@ -10,6 +10,7 @@
 
 import Foundation
 import Combine
+import PotentCodables
 
 
 public class NetworkRequestFactory: RequestFactory {
@@ -20,6 +21,7 @@ public class NetworkRequestFactory: RequestFactory {
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
   public let mediaTypeDecoders: MediaTypeDecoders
+  private var problemTypes: [String: Problem.Type] = [:]
 
   public init(baseURL: URLTemplate, adapter: NetworkRequestAdapter? = nil,
               serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
@@ -47,6 +49,10 @@ public class NetworkRequestFactory: RequestFactory {
                           requestQueue: requestQueue,
                           mediaTypeEncoders: mediaTypeEncoders,
                           mediaTypeDecoders: mediaTypeDecoders)
+  }
+  
+  public func registerProblem(typeId: String, problemType: Problem.Type) {
+    self.problemTypes[typeId] = problemType
   }
 
   public func request<B: Encodable>(
@@ -178,7 +184,10 @@ public class NetworkRequestFactory: RequestFactory {
       let contentType = MediaType(contentTypeHeader),
       contentType == .problem,
       let validData = data,
-      let problem = try? mediaTypeDecoders.find(for: .problem).decode(Problem.self, from: validData)
+      let parsedData = try? mediaTypeDecoders.find(for: .json).decode([String: AnyValue].self, from: validData),
+      let problemTypeId = parsedData["type"]?.stringValue,
+      let problemType = problemTypes[problemTypeId],
+      let problem = try? mediaTypeDecoders.find(for: .problem).decode(problemType, from: validData)
     else {
       return error
     }

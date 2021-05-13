@@ -18,25 +18,30 @@ import PotentCodables
  * Swift `Error` compatible `struct` for RFC 7807 with the
  * media type `application/problem+json`.
  */
-public struct Problem: Error {
+public class Problem: Error, Codable {
 
-  public let status: Int
+  public let type: URL
 
   public let title: String
 
+  public let status: Int
+
   public let detail: String?
 
-  public let instance: String?
+  public let instance: URL?
 
-  public let type: URL?
+  public let parameters: [String: AnyValue]?
 
-  public let extended: [String: AnyValue]?
+  public init(type: URL, title: String, status: Int, detail: String, instance: URL?, parameters: [String: AnyValue]? = nil) {
+    self.type = type
+    self.title = title
+    self.status = status
+    self.detail = detail
+    self.instance = instance
+    self.parameters = parameters
+  }
 
 }
-
-
-extension Problem: Encodable {}
-extension Problem: Decodable {}
 
 
 extension Problem: CustomStringConvertible {
@@ -44,15 +49,17 @@ extension Problem: CustomStringConvertible {
   public var description: String {
     var output: [String] = []
 
-    output.append("Status: \(status)")
+    output.append("Type: \(type)")
     output.append("Title: \(title)")
-    output.append("Detail: " + (detail != nil ? "\(detail!)" : "nil"))
-    output.append("Instance: " + (instance != nil ? "\(instance!)" : "nil"))
-    output.append("Type: " + (type != nil ? "\(type!)" : "nil"))
-    if let extended = extended {
-      if !extended.isEmpty {
-        output.append("Extended: \(extended)")
-      }
+    output.append("Status: \(status)")
+    if let detail = detail {
+      output.append("Detail: \(detail)")
+    }
+    if let instance = instance {
+      output.append("Instance: \(instance)")
+    }
+    if let parameters = parameters, !parameters.isEmpty {
+      output.append("Extended: \(parameters)")
     }
 
     return output.joined(separator: "\n")
@@ -66,3 +73,4 @@ public extension MediaType {
   static let problem = MediaType(type: .application, tree: .standard, subtype: "problem", suffix: .json)
 
 }
+
