@@ -1,5 +1,5 @@
 //
-//  RequestTests.swift
+//  ResponseDecodingTests.swift
 //  Sunday
 //
 //  Copyright © 2019 Outfox, inc.
@@ -14,7 +14,7 @@ import PotentCodables
 import XCTest
 
 
-class RequestTests: ParameterizedTest {
+class ResponseDecodingTests: ParameterizedTest {
 
   override class var parameterSets: [Any] {
     return [

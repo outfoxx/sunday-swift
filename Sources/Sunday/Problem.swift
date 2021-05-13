@@ -32,13 +32,37 @@ public class Problem: Error, Codable {
 
   public let parameters: [String: AnyValue]?
 
-  public init(type: URL, title: String, status: Int, detail: String, instance: URL?, parameters: [String: AnyValue]? = nil) {
+  public init(
+    type: URL,
+    title: String,
+    status: Int,
+    detail: String? = nil,
+    instance: URL? = nil,
+    parameters: [String: AnyValue]? = nil
+  ) {
     self.type = type
     self.title = title
     self.status = status
     self.detail = detail
     self.instance = instance
     self.parameters = parameters
+  }
+  
+  public convenience init(statusCode: Int) {
+    self.init(type: URL(string: "about:blank")!, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
+  }
+  
+  public convenience init(statusCode: Int, data: [String: AnyValue]) {
+    var data = data
+    let type = URL(string: "about:blank")!
+    let title = data.removeValue(forKey: "title")?.stringValue ?? Problem.statusTitle(statusCode: statusCode)
+    let detail = data.removeValue(forKey: "detail")?.stringValue
+    let instance = data.removeValue(forKey: "instance")?.stringValue.map { URL(string: $0) } ?? nil
+    self.init(type: type, title: title, status: statusCode, detail: detail, instance: instance, parameters: data)
+  }
+  
+  public static func statusTitle(statusCode: Int) -> String {
+    return HTTP.StatusCode(rawValue: statusCode).map { HTTP.statusText[$0]! } ?? "Unknown"
   }
 
 }
@@ -47,22 +71,21 @@ public class Problem: Error, Codable {
 extension Problem: CustomStringConvertible {
 
   public var description: String {
-    var output: [String] = []
-
-    output.append("Type: \(type)")
-    output.append("Title: \(title)")
-    output.append("Status: \(status)")
+    var builder =
+      DescriptionBuilder(Self.self)
+        .add(type, named: "type")
+        .add(title, named: "title")
+        .add(status, named: "status")
     if let detail = detail {
-      output.append("Detail: \(detail)")
+      builder = builder.add(detail, named: "detail")
     }
     if let instance = instance {
-      output.append("Instance: \(instance)")
+      builder = builder.add(instance, named: "instance")
     }
     if let parameters = parameters, !parameters.isEmpty {
-      output.append("Extended: \(parameters)")
+      builder = builder.add(parameters, named: "parameters")
     }
-
-    return output.joined(separator: "\n")
+    return builder.build()
   }
 
 }
@@ -73,4 +96,3 @@ public extension MediaType {
   static let problem = MediaType(type: .application, tree: .standard, subtype: "problem", suffix: .json)
 
 }
-

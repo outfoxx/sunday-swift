@@ -28,7 +28,7 @@ public struct HTTP {
   public enum StatusCode: Int {
     case `continue` = 100
     case switchingProtocols = 101
-
+    
     case ok = 200
     case created = 201
     case accepted = 202
@@ -36,7 +36,7 @@ public struct HTTP {
     case noContent = 204
     case resetContent = 205
     case partialContent = 206
-
+    
     case multipleChoices = 300
     case movedPermanently = 301
     case found = 302
@@ -44,7 +44,7 @@ public struct HTTP {
     case notModified = 304
     case useProxy = 305
     case temporaryRedirect = 307
-
+    
     case badRequest = 400
     case unauthenticated = 401
     case paymentRequired = 402
@@ -63,7 +63,7 @@ public struct HTTP {
     case unsupportedMediaType = 415
     case requestRangeNotSatisfiable = 416
     case expectationFailed = 417
-
+    
     case internalServerError = 500
     case notImplemented = 501
     case badGateway = 502
@@ -71,6 +71,53 @@ public struct HTTP {
     case gatewayTimeout = 504
     case httpVersionNotSupported = 505
   }
+  
+  public static let statusText: [StatusCode: String] = [
+    .continue: "Continue",
+    .switchingProtocols: "Switching Protocols",
+    
+    .ok: "OK",
+    .created: "Created",
+    .accepted: "Accepted",
+    .nonAuthoritativeInformation: "Non Authoritative Information",
+    .noContent: "No Content",
+    .resetContent: "ResetContent",
+    .partialContent: "Partial Content",
+    
+    .multipleChoices: "Multiple Choices",
+    .movedPermanently: "Moved Permanently",
+    .found: "Found",
+    .seeOther: "See Other",
+    .notModified: "Not Modified",
+    .useProxy: "Use Proxy",
+    .temporaryRedirect: "Temporary Redirect",
+    
+    .badRequest: "Bad Request",
+    .unauthenticated: "Unauthenticated",
+    .paymentRequired: "Payment Required",
+    .forbidden: "Forbidden",
+    .notFound: "Not Found",
+    .methodNotAllowed: "Method Not Allowed",
+    .notAcceptable: "Not Acceptable",
+    .proxyAuthenticationRequired: "Proxy Authentication Required",
+    .requestTimeout: "Request Timeout",
+    .conflict: "Conflict",
+    .gone: "Gone",
+    .lengthRequired: "Length Required",
+    .preconditionFailed: "Precondition Failed",
+    .requestEntityTooLarge: "Request Entity Too Large",
+    .requestUriTooLong: "Request Uri Too Long",
+    .unsupportedMediaType: "Unsupported Media Type",
+    .requestRangeNotSatisfiable: "Request Range Not Satisfiable",
+    .expectationFailed: "Expectation Failed",
+    
+    .internalServerError: "Internal Server Error",
+    .notImplemented: "Not mplemented",
+    .badGateway: "Bad Gateway",
+    .serviceUnavailable: "Service Unavailable",
+    .gatewayTimeout: "Gateway Timeout",
+    .httpVersionNotSupported: "Http Version Not Supported",
+  ]
 
   public typealias Headers = [String: [String]]
   public typealias RawHeaders = [(name: String, value: Data)]

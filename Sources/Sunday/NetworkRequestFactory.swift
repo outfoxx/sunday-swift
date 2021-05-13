@@ -51,8 +51,8 @@ public class NetworkRequestFactory: RequestFactory {
                           mediaTypeDecoders: mediaTypeDecoders)
   }
   
-  public func registerProblem(typeId: String, problemType: Problem.Type) {
-    self.problemTypes[typeId] = problemType
+  public func registerProblem(type: URL, problemType: Problem.Type) {
+    self.problemTypes[type.absoluteString] = problemType
   }
 
   public func request<B: Encodable>(
@@ -177,22 +177,63 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func parse(error: Error) -> Error {
 
+    // Check if this is an HTTP error response
     guard
       case SundayError.responseValidationFailed(reason: let reason) = error,
-      case ResponseValidationFailureReason.unacceptableStatusCode(response: let response, data: let data) = reason,
-      let contentTypeHeader = response.value(forHttpHeaderField: "Content-Type"),
-      let contentType = MediaType(contentTypeHeader),
-      contentType == .problem,
-      let validData = data,
-      let parsedData = try? mediaTypeDecoders.find(for: .json).decode([String: AnyValue].self, from: validData),
-      let problemTypeId = parsedData["type"]?.stringValue,
-      let problemType = problemTypes[problemTypeId],
-      let problem = try? mediaTypeDecoders.find(for: .problem).decode(problemType, from: validData)
+      case ResponseValidationFailureReason.unacceptableStatusCode(response: let response, data: let possibleData) = reason
     else {
       return error
     }
 
-    return problem
+    // Check if response from error is "application/problem+json"
+    guard
+      let contentTypeHeader = response.value(forHttpHeaderField: HTTP.StdHeaders.contentType),
+      let contentType = MediaType(contentTypeHeader),
+      contentType == .problem
+    else {
+      return Problem(statusCode: response.statusCode)
+    }
+    
+    // Ensure data is available
+    guard let data = possibleData, !data.isEmpty else {
+      // Return standard problem
+      return Problem(statusCode: response.statusCode)
+    }
+    
+    // Find decoder
+    let mediaTypeDecoder: MediaTypeDecoder
+    do {
+      mediaTypeDecoder = try mediaTypeDecoders.find(for: .json)
+    }
+    catch {
+      return error
+    }
+    
+    // Parse data to dictionary
+    var problemData: [String: AnyValue]
+    do {
+      problemData = try mediaTypeDecoder.decode([String: AnyValue].self, from: data)
+    }
+    catch {
+      return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
+    }
+    
+    // Find registered problem type
+    guard
+      let type = problemData.removeValue(forKey: "type")?.stringValue,
+      let problemType = problemTypes[type]
+    else {
+      // Return generic problem
+      return Problem(statusCode: response.statusCode, data: problemData)
+    }
+    
+    // Parse registered problem type
+    do {
+      return try mediaTypeDecoder.decode(problemType, from: data)
+    }
+    catch {
+      return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
+    }
   }
 
   public func result<B: Encodable, D: Decodable>(
@@ -315,9 +356,6 @@ public class NetworkRequestFactory: RequestFactory {
   }
   
 }
-
-
-private let acceptableStatusCodes: Set<Int> = [200, 201, 204, 205, 206, 400, 409, 410, 412, 413]
 
 
 
