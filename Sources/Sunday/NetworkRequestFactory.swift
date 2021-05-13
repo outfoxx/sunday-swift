@@ -49,10 +49,11 @@ public class NetworkRequestFactory: RequestFactory {
                           mediaTypeDecoders: mediaTypeDecoders)
   }
 
-  public func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
-                                    pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
-                                    contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                    headers: HTTP.Headers?) -> RequestPublisher {
+  public func request<B: Encodable>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+  ) -> RequestPublisher {
+    
     Deferred { [self] () -> AnyPublisher<URLRequest, Error> in
       do {
         var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
@@ -123,12 +124,11 @@ public class NetworkRequestFactory: RequestFactory {
     return session.dataTaskValidatedPublisher(request: request).eraseToAnyPublisher()
   }
 
-  public func response<B: Encodable>(method: HTTP.Method,
-                                     pathTemplate: String, pathParameters: Parameters?,
-                                     queryParameters: Parameters?,
-                                     body: B?,
-                                     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                     headers: HTTP.Headers?) -> RequestResponsePublisher {
+  public func response<B: Encodable>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+  ) -> RequestResponsePublisher {
+    
     return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
                    queryParameters: queryParameters,
                    body: body,
@@ -186,25 +186,24 @@ public class NetworkRequestFactory: RequestFactory {
     return problem
   }
 
-  public func result<D: Decodable>(request: URLRequest) -> RequestResultPublisher<D> {
-    return response(request: request)
-      .tryMap { try self.parse(response: $0.response, data: $0.data) }
-      .mapError { self.parse(error: $0) }
-      .eraseToAnyPublisher()
-  }
-
-  public func result<B: Encodable, D: Decodable>(method: HTTP.Method,
-                                                 pathTemplate: String, pathParameters: Parameters?,
-                                                 queryParameters: Parameters?,
-                                                 body: B?,
-                                                 contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                                 headers: HTTP.Headers?) -> RequestResultPublisher<D> {
+  public func result<B: Encodable, D: Decodable>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+  ) -> RequestResultPublisher<D> {
+    
     return response(method: method,
                     pathTemplate: pathTemplate, pathParameters: pathParameters,
                     queryParameters: queryParameters,
                     body: body,
                     contentTypes: contentTypes, acceptTypes: acceptTypes,
                     headers: headers)
+      .tryMap { try self.parse(response: $0.response, data: $0.data) }
+      .mapError { self.parse(error: $0) }
+      .eraseToAnyPublisher()
+  }
+
+  public func result<D: Decodable>(request: URLRequest) -> RequestResultPublisher<D> {
+    return response(request: request)
       .tryMap { try self.parse(response: $0.response, data: $0.data) }
       .mapError { self.parse(error: $0) }
       .eraseToAnyPublisher()
@@ -217,12 +216,11 @@ public class NetworkRequestFactory: RequestFactory {
       .eraseToAnyPublisher()
   }
 
-  public func result<B: Encodable>(method: HTTP.Method,
-                                   pathTemplate: String, pathParameters: Parameters?,
-                                   queryParameters: Parameters?,
-                                   body: B?,
-                                   contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-                                   headers: HTTP.Headers?) -> RequestCompletePublisher {
+  public func result<B: Encodable>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+  ) -> RequestCompletePublisher {
+    
     return response(method: method,
                     pathTemplate: pathTemplate, pathParameters: pathParameters,
                     queryParameters: queryParameters,
@@ -234,7 +232,22 @@ public class NetworkRequestFactory: RequestFactory {
       .eraseToAnyPublisher()
   }
 
-  public func events(from request$: RequestPublisher) -> EventSource {
+  public func eventSource<B>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+  ) -> EventSource where B : Encodable {
+    
+    self.eventSource(from: self.request(method: method,
+                                        pathTemplate: pathTemplate,
+                                        pathParameters: pathParameters,
+                                        queryParameters: queryParameters,
+                                        body: body,
+                                        contentTypes: contentTypes,
+                                        acceptTypes: acceptTypes,
+                                        headers: headers))
+  }
+
+  public func eventSource(from request$: RequestPublisher) -> EventSource {
 
     return EventSource(queue: requestQueue) { headers in
       request$.flatMap { request in
@@ -244,13 +257,32 @@ public class NetworkRequestFactory: RequestFactory {
     }
   }
 
-  public func events<D: Decodable>(from request$: RequestPublisher) -> RequestEventPublisher<D> {
+  public func eventStream<B, D>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?,
+    eventTypes: [String : D.Type]
+  ) -> RequestEventPublisher<D> where B : Encodable, D : Decodable {
+    
+    self.eventStream(eventTypes: eventTypes,
+                     from: self.request(method: method,
+                                        pathTemplate: pathTemplate,
+                                        pathParameters: pathParameters,
+                                        queryParameters: queryParameters,
+                                        body: body,
+                                        contentTypes: contentTypes,
+                                        acceptTypes: acceptTypes,
+                                        headers: headers))
+  }
+
+  public func eventStream<D: Decodable>(eventTypes: [String : D.Type], from request$: RequestPublisher) -> RequestEventPublisher<D> {
     Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
         
-        let jsonDecoder = try mediaTypeDecoders.find(for: .json)
+        guard let jsonDecoder = try mediaTypeDecoders.find(for: .json) as? TextMediaTypeDecoder else {
+          fatalError("JSON media-type decoder must conform to TextMediaTypeDecoder")
+        }
         
-        return EventPublisher<D>(decoder: jsonDecoder, queue: requestQueue) { headers in
+        return EventPublisher<D>(eventTypes: eventTypes, decoder: jsonDecoder, queue: requestQueue) { headers in
           
           request$.flatMap { request in
             self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))

@@ -17,6 +17,10 @@ public protocol MediaTypeDecoder {
   func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable
 }
 
+public protocol TextMediaTypeDecoder : MediaTypeDecoder {
+  func decode<T: Decodable>(_ type: T.Type, from data: String) throws -> T
+}
+
 
 public struct MediaTypeDecoders {
 
@@ -94,7 +98,7 @@ public struct MediaTypeDecoders {
 }
 
 
-extension JSON.Decoder: MediaTypeDecoder {}
+extension JSON.Decoder: TextMediaTypeDecoder {}
 
 
 extension CBOR.Decoder: MediaTypeDecoder {}

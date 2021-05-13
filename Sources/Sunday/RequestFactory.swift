@@ -22,13 +22,13 @@ public protocol RequestFactory {
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                              contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
                              headers: HTTP.Headers?) -> RequestPublisher
-
-  func response(request: URLRequest) -> RequestResponsePublisher
-
+  
   func response<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                               pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
                               contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
                               headers: HTTP.Headers?) -> RequestResponsePublisher
+
+  func response(request: URLRequest) -> RequestResponsePublisher
 
   func result<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String,
                                           pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
@@ -40,10 +40,16 @@ public protocol RequestFactory {
                             contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
                             headers: HTTP.Headers?) -> RequestCompletePublisher
 
-  func events(from: RequestPublisher) -> EventSource
+  func eventSource<B: Encodable>(method: HTTP.Method, pathTemplate: String,
+                                 pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+                                 contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                                 headers: HTTP.Headers?) -> EventSource
 
-  func events<D: Decodable>(from: RequestPublisher) -> RequestEventPublisher<D>
-  
+  func eventStream<B: Encodable, D: Decodable>(method: HTTP.Method, pathTemplate: String,
+                                               pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+                                               contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+                                               headers: HTTP.Headers?, eventTypes: [String: D.Type]) -> RequestEventPublisher<D>
+
   func close(cancelOutstandingRequests: Bool)
 
 }

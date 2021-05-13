@@ -17,12 +17,14 @@ public struct EventPublisher<Output: Decodable>: Publisher {
   public typealias Failure = Error
   
   private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
-  private let decoder: MediaTypeDecoder
+  private let decoder: TextMediaTypeDecoder
+  private let eventTypes: [String: Output.Type]
   
-  public init(decoder: MediaTypeDecoder, queue: DispatchQueue,
+  public init(eventTypes: [String: Output.Type], decoder: TextMediaTypeDecoder, queue: DispatchQueue,
               requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
     self.requestor = requestor
     self.decoder = decoder
+    self.eventTypes = eventTypes
   }
   
   public func receive<S: Subscriber>(subscriber: S) where S.Input == Output, S.Failure == Failure {
@@ -78,16 +80,13 @@ private extension EventPublisher {
         return
       }
       
-      // Convert "data" value to JSON
-      guard let data = #"{"type": "\#(event ?? "")", "value": \#(data ?? "nil") }"#.data(using: .utf8) else {
-        logger.error("Unable to parse event data")
-        return
-      }
+      let eventType = parent.eventTypes[event ?? ""] ?? Output.self
+
       
       // Parse JSON and pass event on
       
       do {
-        let event = try parent.decoder.decode(Output.self, from: data)
+        let event = try parent.decoder.decode(eventType, from: data ?? "{}")
         
         demand += subscriber.receive(event)
       }
