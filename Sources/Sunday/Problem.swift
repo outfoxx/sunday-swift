@@ -31,6 +31,10 @@ open class Problem: Error, Codable {
   public let instance: URL?
 
   public let parameters: [String: AnyValue]?
+  
+  public var statusCode: HTTP.StatusCode? {
+    HTTP.StatusCode(rawValue: status)
+  }
 
   public init(
     type: URL,
@@ -47,20 +51,45 @@ open class Problem: Error, Codable {
     self.instance = instance
     self.parameters = parameters
   }
-  
+
+  public init(
+    type: URL,
+    title: String,
+    statusCode: HTTP.StatusCode,
+    detail: String? = nil,
+    instance: URL? = nil,
+    parameters: [String: AnyValue]? = nil
+  ) {
+    self.type = type
+    self.title = title
+    self.status = statusCode.rawValue
+    self.detail = detail
+    self.instance = instance
+    self.parameters = parameters
+  }
+
   public convenience init(statusCode: Int) {
     self.init(type: URL(string: "about:blank")!, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
   }
   
+  public convenience init(statusCode: HTTP.StatusCode) {
+    self.init(statusCode: statusCode.rawValue)
+  }
+
   public convenience init(statusCode: Int, data: [String: AnyValue]) {
     var data = data
     let type = URL(string: "about:blank")!
     let title = data.removeValue(forKey: "title")?.stringValue ?? Problem.statusTitle(statusCode: statusCode)
     let detail = data.removeValue(forKey: "detail")?.stringValue
     let instance = data.removeValue(forKey: "instance")?.stringValue.map { URL(string: $0) } ?? nil
-    self.init(type: type, title: title, status: statusCode, detail: detail, instance: instance, parameters: data)
+    let parameters = data.isEmpty ? nil : data
+    self.init(type: type, title: title, status: statusCode, detail: detail, instance: instance, parameters: parameters)
   }
-  
+
+  public convenience init(statusCode: HTTP.StatusCode, data: [String: AnyValue]) {
+    self.init(statusCode: statusCode.rawValue, data: data)
+  }
+
   public required init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: AnyCodingKey.self)
     

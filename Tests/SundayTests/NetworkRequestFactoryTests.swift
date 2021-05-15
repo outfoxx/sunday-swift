@@ -19,7 +19,7 @@ class NetworkRequestFactoryTests: XCTestCase {
   class TestProblem : Problem {
     
     static let type = URL(string: "http://example.com/test")!
-    static let status = 400
+    static let statusCode = HTTP.StatusCode.badRequest
     
     let extra: String
     
@@ -27,7 +27,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       self.extra = extra
       super.init(type: Self.type,
                  title: "Test Problem",
-                 status: Self.status,
+                 statusCode: Self.statusCode,
                  detail: "A Test Problem",
                  instance: instance,
                  parameters: nil)
@@ -57,7 +57,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         Path("/problem") {
           GET { req, res in
             let headers = [HTTP.StdHeaders.contentType: [MediaType.problem.value]]
-            res.send(status: .badRequest, headers: headers, value: testProblem)
+            res.send(statusCode: TestProblem.statusCode, headers: headers, value: testProblem)
           }
         }
       }
@@ -115,7 +115,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         Path("/problem") {
           GET { req, res in
             let headers = [HTTP.StdHeaders.contentType: [MediaType.problem.value]]
-            res.send(status: .badRequest, headers: headers, value: testProblem)
+            res.send(statusCode: TestProblem.statusCode, headers: headers, value: testProblem)
           }
         }
       }
@@ -274,7 +274,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         Path("/problem") {
           GET { req, res in
             let headers = [HTTP.StdHeaders.contentType: [MediaType.problem.value]]
-            res.send(status: .badRequest, headers: headers, value: TestProblem(extra: "none"))
+            res.send(statusCode: TestProblem.statusCode, headers: headers, value: TestProblem(extra: "none"))
           }
         }
       }
