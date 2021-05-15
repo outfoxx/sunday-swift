@@ -21,7 +21,7 @@ public enum ResponseDecodingFailureReason {
   case invalidContentType(String)
   case unsupportedContentType(MediaType)
   case inputDataNilOrZeroLength
-  case serializationFailed(contentType: MediaType, error: Error?)
+  case deserializationFailed(contentType: MediaType, error: Error?)
   case missingValue
 }
 

@@ -114,8 +114,8 @@ public struct DataDecoder: MediaTypeDecoder {
 
   public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
     guard type == Data.self else {
-      throw SundayError.responseDecodingFailed(reason: .serializationFailed(contentType: .octetStream,
-                                                                            error: Error.translationNotSupported))
+      throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .octetStream,
+                                                                              error: Error.translationNotSupported))
     }
     return (data as! T)
   }
