@@ -141,7 +141,7 @@ public struct MediaType {
   public var value: String {
     let type = self.type.rawValue
     let tree = self.tree.rawValue
-    let suffix = self.suffix != nil ? ".\(self.suffix!.rawValue)" : ""
+    let suffix = self.suffix != nil ? "+\(self.suffix!.rawValue)" : ""
     let parameters = self.parameters.keys.sorted().map { key in ";\(key)=\(self.parameters[key]!)" }.joined()
     return "\(type)/\(tree)\(subtype)\(suffix)\(parameters)"
   }
