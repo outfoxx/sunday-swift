@@ -39,72 +39,76 @@ public extension HTTP {
   struct Response {
 
     public struct Status: CustomStringConvertible {
-      public let code: StatusCode
+      public let code: Int
       public let info: String
 
-      public init(code: StatusCode, info: String) {
+      public init(code: Int, info: String) {
         self.code = code
         self.info = info
       }
-
+      
+      public init(code: StatusCode) {
+        self.init(code: code.rawValue, info: HTTP.statusText[code]!.uppercased())
+      }
+      
       public var description: String {
-        return "\(code.rawValue) \(info)"
+        return "\(code) \(info)"
       }
 
       // 1XX
 
-      public static let `continue` = Status(code: .continue, info: "CONTINUE")
-      public static let switchingProtocols = Status(code: .switchingProtocols, info: "SWITCHING PROTOCOLS")
+      public static let `continue` = Status(code: .continue)
+      public static let switchingProtocols = Status(code: .switchingProtocols)
 
       // 2XX
 
-      public static let ok = Status(code: .ok, info: "OK")
-      public static let created = Status(code: .created, info: "CREATED")
-      public static let accepted = Status(code: .accepted, info: "ACCEPTED")
-      public static let nonAuthoritativeInformation = Status(code: .nonAuthoritativeInformation, info: "NON-AUTHORITATIVE INFORMATION")
-      public static let noContent = Status(code: .noContent, info: "NO CONTENT")
-      public static let resetContent = Status(code: .resetContent, info: "RESET CONTENT")
-      public static let partialContent = Status(code: .partialContent, info: "PARTIAL CONTENT")
+      public static let ok = Status(code: .ok)
+      public static let created = Status(code: .created)
+      public static let accepted = Status(code: .accepted)
+      public static let nonAuthoritativeInformation = Status(code: .nonAuthoritativeInformation)
+      public static let noContent = Status(code: .noContent)
+      public static let resetContent = Status(code: .resetContent)
+      public static let partialContent = Status(code: .partialContent)
 
       // 3XX
 
-      public static let multipleChoices = Status(code: .multipleChoices, info: "MULTIPLE CHOICES")
-      public static let movedPermanently = Status(code: .movedPermanently, info: "MOVED PERMANENTLY")
-      public static let found = Status(code: .found, info: "FOUND")
-      public static let seeOther = Status(code: .seeOther, info: "SEE OTHER")
-      public static let notModified = Status(code: .notModified, info: "NOT MODIFIED")
-      public static let useProxy = Status(code: .useProxy, info: "USE PROXY")
-      public static let temporaryRedirect = Status(code: .temporaryRedirect, info: "TEMPORARY REDIRECT")
+      public static let multipleChoices = Status(code: .multipleChoices)
+      public static let movedPermanently = Status(code: .movedPermanently)
+      public static let found = Status(code: .found)
+      public static let seeOther = Status(code: .seeOther)
+      public static let notModified = Status(code: .notModified)
+      public static let useProxy = Status(code: .useProxy)
+      public static let temporaryRedirect = Status(code: .temporaryRedirect)
 
       // 4XX
 
-      public static let badRequest = Status(code: .badRequest, info: "BAD REQUEST")
-      public static let unauthenticated = Status(code: .unauthenticated, info: "UNAUTHENTICATED")
-      public static let paymentRequired = Status(code: .paymentRequired, info: "PAYMENT REQUIRED")
-      public static let forbidden = Status(code: .forbidden, info: "FORBIDDEN")
-      public static let notFound = Status(code: .notFound, info: "NOT FOUND")
-      public static let methodNotAllowed = Status(code: .methodNotAllowed, info: "METHOD NOT ALLOWED")
-      public static let notAcceptable = Status(code: .notAcceptable, info: "NOT ACCEPTABLE")
-      public static let proxyAuthenticationRequired = Status(code: .proxyAuthenticationRequired, info: "PROXY AUTHENTICATION REQUIRED")
-      public static let requestTimeout = Status(code: .requestTimeout, info: "REQUEST TIMEOUT")
-      public static let conflict = Status(code: .conflict, info: "CONFLICT")
-      public static let gone = Status(code: .gone, info: "GONE")
-      public static let lengthRequired = Status(code: .lengthRequired, info: "LENGTH REQUIRED")
-      public static let preconditionFailed = Status(code: .preconditionFailed, info: "PRECONDITION FAILED")
-      public static let requestEntityTooLarge = Status(code: .requestEntityTooLarge, info: "REQUEST ENTITY TOO LARGE")
-      public static let requestUriTooLong = Status(code: .requestUriTooLong, info: "REQUEST URI TOO LONG")
-      public static let unsupportedMediaType = Status(code: .unsupportedMediaType, info: "UNSUPPORTED MEDIA TYPE")
-      public static let requestRangeNotSatisfiable = Status(code: .requestRangeNotSatisfiable, info: "REQUEST RANGE NOT SATISFIABLE")
-      public static let expectationFailed = Status(code: .expectationFailed, info: "EXPECTATION FAILED")
+      public static let badRequest = Status(code: .badRequest)
+      public static let unauthenticated = Status(code: .unauthenticated)
+      public static let paymentRequired = Status(code: .paymentRequired)
+      public static let forbidden = Status(code: .forbidden)
+      public static let notFound = Status(code: .notFound)
+      public static let methodNotAllowed = Status(code: .methodNotAllowed)
+      public static let notAcceptable = Status(code: .notAcceptable)
+      public static let proxyAuthenticationRequired = Status(code: .proxyAuthenticationRequired)
+      public static let requestTimeout = Status(code: .requestTimeout)
+      public static let conflict = Status(code: .conflict)
+      public static let gone = Status(code: .gone)
+      public static let lengthRequired = Status(code: .lengthRequired)
+      public static let preconditionFailed = Status(code: .preconditionFailed)
+      public static let requestEntityTooLarge = Status(code: .requestEntityTooLarge)
+      public static let requestUriTooLong = Status(code: .requestUriTooLong)
+      public static let unsupportedMediaType = Status(code: .unsupportedMediaType)
+      public static let requestRangeNotSatisfiable = Status(code: .requestRangeNotSatisfiable)
+      public static let expectationFailed = Status(code: .expectationFailed)
 
       // 5XX
 
-      public static let internalServerError = Status(code: .internalServerError, info: "INTERNAL SERVER ERROR")
-      public static let notImplemented = Status(code: .notImplemented, info: "NOT IMPLEMENTED")
-      public static let badGateway = Status(code: .badGateway, info: "BAD GATEWAY")
-      public static let serviceUnavailable = Status(code: .serviceUnavailable, info: "SERVICE UNAVAILABLE")
-      public static let gatewayTimeout = Status(code: .gatewayTimeout, info: "GATEWAY TIMEOUT")
-      public static let httpVersionNotSupported = Status(code: .httpVersionNotSupported, info: "HTTP VERSION NOT SUPPORTED")
+      public static let internalServerError = Status(code: .internalServerError)
+      public static let notImplemented = Status(code: .notImplemented)
+      public static let badGateway = Status(code: .badGateway)
+      public static let serviceUnavailable = Status(code: .serviceUnavailable)
+      public static let gatewayTimeout = Status(code: .gatewayTimeout)
+      public static let httpVersionNotSupported = Status(code: .httpVersionNotSupported)
 
     }
 

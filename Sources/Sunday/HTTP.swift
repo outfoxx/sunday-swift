@@ -25,7 +25,7 @@ public struct HTTP {
     case connect = "CONNECT"
   }
 
-  public enum StatusCode: Int {
+  public enum StatusCode: Int, Codable, ExpressibleByIntegerLiteral {
     case `continue` = 100
     case switchingProtocols = 101
     
@@ -70,6 +70,10 @@ public struct HTTP {
     case serviceUnavailable = 503
     case gatewayTimeout = 504
     case httpVersionNotSupported = 505
+    
+    public init(integerLiteral value: IntegerLiteralType) {
+      self.init(rawValue: value)!
+    }
   }
   
   public static let statusText: [StatusCode: String] = [
