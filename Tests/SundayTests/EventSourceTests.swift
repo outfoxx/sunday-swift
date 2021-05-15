@@ -63,6 +63,8 @@ class EventSourceTests: XCTestCase {
       }
     
     let x = expectation(description: "Event Received")
+    x.assertForOverFulfill = false
+    
     eventSource.onMessage { (id, event, data) in
       XCTAssertEqual(id, "123")
       XCTAssertEqual(event, "test")
@@ -82,6 +84,8 @@ class EventSourceTests: XCTestCase {
       }
 
     let x = expectation(description: "Event Received")
+    x.assertForOverFulfill = false
+
     eventSource.onMessage { (id, event, data) in
       XCTAssertEqual(id, "123")
       XCTAssertEqual(event, "test")
