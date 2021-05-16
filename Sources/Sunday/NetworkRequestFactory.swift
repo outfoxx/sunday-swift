@@ -56,8 +56,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func request<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
   ) -> RequestPublisher {
     
     Deferred { [self] () -> AnyPublisher<URLRequest, Error> in
@@ -66,6 +66,7 @@ public class NetworkRequestFactory: RequestFactory {
         
         // Encode & add query parameters to url
         if let queryParameters = queryParameters, !queryParameters.isEmpty {
+          
           guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
             fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
           }
@@ -92,7 +93,11 @@ public class NetworkRequestFactory: RequestFactory {
         }
         
         // Determine & add accept header
-        if let supportedAcceptTypes = acceptTypes?.filter({ mediaTypeDecoders.supports(for: $0) }), !supportedAcceptTypes.isEmpty {
+        if let acceptTypes = acceptTypes {
+          let supportedAcceptTypes = acceptTypes.filter { mediaTypeDecoders.supports(for: $0) }
+          if supportedAcceptTypes.isEmpty {
+            throw SundayError.requestEncodingFailed(reason: .noSupportedAcceptTypes(acceptTypes))
+          }
           
           let accept = supportedAcceptTypes.map { $0.value }.joined(separator: " , ")
           
@@ -110,7 +115,7 @@ public class NetworkRequestFactory: RequestFactory {
         // Encode & add body data
         if let body = body {
           guard let contentType = contentType else {
-            throw SundayError.requestEncodingFailed(reason: .noSupportedContentType(contentTypes ?? []))
+            throw SundayError.requestEncodingFailed(reason: .noSupportedContentTypes(contentTypes ?? []))
           }
           urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
         }
@@ -131,8 +136,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func response<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
   ) -> RequestResponsePublisher {
     
     return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
@@ -237,8 +242,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func result<B: Encodable, D: Decodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
   ) -> RequestResultPublisher<D> {
     
     return response(method: method,
@@ -283,8 +288,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func eventSource<B>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
   ) -> EventSource where B : Encodable {
     
     self.eventSource(from: self.request(method: method,
@@ -308,8 +313,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func eventStream<B, D>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?,
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil,
     eventTypes: [String : D.Type]
   ) -> RequestEventPublisher<D> where B : Encodable, D : Decodable {
     

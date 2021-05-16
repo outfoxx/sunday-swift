@@ -11,11 +11,208 @@
 import PotentCodables
 @testable import Sunday
 @testable import SundayServer
+import CombineExpectations
 import XCTest
 
 
 class NetworkRequestFactoryTests: XCTestCase {
   
+  func testEnsureDefaultsCanBeOverridden() {
+        
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
+                                               mediaTypeEncoders: .Builder().build(),
+                                               mediaTypeDecoders: .Builder().build())
+    
+    XCTAssertNil(try? requestFactory.mediaTypeEncoders.find(for: .json))
+    XCTAssertNil(try? requestFactory.mediaTypeDecoders.find(for: .json))
+  }
+  
+  func testEncodesQueryParameters() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             queryParameters: ["limit": 5, "search": "1 & 2"],
+                             body: Empty.none)
+      .record()
+    
+    let request = try wait(for: request$.single, timeout: 1.0)
+    
+    XCTAssertEqual(request.url?.absoluteString, "http://example.com/api?limit=5&search=1%20%26%202")
+  }
+  
+  func testFailsWhenNoQueryParamEncoderIsRegisteredAndQueryParamsAreProvided() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
+                                               mediaTypeEncoders: .Builder().build())
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             queryParameters: ["limit": 5, "search": "1 & 2"],
+                             body: Empty.none)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+      guard
+        case SundayError.requestEncodingFailed(reason: let reason) = error,
+        case RequestEncodingFailureReason.unsupportedContentType(_) = reason
+      else {
+        XCTFail("Incorrect Error")
+        return
+      }
+    }
+  }
+  
+  func testAddsCustomHeaders() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             headers: [HTTP.StdHeaders.authorization: ["Bearer 12345"]])
+      .record()
+    
+    let request = try wait(for: request$.single, timeout: 1.0)
+    
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345")
+  }
+  
+  func testAddsAcceptHeader() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json, .cbor])
+      .record()
+    
+    let request = try wait(for: request$.single, timeout: 1.0)
+    
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.accept), "application/json , application/cbor")
+  }
+  
+  func testFailsIfNoneOfTheAcceptTypesHasADecoder() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
+                                               mediaTypeDecoders: .Builder().build())
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json, .cbor])
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+      guard
+        case SundayError.requestEncodingFailed(reason: let reason) = error,
+        case RequestEncodingFailureReason.noSupportedAcceptTypes(_) = reason
+      else {
+        XCTFail("Incorrect Error")
+        return
+      }
+    }
+  }
+  
+  func testFailsIfNoneOfTheContentTypesHasAnEncoder() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
+                                               mediaTypeEncoders: .Builder().build())
+    
+    let request$ =
+      requestFactory.request(method: .get,
+                             pathTemplate: "/api",
+                             body: "a body",
+                             contentTypes: [.json, .cbor])
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+      guard
+        case SundayError.requestEncodingFailed(reason: let reason) = error,
+        case RequestEncodingFailureReason.noSupportedContentTypes(_) = reason
+      else {
+        XCTFail("Incorrect Error")
+        return
+      }
+    }
+  }
+  
+  func testAttachesBodyEncodedByContentType() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    
+    let request$ =
+      requestFactory.request(method: .post,
+                             pathTemplate: "/api",
+                             body: ["a": 5],
+                             contentTypes: [.json])
+      .record()
+    
+    let request = try wait(for: request$.single, timeout: 1.0)
+    
+    XCTAssertEqual(request.httpBody, #"{"a":5}"#.data(using: .utf8))
+  }
+  
+  func testSetContentTypeWhenBodyIsNonExistent() throws {
+    
+    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    
+    let request$ =
+      requestFactory.request(method: .post,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             contentTypes: [.json])
+      .record()
+    
+    let request = try wait(for: request$.single, timeout: 1.0)
+    
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType), "application/json")
+  }
+  
+  func testFetchesTypedResults() throws {
+    
+    struct Tester : Codable, Equatable, Hashable {
+      let name: String
+      let count: Int
+    }
+    
+    let tester = Tester(name: "test", count: 5)
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/api") {
+          GET { req, res in
+            let headers = [HTTP.StdHeaders.contentType: [MediaType.json.value]]
+            res.send(statusCode: .ok, headers: headers, value: tester)
+          }
+        }
+      }
+    }
+    
+    let url = server.start()
+    XCTAssertNotNil(url)
+
+    let requestFactory = NetworkRequestFactory(baseURL: .init(template: url!.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                            pathTemplate: "/api",
+                            body: Empty.none,
+                            acceptTypes: [.json]) as RequestResultPublisher<Tester>)
+      .record()
+    
+    let result = try wait(for: result$.single, timeout: 1.0)
+    
+    XCTAssertEqual(result, tester)
+  }
+
   class TestProblem : Problem {
     
     static let type = URL(string: "http://example.com/test")!
@@ -51,7 +248,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let testProblem = TestProblem(extra: "Something Extra", instance: URL(string: "id:12345"))
     
-    
+  
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
         Path("/problem") {
