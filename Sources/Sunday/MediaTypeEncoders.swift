@@ -39,11 +39,11 @@ public struct MediaTypeEncoders {
       return registerURL().registerData().registerJSON().registerCBOR()
     }
 
-    public func registerURL(arrayEndcoding: URLEncoder.ArrayEncoding = .bracketed,
-                            boolEncoding: URLEncoder.BoolEncoding = .numeric,
-                            dateEncoding: URLEncoder.DateEncoding = .millisecondsSince1970,
+    public func registerURL(arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .bracketed,
+                            boolEncoding: WWWFormURLEncoder.BoolEncoding = .numeric,
+                            dateEncoding: WWWFormURLEncoder.DateEncoding = .millisecondsSince1970,
                             encoder: AnyValueEncoder = .default) -> Builder {
-      return register(encoder: URLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
+      return register(encoder: WWWFormURLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
                                           dateEncoding: dateEncoding, encoder: encoder),
                       forTypes: .wwwFormUrlEncoded)
     }

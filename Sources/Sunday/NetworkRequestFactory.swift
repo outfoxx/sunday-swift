@@ -66,8 +66,8 @@ public class NetworkRequestFactory: RequestFactory {
         
         // Encode & add query parameters to url
         if let queryParameters = queryParameters, !queryParameters.isEmpty {
-          guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? URLEncoder else {
-            fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of URLEncoder")
+          guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
+            fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
           }
           
           var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
