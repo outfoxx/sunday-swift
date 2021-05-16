@@ -53,10 +53,10 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
   /// Configures how `Date` parameters are encoded.
   ///
   public enum DateEncoding {
-    /// Encode the `Date` as a UNIX timestamp (floating point seconds since epoch).
+    /// Encode the `Date` as a UNIX timestamp (decimal seconds since epoch).
     case secondsSince1970
 
-    /// Encode the `Date` as UNIX millisecond timestamp (integer milliseconds since epoch).
+    /// Encode the `Date` as UNIX millisecond timestamp (milliseconds since epoch).
     case millisecondsSince1970
 
     /// Encode the `Date` as an ISO-8601-formatted string (in RFC 3339 format).
