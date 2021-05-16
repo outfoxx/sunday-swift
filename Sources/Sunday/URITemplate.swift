@@ -44,7 +44,7 @@ public struct URI: Equatable, Hashable {
     self.components = components
   }
 
-  public struct Template {
+  public struct Template : ExpressibleByStringLiteral {
     
     public enum Error: Swift.Error {
       case missingParameterValue(name: String)
@@ -62,6 +62,9 @@ public struct URI: Equatable, Hashable {
       self.parameters = parameters
     }
     
+    public init(stringLiteral template: String) {
+      self.init(template: template)
+    }    
     
     /// Builds a complete URL with the provided path arguments
     ///
