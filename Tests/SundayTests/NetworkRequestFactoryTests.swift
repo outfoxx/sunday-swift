@@ -221,22 +221,63 @@ class NetworkRequestFactoryTests: XCTestCase {
       return
     }
     defer { server.stop() }
-
+    
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
     
     let result$ =
       (requestFactory.result(method: .get,
-                            pathTemplate: "/api",
-                            body: Empty.none,
-                            acceptTypes: [.json]) as RequestResultPublisher<Tester>)
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<Tester>)
       .record()
     
     let result = try wait(for: result$.single, timeout: 1.0)
     
     XCTAssertEqual(result, tester)
   }
-
   
+  func testFailsWhenNoDataAndNonEmptyResult() throws {
+    
+    struct Tester : Codable, Equatable, Hashable {
+      let name: String
+      let count: Int
+    }
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/api") {
+          GET { req, res in
+            res.send(statusCode: .noContent)
+          }
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<Tester>)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+      
+      guard case SundayError.unexpectedEmptyResponse = error else {
+        return XCTFail("unexected error")
+      }
+      
+    }
+  }
+  
+
   //
   // MARK: Problem Building/Handling
   //

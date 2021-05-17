@@ -1,5 +1,5 @@
 //
-//  URITemplate.swift
+//  URI.swift
 //  Sunday
 //
 //  Copyright © 2018 Outfox, inc.

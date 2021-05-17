@@ -1,8 +1,11 @@
 //
 //  NetworkSession.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 8/28/20.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation

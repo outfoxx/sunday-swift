@@ -1,8 +1,11 @@
 //
 //  Publishers.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 8/21/20.
+//  Copyright © 2018 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
