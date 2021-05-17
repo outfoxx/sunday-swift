@@ -26,53 +26,105 @@ open class EventSource {
     case open
     case closed
   }
+  
+  
+  public static let eventTimeoutIntervalDefault = DispatchTimeInterval.seconds(75)
+  private static let eventTimeoutCheckInterval = DispatchTimeInterval.seconds(2)
+  private static let maxRetryTimeMultiplier = 30
+  
 
-  public fileprivate(set) var state = State.closed
-  public fileprivate(set) var retryTime = 500
+  public private(set) var readyState = State.closed
+  public private(set) var retryTime = DispatchTimeInterval.milliseconds(500)
 
   private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private var data$Cancel: AnyCancellable?
   private var receivedString: String?
+  
   private var onOpenCallback: (() -> Void)?
   private var onErrorCallback: ((Swift.Error?) -> Void)?
   private var onMessageCallback: ((String?, String?, String?) -> Void)?
   private var eventListeners = [String: (String?, String?, String?) -> Void]()
+  
   private var queue: DispatchQueue
+
   private var receivedDataBuffer: Data
   private var lastEventId: String?
+  private var lastEventReceivedTime: DispatchTime = .distantFuture
 
-  private var event = [String: String]()
-
+  private var connectionAttemptTime: DispatchTime?
+  private var reconnectTimeoutTask: DispatchWorkItem?
+  private var retryAttempt = 0
+  
+  private let eventTimeoutInterval: DispatchTimeInterval?
+  private var eventTimeoutTask: DispatchWorkItem?
+  
 
   public init(queue: DispatchQueue = .global(qos: .background),
+              eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
               requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
 
     self.requestor = requestor
     self.queue = queue
+    self.eventTimeoutInterval = eventTimeoutInterval
     self.receivedString = nil
     self.receivedDataBuffer = Data()
+  }
+  
+  // MARK: EventListeners
+  
+  open func onOpen(_ onOpenCallback: @escaping () -> Void) {
+    
+    self.onOpenCallback = onOpenCallback
+  }
+  
+  open func onError(_ onErrorCallback: @escaping (Swift.Error?) -> Void) {
+    
+    self.onErrorCallback = onErrorCallback
+  }
+  
+  open func onMessage(_ onMessageCallback: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
+    self.onMessageCallback = onMessageCallback
+  }
+  
+  open func addEventListener(_ event: String,
+                             handler: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
+    eventListeners[event] = handler
+  }
+  
+  open func removeEventListener(_ event: String) {
+    eventListeners.removeValue(forKey: event)
+  }
+  
+  open func events() -> [String] {
+    return Array(eventListeners.keys)
   }
 
   // MARK: Connect
 
   open func connect() {
-    if state == .connecting || state == .open {
+    if readyState == .connecting || readyState == .open {
       return
     }
     
-    connectNow()
+    internalConnect()
   }
   
-  private func connectNow() {
-
+  private func internalConnect() {
     logger.debug("Connecting")
     
-    state = .connecting
+    readyState = .connecting
+    
+    // Build default headers for passing to request builder
     
     var headers = HTTP.Headers()
+    headers[HTTP.StdHeaders.accept] = [MediaType.eventStream.value]
+    
+    // Add laste-event-id if we are reconnecting
     if let lastEventId = lastEventId {
-      headers[lastEventIdHeader] = [lastEventId]
+      headers[HTTP.StdHeaders.lastEventId] = [lastEventId]
     }
+    
+    connectionAttemptTime = .now()
     
     data$Cancel = requestor(headers)
       .tryMap { event -> Void in
@@ -94,63 +146,97 @@ open class EventSource {
   }
 
   // MARK: Close
-
+  
   open func close() {
+    logger.debug("Close Requested")
 
-    state = .closed
+    readyState = .closed
+  }
 
+  private func internalClose() {
+    
     data$Cancel?.cancel()
     data$Cancel = nil
+    
+    cancelReconnect()
+    
+    stopEventTimeoutCheck()
   }
-
-  // MARK: EventListeners
-
-  open func onOpen(_ onOpenCallback: @escaping () -> Void) {
-
-    self.onOpenCallback = onOpenCallback
+  
+  // MARK: Event Timeout
+  
+  private func startEventTimeoutCheck(lastEventReceivedTime: DispatchTime) {
+    stopEventTimeoutCheck()
+    
+    // If no timeout value, check is disabled
+    if eventTimeoutInterval == nil {
+      return
+    }
+    
+    self.lastEventReceivedTime = lastEventReceivedTime
+    
+    // Schedule check
+    eventTimeoutTask = DispatchWorkItem(block: checkEventTimeout)
+    queue.asyncAfter(
+      deadline: .now() + Self.eventTimeoutCheckInterval,
+      execute: eventTimeoutTask!
+    )
   }
+  
+  private func stopEventTimeoutCheck() {
 
-  open func onError(_ onErrorCallback: @escaping (Swift.Error?) -> Void) {
-
-    self.onErrorCallback = onErrorCallback
+    eventTimeoutTask?.cancel()
+    eventTimeoutTask = nil
   }
-
-  open func onMessage(_ onMessageCallback: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
-    self.onMessageCallback = onMessageCallback
-  }
-
-  open func addEventListener(_ event: String,
-                             handler: @escaping (_ id: String?, _ event: String?, _ data: String?) -> Void) {
-    eventListeners[event] = handler
-  }
-
-  open func removeEventListener(_ event: String) {
-    eventListeners.removeValue(forKey: event)
-  }
-
-  open func events() -> [String] {
-    return Array(eventListeners.keys)
+  
+  private func checkEventTimeout() {
+    guard let eventTimeoutInterval = eventTimeoutInterval else {
+      return
+    }
+    
+    logger.debug("Checking Event Timeout")
+    
+    let eventTimeoutDeadline = lastEventReceivedTime + eventTimeoutInterval
+    guard DispatchTime.now() < eventTimeoutDeadline else {
+      return
+    }
+    
+    logger.debug("Event Timeout Deadline Expired")
+      
+    internalClose()
+    scheduleReconnect()
   }
 
   // MARK: Handlers
 
-  fileprivate func receivedHeaders(_ response: HTTPURLResponse) throws {
-    guard state == .connecting else {
-      close()
-      throw Error.invalidState
+  private func receivedHeaders(_ response: HTTPURLResponse) throws {
+    guard readyState == .connecting else {
+      logger.error("invalid state for receiving headers: state=\(readyState)")
+      
+      internalClose()
+      scheduleReconnect()
+      return
     }
 
-    state = .open
+    retryAttempt = 0
+    readyState = .open
 
+    // Start event timeout check, treating this
+    // connect as last time we received an event
+    startEventTimeoutCheck(lastEventReceivedTime: .now())
+    
     logger.debug("Opened")
 
     onOpenCallback.flatMap { queue.async(execute: $0) }
   }
 
-  fileprivate func receivedData(_ data: Data) throws {
-    guard state == .open else {
-      close()
-      throw Error.invalidState
+  private func receivedData(_ data: Data) throws {
+    guard readyState == .open else {
+      logger.error("invalid state for receiving data: state=\(readyState)")
+
+      internalClose()
+      scheduleReconnect()
+      return
     }
 
     guard !data.isEmpty else {
@@ -165,8 +251,9 @@ open class EventSource {
     parseEventStrings(eventStrings)
   }
 
-  fileprivate func receivedError(error: Swift.Error) {
+  private func receivedError(error: Swift.Error) {
 
+    // Ensure this is _not_ a cancellation
     guard (error as? URLError)?.code != .cancelled else {
       return
     }
@@ -180,34 +267,79 @@ open class EventSource {
     }
   }
 
-  fileprivate func receivedComplete() {
+  private func receivedComplete() {
     
-    if state != .closed {
+    if readyState != .closed {
       
-      logger.debug("Closed unexpectedly")
+      logger.debug("Unexpected Completion")
 
       scheduleReconnect()
       
       return
     }
 
-    logger.debug("Closed")
+    logger.debug("Closing")
 
     return
   }
 
-  // MARK: Helpers
+  // MARK: Reconnection
   
-  fileprivate func scheduleReconnect() {
-
-    logger.debug("Scheduling reconnect after \(retryTime) milliseconds")
-
-    let delayTime = DispatchTime.now() + .milliseconds(retryTime)
-
-    queue.asyncAfter(deadline: delayTime, execute: connectNow)
+  private func scheduleReconnect() {
+    
+    let lastConnectTime = connectionAttemptTime?.distance(to: .now()) ?? .microseconds(0)
+    
+    let retryDelay = Self.calculateRetryDelay(retryAttempt: retryAttempt,
+                                              retryTime: retryTime,
+                                              lastConnectTime: lastConnectTime)
+  
+    logger.debug("Scheduling Reconnect delay=\(retryDelay)")
+    
+    retryAttempt += 1
+    
+    reconnectTimeoutTask = DispatchWorkItem(block: internalConnect)
+    queue.asyncAfter(deadline: .now() + retryDelay, execute: reconnectTimeoutTask!)
   }
+  
+  private func cancelReconnect() {
 
-  fileprivate func extractEventStringsFromBuffer() -> [String] {
+    reconnectTimeoutTask?.cancel()
+    reconnectTimeoutTask = nil
+  }
+  
+  private static func calculateRetryDelay(
+    retryAttempt: Int,
+    retryTime: DispatchTimeInterval,
+    lastConnectTime: DispatchTimeInterval
+  ) -> DispatchTimeInterval {
+    
+    let retryAttempt = Double(retryAttempt)
+    let retryTime = Double(retryTime.totalMilliseconds)
+    
+    // calculate total delay
+    let backOffDelay = pow(retryAttempt, 2.0) * retryTime
+    var retryDelay = min(
+      retryTime + backOffDelay,
+      retryTime * Double(Self.maxRetryTimeMultiplier)
+    )
+    
+    // Adjust delay by amount of time last connect
+    // cycle took, except on the first attempt
+    if retryAttempt > 0 {
+      
+      retryDelay -= Double(lastConnectTime.totalMilliseconds)
+      
+      // Ensure delay is at least as large as
+      // minimum retry time interval
+      retryDelay = max(retryDelay, retryTime)
+    }
+    
+    return .milliseconds(Int(retryDelay))
+  }
+  
+  // MARK: Event Parsing
+
+  private func extractEventStringsFromBuffer() -> [String] {
 
     var eventStrings = [String]()
 
@@ -231,7 +363,7 @@ open class EventSource {
     return eventStrings
   }
 
-  fileprivate func searchForSeparatorInRange(_ searchRange: Range<Int>) -> Range<Int>? {
+  private func searchForSeparatorInRange(_ searchRange: Range<Int>) -> Range<Int>? {
 
     for delimiter in validSeparatorSequences {
 
@@ -244,7 +376,7 @@ open class EventSource {
     return nil
   }
 
-  fileprivate func parseEventStrings(_ eventStrings: [String]) {
+  private func parseEventStrings(_ eventStrings: [String]) {
 
     for eventString in eventStrings {
       if eventString.isEmpty {
@@ -260,7 +392,8 @@ open class EventSource {
           continue
         }
         
-        self.retryTime = Int(retry.trimmingCharacters(in: .whitespaces)) ?? self.retryTime
+        let updatedRetryTime = Int(retry.trimmingCharacters(in: .whitespaces)).map { DispatchTimeInterval.milliseconds($0) }
+        self.retryTime = updatedRetryTime ?? self.retryTime
       }
       
       lastEventId = parsedEvent.id ?? lastEventId
@@ -286,7 +419,7 @@ open class EventSource {
     }
   }
 
-  fileprivate func parseEvent(_ eventString: String) -> (id: String?, event: String?, data: String?, retry: String?) {
+  private func parseEvent(_ eventString: String) -> (id: String?, event: String?, data: String?, retry: String?) {
 
     var id: String?
     var event: String?
@@ -328,11 +461,27 @@ open class EventSource {
 
     return (id, event, data, retry)
   }
-
+  
 }
 
 
 private let validNewlines = ["\r\n", "\n", "\r"]
 private let validSeparatorSequences = validNewlines.map { "\($0)\($0)".data(using: .utf8)! }
 
-private let lastEventIdHeader = "Last-Event-Id"
+extension HTTP.StdHeaders {
+  public static let lastEventId = "Last-Event-Id"
+}
+
+fileprivate extension DispatchTimeInterval {
+  
+  var totalMilliseconds: Int {
+    switch self {
+    case .seconds(let secs): return secs * 1_000
+    case .milliseconds(let millis): return millis
+    case .microseconds(let micros): return micros / 1_000
+    case .nanoseconds(let nanos): return nanos / 1_000_000
+    default: return Int.max
+    }
+  }
+  
+}

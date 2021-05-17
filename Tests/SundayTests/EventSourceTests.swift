@@ -270,7 +270,7 @@ class EventSourceTests: XCTestCase {
     
     waitForExpectations(timeout: 1.0, handler: nil)
     
-    XCTAssertEqual(eventSource.retryTime, 123456789)
+    XCTAssertEqual(eventSource.retryTime, .milliseconds(123456789))
   }
 
   func testInvalidRetryTimeoutUpdateIgnored() throws {
@@ -334,7 +334,7 @@ class EventSourceTests: XCTestCase {
     
     waitForExpectations(timeout: 1.0, handler: nil)
     
-    XCTAssertEqual(eventSource.retryTime, 500)
+    XCTAssertEqual(eventSource.retryTime, .milliseconds(500))
   }
 
 }
