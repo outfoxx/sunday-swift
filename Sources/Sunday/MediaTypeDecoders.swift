@@ -48,7 +48,7 @@ public struct MediaTypeDecoders {
 
     public func registerJSON() -> Builder {
       let decoder = JSON.Decoder()
-      decoder.dateDecodingStrategy = .millisecondsSince1970
+      decoder.dateDecodingStrategy = .secondsSince1970
       return registerJSON(decoder: decoder)
     }
 
@@ -58,7 +58,7 @@ public struct MediaTypeDecoders {
 
     public func registerCBOR() -> Builder {
       let decoder = CBOR.Decoder()
-      decoder.untaggedDateDecodingStrategy = .millisecondsSince1970
+      decoder.untaggedDateDecodingStrategy = .secondsSince1970
       return registerCBOR(decoder: decoder)
     }
 
