@@ -105,6 +105,10 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
     }
 
   }
+  
+  public func stop() {
+    listener.cancel()
+  }
 
   func connect(with connection: NWConnection) {
 
