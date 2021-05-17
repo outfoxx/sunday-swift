@@ -155,6 +155,7 @@ public struct MediaType {
   public static let wwwFormUrlEncoded = MediaType(type: .application, tree: .obsolete, subtype: "www-form-urlencoded")
 
   public static let any = MediaType(type: .any, subtype: "*")
+  public static let anyText = MediaType(type: .text, subtype: "*")
   public static let anyImage = MediaType(type: .image, subtype: "*")
   public static let anyAudio = MediaType(type: .audio, subtype: "*")
   public static let anyVideo = MediaType(type: .video, subtype: "*")

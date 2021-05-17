@@ -36,7 +36,7 @@ public struct MediaTypeEncoders {
     }
 
     public func registerDefault() -> Builder {
-      return registerURL().registerData().registerJSON().registerCBOR()
+      return registerURL().registerData().registerJSON().registerCBOR().registerText()
     }
 
     public func registerURL(arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .unbracketed,
@@ -50,6 +50,10 @@ public struct MediaTypeEncoders {
 
     public func registerData() -> Builder {
       return register(encoder: DataEncoder(), forTypes: .octetStream)
+    }
+
+    public func registerText() -> Builder {
+      return register(encoder: TextEncoder(), forTypes: .anyText)
     }
 
     public func registerJSON() -> Builder {

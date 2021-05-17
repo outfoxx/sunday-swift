@@ -39,11 +39,15 @@ public struct MediaTypeDecoders {
     }
 
     public func registerDefault() -> Builder {
-      return registerData().registerJSON().registerCBOR()
+      return registerData().registerJSON().registerCBOR().registerText()
     }
 
     public func registerData() -> Builder {
       return register(decoder: DataDecoder(), forTypes: .octetStream)
+    }
+    
+    public func registerText() -> Builder {
+      return register(decoder: TextDecoder(), forTypes: .anyText)
     }
 
     public func registerJSON() -> Builder {
@@ -105,13 +109,13 @@ extension CBOR.Decoder: MediaTypeDecoder {}
 
 
 public struct DataDecoder: MediaTypeDecoder {
-
+  
   public static let `default` = DataDecoder()
-
+  
   enum Error: Swift.Error {
     case translationNotSupported
   }
-
+  
   public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
     guard type == Data.self else {
       throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .octetStream,
@@ -119,5 +123,32 @@ public struct DataDecoder: MediaTypeDecoder {
     }
     return (data as! T)
   }
+  
+}
 
+
+public struct TextDecoder: MediaTypeDecoder, TextMediaTypeDecoder {
+  
+  public static let `default` = TextDecoder()
+  
+  enum Error: Swift.Error {
+    case translationNotSupported
+  }
+  
+  public func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
+    guard type == String.self else {
+      throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .plain,
+                                                                              error: Error.translationNotSupported))
+    }
+    return (String(data: data, encoding: .utf8) as! T)
+  }
+
+  public func decode<T>(_ type: T.Type, from data: String) throws -> T where T : Decodable {
+    guard type == String.self else {
+      throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .plain,
+                                                                              error: Error.translationNotSupported))
+    }
+    return (data as! T)
+  }
+  
 }
