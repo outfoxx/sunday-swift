@@ -1,8 +1,11 @@
 //
-//  File.swift
-//  
+//  WWWFormURLEncoderTests.swift
+//  Sunday
 //
-//  Created by Kevin Wooten on 5/15/21.
+//  Copyright © 2021 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -11,6 +14,30 @@ import XCTest
 
 class WWWFormURLEncoderTests: XCTestCase {
   
+  func testGenericEncoding() throws {
+    
+    let encoder = WWWFormURLEncoder(arrayEncoding: .unbracketed,
+                                    boolEncoding: .numeric,
+                                    dateEncoding: .iso8601)
+    
+    XCTAssertEqual(
+      try encoder.encode([
+        "test/data":  [1, 2, 3],
+      ]),
+      "test%2Fdata=1&test%2Fdata=2&test%2Fdata=3".data(using: .utf8)
+    )
+    
+  }
+  
+  func testGenericEncodingFailsWhenNotADictionary() throws {
+    
+    let encoder = WWWFormURLEncoder(arrayEncoding: .unbracketed,
+                                    boolEncoding: .numeric,
+                                    dateEncoding: .iso8601)
+    
+    XCTAssertThrowsError(try encoder.encode([1, 2, 3]))
+  }
+
   func testKeysArePercentEncoded() {
     
     let encoder = WWWFormURLEncoder(arrayEncoding: .unbracketed,

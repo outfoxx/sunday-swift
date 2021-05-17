@@ -9,13 +9,21 @@
 //
 
 import PotentCodables
-@testable import Sunday
-@testable import SundayServer
+import Combine
 import CombineExpectations
 import XCTest
 
+@testable import Sunday
+@testable import SundayServer
+
 
 class NetworkRequestFactoryTests: XCTestCase {
+  
+  
+  //
+  // MARK: General
+  //
+  
   
   func testEnsureDefaultsCanBeOverridden() {
         
@@ -26,6 +34,12 @@ class NetworkRequestFactoryTests: XCTestCase {
     XCTAssertNil(try? requestFactory.mediaTypeEncoders.find(for: .json))
     XCTAssertNil(try? requestFactory.mediaTypeDecoders.find(for: .json))
   }
+  
+  
+  //
+  // MARK: Request Building
+  //
+
   
   func testEncodesQueryParameters() throws {
     
@@ -175,7 +189,13 @@ class NetworkRequestFactoryTests: XCTestCase {
     
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType), "application/json")
   }
+
   
+  //
+  // MARK: Response/Result Processing
+  //
+  
+
   func testFetchesTypedResults() throws {
     
     struct Tester : Codable, Equatable, Hashable {
@@ -196,10 +216,13 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(template: url!.absoluteString))
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
     
     let result$ =
       (requestFactory.result(method: .get,
@@ -212,6 +235,12 @@ class NetworkRequestFactoryTests: XCTestCase {
     
     XCTAssertEqual(result, tester)
   }
+
+  
+  //
+  // MARK: Problem Building/Handling
+  //
+  
 
   class TestProblem : Problem {
     
@@ -243,7 +272,7 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     
   }
-
+  
   func testRegisteredProblemsDecodeAsTypedProblems() throws {
 
     let testProblem = TestProblem(extra: "Something Extra", instance: URL(string: "id:12345"))
@@ -260,12 +289,15 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
-    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
     let completeX = expectation(description: "typed problem - complete")
     
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: serverURL.absoluteString)
     
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
@@ -318,12 +350,15 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
-    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
     let completeX = expectation(description: "typed problem - complete")
     
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: serverURL.absoluteString)
     
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
@@ -371,12 +406,15 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
-    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
     let completeX = expectation(description: "typed problem - complete")
     
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: serverURL.absoluteString)
     
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
@@ -424,12 +462,15 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
-    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
     let completeX = expectation(description: "typed problem - complete")
     
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: serverURL.absoluteString)
     
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
@@ -477,12 +518,15 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
     
-    let url = server.start()
-    XCTAssertNotNil(url)
-    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
     let completeX = expectation(description: "typed problem - complete")
     
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: serverURL.absoluteString)
     
     let requestFactory = NetworkRequestFactory(baseURL: baseURL, mediaTypeDecoders: MediaTypeDecoders.Builder().build())
     defer { requestFactory.close() }
@@ -507,6 +551,129 @@ class NetworkRequestFactoryTests: XCTestCase {
     waitForExpectations(timeout: 5.0) { _ in
       requestCancel.cancel()
     }
+  }
+  
+
+  //
+  // MARK: Event Source/Stream Building
+  //
+
+  func testEventSourceBuilding() throws {
+    
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/events") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+            HTTP.StdHeaders.transferEncoding: ["chunked"]
+          ])
+          res.send(chunk: "event: test\n".data(using: .utf8)!)
+          res.send(chunk: "id: 123\n".data(using: .utf8)!)
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.finish(trailers: [:])
+        }
+      }
+      CatchAll { route, req, res in
+        print(route)
+        print(req)
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let completeX = expectation(description: "event source building - complete")
+    
+    let baseURL = URI.Template(format: serverURL.absoluteString)
+    
+    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
+    defer { requestFactory.close() }
+    
+    let eventSource = requestFactory.eventSource(method: .get, pathTemplate: "/events",
+                                                 pathParameters: nil, queryParameters: nil,
+                                                 body: Empty.none, contentTypes: [.json],
+                                                 acceptTypes: [.json], headers: nil)
+    
+    eventSource.addEventListener("test") { _, _, _ in
+      eventSource.close()
+      completeX.fulfill()
+    }
+    
+    eventSource.connect()
+    
+    waitForExpectations(timeout: 5.0) { _ in
+      eventSource.close()
+    }
+  }
+
+  func testEventStreamBuilding() throws {
+    
+    struct TestEvent : Codable {
+      var some: String
+    }
+    
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/events") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+            HTTP.StdHeaders.transferEncoding: ["chunked"]
+          ])
+          res.send(chunk: "event: test\n".data(using: .utf8)!)
+          res.send(chunk: "id: 123\n".data(using: .utf8)!)
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.finish(trailers: [:])
+        }
+      }
+      CatchAll { route, req, res in
+        print(route)
+        print(req)
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let baseURL = URI.Template(format: serverURL.absoluteString)
+    
+    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
+    defer { requestFactory.close() }
+    
+    let event$ = requestFactory.eventStream(method: .get, pathTemplate: "/events",
+                                            pathParameters: nil, queryParameters: nil,
+                                            body: Empty.none, contentTypes: [.json],
+                                            acceptTypes: [.json], headers: nil,
+                                            eventTypes: ["test": TestEvent.self])
+
+    let completeX = expectation(description: "complete received")
+
+    var cancels: Set<AnyCancellable> = []
+  
+    event$.sink(
+      receiveCompletion: { _ in
+        
+        XCTFail("unexpected complete")
+        
+        completeX.fulfill()
+      },
+      receiveValue: { event in
+        
+        cancels.forEach { $0.cancel() }
+        
+        completeX.fulfill()
+        XCTAssertEqual(event.some, "test data")
+      }
+    ).store(in: &cancels)
+    
+    waitForExpectations(timeout: 2.0, handler: nil)
   }
 
 }

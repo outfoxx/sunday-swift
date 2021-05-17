@@ -46,15 +46,18 @@ class ResponseDecodingTests: ParameterizedTest {
       }
     }
 
-    let url = server.start()
-    XCTAssertNotNil(url)
+    guard let url = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
 
     let completeX = expectation(description: "echo repsonse - complete")
     let dataX = expectation(description: "echo repsonse - data")
 
     let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
 
-    let baseURL = URI.Template(template: url!.absoluteString)
+    let baseURL = URI.Template(format: url.absoluteString)
 
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }

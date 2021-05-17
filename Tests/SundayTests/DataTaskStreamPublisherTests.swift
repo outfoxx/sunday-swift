@@ -13,49 +13,31 @@ import XCTest
 
 class DataTaskStreamPublisherTests: XCTestCase {
   
-  static let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-    Path("/regular") {
-      GET { _, res in
-        res.start(status: .ok, headers: [:])
-        res.send(body: Data(count: 1000), final: false)
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(body: Data(count: 1000), final: false)
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(body: Data(count: 1000), final: false)
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(body: Data(count: 1000), final: true)
-      }
-    }
-    Path("/chunked") {
-      GET { _, res in
-        res.start(status: .ok, headers: [
-          HTTP.StdHeaders.transferEncoding: ["chunked"]
-        ])
-        res.send(chunk: Data(count: 1000))
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(chunk: Data(count: 1000))
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(chunk: Data(count: 1000))
-        Thread.sleep(forTimeInterval: 0.1)
-        res.send(chunk: Data(count: 1000))
-        res.finish(trailers: [:])
-      }
-    }
-  }
-  static var serverURL: URL!
-  
-  let session = NetworkSession(configuration: .default)
-  
-  override class func setUp() {
-    super.setUp()
-    
-    serverURL = server.start()
-    XCTAssertNotNil(serverURL)
-    print("SERVER URL", serverURL!)
-  }
-
   func testSimple() {
     
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/regular") {
+        GET { _, res in
+          res.start(status: .ok, headers: [:])
+          res.send(body: Data(count: 1000), final: false)
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(body: Data(count: 1000), final: false)
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(body: Data(count: 1000), final: false)
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(body: Data(count: 1000), final: true)
+        }
+      }
+    }
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+
     let getChunkedCompleteX = expectation(description: "GET - complete")
     let getChunkedDataX = expectation(description: "GET - data")
     getChunkedDataX.expectedFulfillmentCount = 5
@@ -65,7 +47,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
       let cost: Double
     }
     
-    var urlRequest = URLRequest(url: URL(string: "regular", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "regular", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     
     let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
@@ -88,7 +70,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       }
     
-    waitForExpectations(timeout: 12) { _ in
+    waitForExpectations(timeout: 2) { _ in
       requestCancel.cancel()
     }
     
@@ -96,6 +78,32 @@ class DataTaskStreamPublisherTests: XCTestCase {
   
   func testChunked() {
     
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/chunked") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.transferEncoding: ["chunked"]
+          ])
+          res.send(chunk: Data(count: 1000))
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(chunk: Data(count: 1000))
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(chunk: Data(count: 1000))
+          Thread.sleep(forTimeInterval: 0.1)
+          res.send(chunk: Data(count: 1000))
+          res.finish(trailers: [:])
+        }
+      }
+    }
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+
     let getChunkedCompleteX = expectation(description: "GET (chunked) - complete")
     let getChunkedDataX = expectation(description: "GET (chunked) - data")
     getChunkedDataX.expectedFulfillmentCount = 5
@@ -105,7 +113,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
       let cost: Double
     }
     
-    var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     
     let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
@@ -130,10 +138,58 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       )
     
-    waitForExpectations(timeout: 12) { _ in
+    waitForExpectations(timeout: 2) { _ in
       requestCancel.cancel()
     }
     
   }
+
+  func testCompletesWithErrorWhenHTTPErrorResponse() {
+    
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/regular") {
+        GET { _, res in
+          res.send(status: .badRequest, text: "fix it")
+        }
+      }
+    }
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+    
+    let completeX = expectation(description: "received error")
+    
+    let urlRequest = URLRequest(url: URL(string: "regular", relativeTo: serverURL)!)
+    
+    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
+      .sink { completion in
+        defer { completeX.fulfill() }
+        
+        guard case .failure(let error) = completion else {
+          return XCTFail("publisher completed, expected error")
+        }
+        
+        guard
+          case SundayError.responseValidationFailed(reason: let reason) = error,
+          case ResponseValidationFailureReason.unacceptableStatusCode(response: _, data: _) = reason
+        else {
+          return XCTFail("published emitted unexpected error type")
+        }
+                
+      } receiveValue: { _ in
+        XCTFail("publisher emitted value, expected error")
+      }
+    
+    waitForExpectations(timeout: 2) { _ in
+      requestCancel.cancel()
+    }
+    
+  }
+  
 
 }

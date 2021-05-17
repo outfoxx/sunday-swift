@@ -1,8 +1,11 @@
 //
-//  File.swift
-//  
+//  ProblemTests.swift
+//  Sunday
 //
-//  Created by Kevin Wooten on 5/14/21.
+//  Copyright © 2021 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -42,6 +45,83 @@ class ProblemTests: XCTestCase {
       try super.encode(to: encoder)
     }
     
+  }
+  
+  func testInitFromStatus() throws {
+    
+    let problem1 = Problem(statusCode: 404)
+    XCTAssertEqual(problem1.type, URL(string: "about:blank"))
+    XCTAssertEqual(problem1.status, 404)
+    XCTAssertEqual(problem1.statusCode, .notFound)
+    XCTAssertEqual(problem1.title, HTTP.statusText[.notFound])
+    XCTAssertNil(problem1.detail)
+    XCTAssertNil(problem1.instance)
+    XCTAssertNil(problem1.parameters)
+    
+    let problem2 = Problem(statusCode: .notFound)
+    XCTAssertEqual(problem2.type, URL(string: "about:blank"))
+    XCTAssertEqual(problem2.status, 404)
+    XCTAssertEqual(problem2.statusCode, .notFound)
+    XCTAssertEqual(problem2.title, HTTP.statusText[.notFound])
+    XCTAssertNil(problem2.detail)
+    XCTAssertNil(problem2.instance)
+    XCTAssertNil(problem2.parameters)
+    
+  }
+  
+  func testInitFromTree() throws {
+    
+    let problem1 =
+      Problem(statusCode: 400, data: [
+        "type": "http://example.com/test",
+        "title": "Test",
+        "detail": "Some Details",
+        "instance": "id:12345",
+        "extra": "test"
+      ])
+    XCTAssertEqual(problem1.type, URL(string: "http://example.com/test"))
+    XCTAssertEqual(problem1.status, 400)
+    XCTAssertEqual(problem1.statusCode, .badRequest)
+    XCTAssertEqual(problem1.title, "Test")
+    XCTAssertEqual(problem1.detail, "Some Details")
+    XCTAssertEqual(problem1.instance, URL(string: "id:12345"))
+    XCTAssertEqual(problem1.parameters, ["extra": "test"])
+    
+    let problem2 = Problem(statusCode: .badRequest, data: [
+      "type": "http://example.com/test",
+      "title": "Test",
+      "detail": "Some Details",
+      "instance": "id:12345",
+      "extra": "test"
+    ])
+    XCTAssertEqual(problem2.type, URL(string: "http://example.com/test"))
+    XCTAssertEqual(problem2.status, 400)
+    XCTAssertEqual(problem2.statusCode, .badRequest)
+    XCTAssertEqual(problem2.title, "Test")
+    XCTAssertEqual(problem2.detail, "Some Details")
+    XCTAssertEqual(problem2.instance, URL(string: "id:12345"))
+    XCTAssertEqual(problem2.parameters, ["extra": "test"])
+
+  }
+  
+  func testDescription() {
+    
+    let problemDesc =
+      Problem(type: TestProblem.type,
+              title: "Test Problem",
+              status: 200,
+              detail: "A Test Problem",
+              instance: URL(string: "id:12345"),
+              parameters: ["extra": "some extra"]).description
+
+  
+    XCTAssertTrue(problemDesc.contains("type="))
+    XCTAssertTrue(problemDesc.contains("title="))
+    XCTAssertTrue(problemDesc.contains("status="))
+    XCTAssertTrue(problemDesc.contains("detail="))
+    XCTAssertTrue(problemDesc.contains("instance="))
+    XCTAssertTrue(problemDesc.contains("parameters="))
+    XCTAssertTrue(problemDesc.contains("\"extra\":"))
   }
 
   func testCodableForCustomProblems() throws {

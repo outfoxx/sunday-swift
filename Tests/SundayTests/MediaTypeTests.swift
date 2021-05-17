@@ -8,11 +8,45 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-@testable import Sunday
+import PotentJSON
 import XCTest
+@testable import Sunday
 
 class MediaTypeTests: XCTestCase {
+  
+  func testCodable() throws {
+    
+    let mediaType = MediaType.eventStream.with("utf-8", forParameter: .charSet)
+    
+    let encoded = try JSON.Encoder.default.encodeString(mediaType)
+    let decoded = try JSON.Decoder.default.decode(MediaType.self, from: encoded)
+    
+    XCTAssertEqual(encoded, try JSONSerialization.string(from: JSON.string(mediaType.value)))
+    XCTAssertEqual(decoded, mediaType)
+  }
+  
+  func testParameterSupport() {
+    
+    let mediaType = MediaType.html.with("utf-8", forParameter: .charSet)
+    
+    XCTAssertEqual(mediaType.parameter(.charSet), "utf-8")
+    XCTAssertEqual(mediaType.parameters, [MediaType.StandardParameterName.charSet.rawValue: "utf-8"])
+  }
+  
+  func testPatternMatching() {
+    
+    let mediaType = MediaType.html.with("utf-8", forParameter: .charSet)
+    
+    XCTAssertTrue(mediaType ~= MediaType.html)
+    XCTAssertFalse(mediaType ~= MediaType.anyImage)
 
+    XCTAssertTrue("text/html" ~= MediaType.html)
+    XCTAssertFalse("text/html" ~= MediaType.anyImage)
+
+    XCTAssertTrue(mediaType ~= "text/html")
+    XCTAssertFalse(mediaType ~= "image/*")
+  }
+  
   func testCompatibility() {
 
     XCTAssert(MediaType(type: .text, tree: .vendor, subtype: "plain", suffix: .json, parameters: ["a": "b"]) ~= MediaType(type: .text, tree: .vendor, subtype: "plain", suffix: .json, parameters: ["a": "b"]),
