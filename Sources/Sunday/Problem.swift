@@ -78,7 +78,7 @@ open class Problem: Error, Codable {
 
   public convenience init(statusCode: Int, data: [String: AnyValue]) {
     var data = data
-    let type = URL(string: "about:blank")!
+    let type = (data.removeValue(forKey: "type")?.stringValue.map { URL(string: $0) } ?? Self.stdType) ?? Self.stdType
     let title = data.removeValue(forKey: "title")?.stringValue ?? Problem.statusTitle(statusCode: statusCode)
     let detail = data.removeValue(forKey: "detail")?.stringValue
     let instance = data.removeValue(forKey: "instance")?.stringValue.map { URL(string: $0) } ?? nil
@@ -172,6 +172,8 @@ open class Problem: Error, Codable {
     static let detail = AnyCodingKey("detail")
     static let instance = AnyCodingKey("instance")
   }
+  
+  private static let stdType = URL(string: "about:blank")!
 
 }
 
@@ -191,7 +193,7 @@ extension Problem: CustomStringConvertible {
       builder = builder.add(instance, named: "instance")
     }
     if let parameters = parameters, !parameters.isEmpty {
-      builder = builder.add(parameters, named: "parameters")
+      builder = builder.add(parameters.mapValues { $0.unwrappedValues }, named: "parameters")
     }
     return builder.build()
   }
