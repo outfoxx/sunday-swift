@@ -20,17 +20,13 @@ public struct DescriptionBuilder {
   private var name: String
   private var entries = [(String, Any?)]()
 
-  private init(_ name: String, _ entries: [(String, Any?)]) {
+  private init(_ name: String, _ entries: [(String, Any?)] = []) {
     self.name = name
     self.entries = entries
   }
 
-  public init(_ name: String) {
-    self.name = name
-  }
-
   public init(_ type: Any.Type) {
-    name = String(describing: type)
+    self.init(String(describing: type))
   }
 
   public func add(_ value: Any?, named name: String) -> DescriptionBuilder {
@@ -41,10 +37,6 @@ public struct DescriptionBuilder {
 
   public func build() -> String {
     return "\(name)(\(entries.map { "\($0)=\($1 ?? "nil")" }.joined(separator: ", ")))"
-  }
-
-  public func debugBuild() -> String {
-    return build()
   }
 
 }
