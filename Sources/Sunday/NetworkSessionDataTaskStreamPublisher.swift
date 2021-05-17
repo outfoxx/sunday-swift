@@ -109,6 +109,11 @@ private extension NetworkSession.DataTaskStreamPublisher {
         return
       }
       
+      if parent.session.closed {
+        cancel()
+        return
+      }
+      
       if task == nil {
         task = parent.session.session.dataTask(with: parent.request)
         parent.session.taskDelegates[task!] = Delegate(subscription: self)

@@ -16,6 +16,7 @@ public class NetworkSession {
   internal var taskDelegates: [URLSessionTask: URLSessionTaskDelegate] = [:]
   internal let delegateQueue = OperationQueue()
   internal let serverTrustPolicyManager: ServerTrustPolicyManager?
+  internal var closed = false
 
   public init(configuration: URLSessionConfiguration,
               serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
@@ -63,6 +64,7 @@ public class NetworkSession {
     else {
       session.finishTasksAndInvalidate()
     }
+    closed = true
   }
 
 }
