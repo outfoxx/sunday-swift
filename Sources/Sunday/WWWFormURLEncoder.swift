@@ -104,7 +104,7 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
       throw Error.encodedValueNotDictionary
     }
 
-    guard let data = encodeQueryString(parameters: parameters).data(using: .ascii) else {
+    guard let data = encodeQueryString(parameters: parameters).data(using: .utf8) else {
       throw Error.stringEncodingFailed
     }
 
