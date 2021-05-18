@@ -194,7 +194,6 @@ class NetworkRequestFactoryTests: XCTestCase {
   //
   // MARK: Response/Result Processing
   //
-  
 
   func testFetchesTypedResults() throws {
     
@@ -235,13 +234,8 @@ class NetworkRequestFactoryTests: XCTestCase {
     
     XCTAssertEqual(result, tester)
   }
-  
+
   func testFailsWhenNoDataAndNonEmptyResult() throws {
-    
-    struct Tester : Codable, Equatable, Hashable {
-      let name: String
-      let count: Int
-    }
     
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
@@ -265,7 +259,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       (requestFactory.result(method: .get,
                              pathTemplate: "/api",
                              body: Empty.none,
-                             acceptTypes: [.json]) as RequestResultPublisher<Tester>)
+                             acceptTypes: [.json]) as RequestResultPublisher<[String]>)
       .record()
     
     XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
@@ -276,7 +270,220 @@ class NetworkRequestFactoryTests: XCTestCase {
       
     }
   }
+
+  func testFailsWhenResultExpectedAndNoDataInResponse() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/api") {
+          GET { req, res in
+            res.send(statusCode: .ok, body: Data())
+          }
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<[String]>)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+      
+      guard
+        case SundayError.responseDecodingFailed(reason: let reason) = error,
+        case ResponseDecodingFailureReason.noData = reason
+      else {
+        return XCTFail("unexected error")
+      }
+      
+    }
+  }
+
+  func testFailsWhenResponseContentTypeIsInvalid() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        GET { req, res in
+          let headers = [HTTP.StdHeaders.contentType: ["bad/x-unknown"]]
+          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8)!)
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<[String]>)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+      
+      guard
+        case SundayError.responseDecodingFailed(reason: let reason) = error,
+        case ResponseDecodingFailureReason.invalidContentType(_) = reason
+      else {
+        return XCTFail("unexected error")
+      }
+      
+    }
+  }
+
+  func testFailsWhenResponseContentTypeIsUnsupported() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        GET { req, res in
+          let headers = [HTTP.StdHeaders.contentType: ["application/x-unknown"]]
+          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8)!)
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<[String]>)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+      
+      guard
+        case SundayError.responseDecodingFailed(reason: let reason) = error,
+        case ResponseDecodingFailureReason.unsupportedContentType(_) = reason
+      else {
+        return XCTFail("unexected error")
+      }
+      
+    }
+  }
   
+  func testFailsWhenResponseDeserializationFails() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        GET { req, res in
+          let headers = [HTTP.StdHeaders.contentType: [MediaType.json.value]]
+          res.send(status: .ok, headers: headers, body: "bad".data(using: .utf8)!)
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      (requestFactory.result(method: .get,
+                             pathTemplate: "/api",
+                             body: Empty.none,
+                             acceptTypes: [.json]) as RequestResultPublisher<[String]>)
+      .record()
+    
+    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+      
+      guard
+        case SundayError.responseDecodingFailed(reason: let reason) = error,
+        case ResponseDecodingFailureReason.deserializationFailed = reason
+      else {
+        return XCTFail("unexected error")
+      }
+      
+    }
+  }
+
+  func testExecutesRequestsWithNoDataResponse() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$: RequestCompletePublisher =
+      requestFactory.result(method: .post,
+                            pathTemplate: "/api",
+                            pathParameters: nil,
+                            queryParameters: nil,
+                            body: Empty.none,
+                            contentTypes: nil,
+                            acceptTypes: nil,
+                            headers: nil)
+    
+    _ = try wait(for: result$.record().single, timeout: 1.0)
+  }
+  
+  func testExecutesManualRequestsForResponses() throws {
+    
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/api") {
+          GET { req, res in
+            res.send(statusCode: .ok, text: "[]")
+          }
+        }
+      }
+    }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+    
+    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    
+    let result$ =
+      requestFactory.response(request: URLRequest(url: URL(string: "/api", relativeTo: serverURL)!))
+      .record()
+    
+    let result = try wait(for: result$.single, timeout: 1.0)
+    
+    XCTAssertEqual(String(data: result.data ?? Data(), encoding: .utf8), "[]")
+  }
+
 
   //
   // MARK: Problem Building/Handling
@@ -715,6 +922,26 @@ class NetworkRequestFactoryTests: XCTestCase {
     ).store(in: &cancels)
     
     waitForExpectations(timeout: 2.0, handler: nil)
+  }
+  
+  func testFluent() {
+    
+    let factory = NetworkRequestFactory(baseURL: "http://example.com", sessionConfiguration: .default)
+    
+    let restConfig = URLSessionConfiguration.rest()
+    let restFactory = factory.with(sessionConfiguration: restConfig)
+    
+    XCTAssertEqual(restFactory.session.session.configuration, restConfig)
+  }
+  
+  func testFluent2() {
+    
+    let factory = NetworkRequestFactory(baseURL: "http://example.com", sessionConfiguration: .default)
+    
+    let restSession = NetworkSession(configuration: .rest())
+    let restFactory = factory.with(session: restSession)
+    
+    XCTAssertEqual(restFactory.session.session.configuration, restSession.session.configuration)
   }
 
 }
