@@ -23,29 +23,55 @@ public class NetworkRequestFactory: RequestFactory {
   public let mediaTypeDecoders: MediaTypeDecoders
   private var problemTypes: [String: Problem.Type] = [:]
 
-  public init(baseURL: URI.Template, adapter: NetworkRequestAdapter? = nil,
-              serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
-              sessionConfiguration: URLSessionConfiguration = .rest(),
+  public init(baseURL: URI.Template,
+              session: NetworkSession,
+              adapter: NetworkRequestAdapter? = nil,
               requestQueue: DispatchQueue = .global(qos: .utility),
               mediaTypeEncoders: MediaTypeEncoders = .default, mediaTypeDecoders: MediaTypeDecoders = .default) {
     self.baseURL = baseURL
-    self.session = NetworkSession(configuration: sessionConfiguration,
-                                  serverTrustPolicyManager: serverTrustPolicyManager)
+    self.session = session
     self.adapter = adapter
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
   }
   
+  public convenience init(
+    baseURL: URI.Template, adapter: NetworkRequestAdapter? = nil,
+    serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
+    sessionConfiguration: URLSessionConfiguration = .rest(),
+    requestQueue: DispatchQueue = .global(qos: .utility),
+    mediaTypeEncoders: MediaTypeEncoders = .default,
+    mediaTypeDecoders: MediaTypeDecoders = .default
+  ) {
+    self.init(
+      baseURL: baseURL,
+      session: .init(configuration: sessionConfiguration, serverTrustPolicyManager: serverTrustPolicyManager),
+      adapter: adapter,
+      requestQueue: requestQueue,
+      mediaTypeEncoders: mediaTypeEncoders,
+      mediaTypeDecoders: mediaTypeDecoders
+    )
+  }
+  
   deinit {
     session.close(cancelOutstandingTasks: true)
   }
   
-  public func with(sessionConfiguration: URLSessionConfiguration) -> RequestFactory {
+  public func with(sessionConfiguration: URLSessionConfiguration) -> NetworkRequestFactory {
     NetworkRequestFactory(baseURL: baseURL,
                           adapter: adapter,
                           serverTrustPolicyManager: session.serverTrustPolicyManager,
                           sessionConfiguration: sessionConfiguration,
+                          requestQueue: requestQueue,
+                          mediaTypeEncoders: mediaTypeEncoders,
+                          mediaTypeDecoders: mediaTypeDecoders)
+  }
+  
+  public func with(session: NetworkSession) -> NetworkRequestFactory {
+    NetworkRequestFactory(baseURL: baseURL,
+                          session: session,
+                          adapter: adapter,
                           requestQueue: requestQueue,
                           mediaTypeEncoders: mediaTypeEncoders,
                           mediaTypeDecoders: mediaTypeDecoders)
@@ -160,7 +186,7 @@ public class NetworkRequestFactory: RequestFactory {
     }
 
     guard let validData = data, !validData.isEmpty else {
-      throw SundayError.responseDecodingFailed(reason: .inputDataNilOrZeroLength)
+      throw SundayError.responseDecodingFailed(reason: .noData)
     }
 
     guard
