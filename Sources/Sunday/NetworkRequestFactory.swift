@@ -199,11 +199,17 @@ public class NetworkRequestFactory: RequestFactory {
 
     let mediaTypeDecoder = try mediaTypeDecoders.find(for: contentType)
 
-    guard let value = try mediaTypeDecoder.decode(D.self, from: validData) as D? else {
-      throw SundayError.responseDecodingFailed(reason: .missingValue)
+    do {
+      
+      guard let value = try mediaTypeDecoder.decode(D.self, from: validData) as D? else {
+        throw SundayError.responseDecodingFailed(reason: .missingValue)
+      }
+      
+      return value
+      
+    } catch {
+      throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: contentType, error: error))
     }
-
-    return value
   }
 
   public func parse(error: Error) -> Error {
