@@ -40,8 +40,12 @@ public extension HTTPRequest {
   var url: URLComponents { raw.url }
 
   var headers: HTTP.Headers { raw.headers }
-  func headers(for name: String) -> [String] { raw.headers[name] ?? [] }
-  func header(for name: String) -> String? { raw.headers[name]?.first }
+  
+  func headers(for name: String) -> [String] {
+    return raw.headers.first { name.caseInsensitiveCompare($0.key) == .orderedSame }?.value ?? []
+  }
+  
+  func header(for name: String) -> String? { headers(for: name).first }
 
   var body: Data? { raw.body }
 
