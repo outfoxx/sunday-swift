@@ -46,7 +46,7 @@ open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   private let tokenHeaderType: String
   private let token: String
 
-  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, token: String) {
+  public init(tokenHeaderType: String, token: String, header: String = HTTP.StdHeaders.authorization) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
     self.token = token
@@ -56,11 +56,9 @@ open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
 
-    var urlRequest = urlRequest
+    let authRequest = urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(token)"]])
 
-    urlRequest.allHTTPHeaderFields?[header] = "\(tokenHeaderType) \(token)"
-
-    return Just(urlRequest)
+    return Just(authRequest)
       .setFailureType(to: Error.self)
       .eraseToAnyPublisher()
   }
@@ -87,16 +85,18 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   private var authorization: TokenAuthorization?
   private var refresh: (NetworkRequestFactory) throws -> RefreshResult
 
-  public init(header: String = HTTP.StdHeaders.authorization, tokenHeaderType: String, refresh: @escaping (NetworkRequestFactory) throws -> RefreshResult) {
+  public init(
+    tokenHeaderType: String,
+    header: String = HTTP.StdHeaders.authorization,
+    refresh: @escaping (NetworkRequestFactory) throws -> RefreshResult
+  ) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
     self.refresh = refresh
   }
 
   func update(urlRequest: URLRequest, accessToken: String) -> URLRequest {
-    var urlRequest = urlRequest
-    urlRequest.allHTTPHeaderFields?[header] = "\(tokenHeaderType) \(accessToken)"
-    return urlRequest
+    urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(accessToken)"]])
   }
 
   // MARK: NetworkRequestFactory
