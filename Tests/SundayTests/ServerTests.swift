@@ -22,61 +22,66 @@ struct Item: Codable, Equatable {
 
 class HTTPServerTests: XCTestCase {
 
-  static let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-    Path("/chunked") {
-      GET { _, res in
-        res.start(status: .ok, headers: [
-          HTTP.StdHeaders.transferEncoding: ["chunked"]
-        ])
-        res.send(chunk: "12345".data(using: .utf8)!)
-        res.send(chunk: "67890".data(using: .utf8)!)
-        res.send(chunk: "12345".data(using: .utf8)!)
-        res.send(chunk: "67890".data(using: .utf8)!)
-        res.finish(trailers: [:])
+  static func buildAndStartServer() -> (URL, RoutingHTTPServer) {
+    
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/chunked") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.transferEncoding: ["chunked"]
+          ])
+          res.send(chunk: "12345".data(using: .utf8)!)
+          res.send(chunk: "67890".data(using: .utf8)!)
+          res.send(chunk: "12345".data(using: .utf8)!)
+          res.send(chunk: "67890".data(using: .utf8)!)
+          res.finish(trailers: [:])
+        }
       }
-    }
-    Path("/{type}") {
-      ContentNegotiation {
+      Path("/{type}") {
+        ContentNegotiation {
 
-        GET(.path("type")) { _, res, _ in
-          res.send(status: .ok, value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
-        }
-
-        POST(.path("type"), .body(Item.self)) { _, res, _, body in
-          res.send(status: .created, value: body)
-        }
-        
-        PUT(.path("type"), .body(Item.self)) { req, res, _, body in
-          res.send(status: .created, value: body)
-        }
-        
-        Path("/{id}") {
-
-          GET(.path("id", Int.self)) { _, res, _ in
-            res.send(status: .ok, value: Item(name: "abc", cost: 12.80))
+          GET(.path("type")) { _, res, _ in
+            res.send(status: .ok, value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
           }
 
-          DELETE(.path("id", Int.self)) { _, res, _ in
-            res.send(status: .noContent)
+          POST(.path("type"), .body(Item.self)) { _, res, _, body in
+            res.send(status: .created, value: body)
           }
-        }
+          
+          PUT(.path("type"), .body(Item.self)) { req, res, _, body in
+            res.send(status: .created, value: body)
+          }
+          
+          Path("/{id}") {
 
+            GET(.path("id", Int.self)) { _, res, _ in
+              res.send(status: .ok, value: Item(name: "abc", cost: 12.80))
+            }
+
+            DELETE(.path("id", Int.self)) { _, res, _ in
+              res.send(status: .noContent)
+            }
+          }
+
+        }
       }
     }
+    
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      fatalError()
+    }
+    
+    return (serverURL, server)
   }
-  static var serverURL: URL!
 
-  let session = NetworkSession(configuration: .default)
-
-  override class func setUp() {
-    super.setUp()
-
-    serverURL = server.start()
-    XCTAssertNotNil(serverURL)
-    print("SERVER URL", serverURL!)
-  }
-  
   func testPOST() throws {
+    
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
 
     let postCompleteX = expectation(description: "POST - complete")
     let postDataX = expectation(description: "POST - data")
@@ -86,7 +91,7 @@ class HTTPServerTests: XCTestCase {
       let cost: Double
     }
 
-    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
     urlRequest.httpMethod = "POST"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
@@ -132,11 +137,17 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testGETList() {
+    
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
 
     let listCompleteX = expectation(description: "GET (list) - complete")
     let listDataX = expectation(description: "GET (list) - data")
 
-    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -181,11 +192,17 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testGETItem() {
+    
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
 
     let itemCompleteX = expectation(description: "GET (item) - complete")
     let itemDataX = expectation(description: "GET (item) - data")
 
-    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -229,11 +246,17 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testDELETE() {
+    
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
 
     let deleteCompleteX = expectation(description: "DELETE - complete")
     let deleteDataX = expectation(description: "DELETE - data")
 
-    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
     urlRequest.httpMethod = "DELETE"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -272,6 +295,12 @@ class HTTPServerTests: XCTestCase {
 
   func testPUTExpect() throws {
     
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+
     let putCompleteX = expectation(description: "PUT - complete")
     let putDataX = expectation(description: "PUT - data")
 
@@ -280,7 +309,7 @@ class HTTPServerTests: XCTestCase {
       let cost: Double
     }
     
-    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
     urlRequest.httpMethod = "PUT"
     urlRequest.addValue("100-continue", forHTTPHeaderField: "expect")
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
@@ -327,6 +356,12 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testChunked() {
+    
+    let (serverURL, server) = Self.buildAndStartServer()
+    defer { server.stop() }
+    
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
 
     let getChunkedCompleteX = expectation(description: "GET (chunked) - complete")
     let getChunkedDataX = expectation(description: "GET (chunked) - data")
@@ -336,7 +371,7 @@ class HTTPServerTests: XCTestCase {
       let cost: Double
     }
     
-    var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: Self.serverURL)!)
+    var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
     let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)

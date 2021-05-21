@@ -12,7 +12,8 @@ import Foundation
 
 
 public enum RequestEncodingFailureReason {
-  case noSupportedContentType([MediaType])
+  case noSupportedContentTypes([MediaType])
+  case noSupportedAcceptTypes([MediaType])
   case unsupportedContentType(MediaType)
   case serializationFailed(contentType: MediaType, error: Error?)
 }
@@ -20,8 +21,8 @@ public enum RequestEncodingFailureReason {
 public enum ResponseDecodingFailureReason {
   case invalidContentType(String)
   case unsupportedContentType(MediaType)
-  case inputDataNilOrZeroLength
-  case serializationFailed(contentType: MediaType, error: Error?)
+  case noData
+  case deserializationFailed(contentType: MediaType, error: Error?)
   case missingValue
 }
 

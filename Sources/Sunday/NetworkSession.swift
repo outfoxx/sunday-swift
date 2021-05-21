@@ -1,8 +1,11 @@
 //
 //  NetworkSession.swift
-//  
+//  Sunday
 //
-//  Created by Kevin Wooten on 8/28/20.
+//  Copyright © 2019 Outfox, inc.
+//
+//
+//  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
@@ -16,6 +19,7 @@ public class NetworkSession {
   internal var taskDelegates: [URLSessionTask: URLSessionTaskDelegate] = [:]
   internal let delegateQueue = OperationQueue()
   internal let serverTrustPolicyManager: ServerTrustPolicyManager?
+  internal var closed = false
 
   public init(configuration: URLSessionConfiguration,
               serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
@@ -63,6 +67,7 @@ public class NetworkSession {
     else {
       session.finishTasksAndInvalidate()
     }
+    closed = true
   }
 
 }

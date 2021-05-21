@@ -8,10 +8,104 @@
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-@testable import Sunday
+import PotentJSON
 import XCTest
+@testable import Sunday
 
 class MediaTypeTests: XCTestCase {
+  
+  func testCodable() throws {
+    
+    let mediaType = MediaType.eventStream.with("utf-8", forParameter: .charSet)
+    
+    let encoded = try JSON.Encoder.default.encodeString(mediaType)
+    let decoded = try JSON.Decoder.default.decode(MediaType.self, from: encoded)
+    
+    XCTAssertEqual(encoded, try JSONSerialization.string(from: JSON.string(mediaType.value)))
+    XCTAssertEqual(decoded, mediaType)
+  }
+  
+  func testParameterSupport() {
+    
+    let mediaType = MediaType.html.with("utf-8", forParameter: .charSet)
+    
+    XCTAssertEqual(mediaType.parameter(.charSet), "utf-8")
+    XCTAssertEqual(mediaType.parameters, [MediaType.StandardParameterName.charSet.rawValue: "utf-8"])
+  }
+  
+  func testPatternMatching() {
+    
+    let mediaType = MediaType.html.with("utf-8", forParameter: .charSet)
+    
+    XCTAssertTrue(mediaType ~= MediaType.html)
+    XCTAssertFalse(mediaType ~= MediaType.anyImage)
+
+    XCTAssertTrue("text/html" ~= MediaType.html)
+    XCTAssertFalse("text/html" ~= MediaType.anyImage)
+
+    XCTAssertTrue(mediaType ~= "text/html")
+    XCTAssertFalse(mediaType ~= "image/*")
+  }
+  
+  func testEquqlity() {
+   
+    let mediaType = MediaType.html.with("utf-8", forParameter: .charSet)
+    XCTAssertEqual(mediaType, mediaType)
+    
+    XCTAssertEqual(
+      MediaType.html.with("utf-8", forParameter: .charSet).with("123", forParameter: "test"),
+      MediaType.html.with("utf-8", forParameter: .charSet).with("123", forParameter: "test")
+    )
+    
+    XCTAssertNotEqual(
+      MediaType("application/text"),
+      MediaType("text/json")
+    )
+    
+    XCTAssertNotEqual(
+      MediaType("application/x-html"),
+      MediaType("application/x.html")
+    )
+    
+    XCTAssertNotEqual(
+      MediaType("text/html"),
+      MediaType("text/json")
+    )
+    
+    XCTAssertNotEqual(
+      MediaType("application/problem+json"),
+      MediaType("application/problem+cbor")
+    )
+    
+    XCTAssertNotEqual(
+      MediaType.html.with("123", forParameter: "a").with("123", forParameter: "b"),
+      MediaType.html.with("123", forParameter: "a").with("456", forParameter: "b")
+    )
+    
+  }
+  
+  func testParmeterAccess() {
+    
+    let mediaType = MediaType.html.with("123", forParameter: "a").with("456", forParameter: "b")
+    
+    XCTAssertEqual(mediaType.parameter("a"), "123")
+    XCTAssertEqual(mediaType.parameter("b"), "456")
+    XCTAssertNil(mediaType.parameter("c"))
+  }
+  
+  func testParmeterOverwrite() {
+    
+    let base = MediaType.html
+    
+    XCTAssertEqual(
+      base.with("123", forParameter: "a").with("456", forParameter: "a").parameter("a"),
+      "456"
+    )
+    XCTAssertEqual(
+      base.with("456", forParameter: "a").with("123", forParameter: "a").parameter("a"),
+      "123"
+    )
+  }
 
   func testCompatibility() {
 
@@ -78,7 +172,34 @@ class MediaTypeTests: XCTestCase {
                    "Test parsing with different cases")
     XCTAssertEqual(MediaType(type: .application, tree: .vendor, subtype: "yaml", parameters: ["charset": "utf-8", "something": "else"]), MediaType("APPLICATION/VND.YAML  ;  CHARSET=UTF-8 ; SOMETHING=ELSE   "),
                    "Test parsing with different random spacing")
-  }
+    
+    XCTAssertEqual(MediaType("application/*")?.type, .application)
+    XCTAssertEqual(MediaType("audio/*")?.type, .audio)
+    XCTAssertEqual(MediaType("example/*")?.type, .example)
+    XCTAssertEqual(MediaType("font/*")?.type, .font)
+    XCTAssertEqual(MediaType("image/*")?.type, .image)
+    XCTAssertEqual(MediaType("message/*")?.type, .message)
+    XCTAssertEqual(MediaType("model/*")?.type, .model)
+    XCTAssertEqual(MediaType("multipart/*")?.type, .multipart)
+    XCTAssertEqual(MediaType("text/*")?.type, .text)
+    XCTAssertEqual(MediaType("video/*")?.type, .video)
+    XCTAssertEqual(MediaType("*/*")?.type, .any)
+
+    XCTAssertEqual(MediaType("application/test")?.tree, .standard)
+    XCTAssertEqual(MediaType("application/vnd.test")?.tree, .vendor)
+    XCTAssertEqual(MediaType("application/prs.test")?.tree, .personal)
+    XCTAssertEqual(MediaType("application/x.test")?.tree, .unregistered)
+    XCTAssertEqual(MediaType("application/x-test")?.tree, .obsolete)
+
+    XCTAssertEqual(MediaType("application/text+xml")?.suffix, .xml)
+    XCTAssertEqual(MediaType("application/text+json")?.suffix, .json)
+    XCTAssertEqual(MediaType("application/text+ber")?.suffix, .ber)
+    XCTAssertEqual(MediaType("application/text+der")?.suffix, .der)
+    XCTAssertEqual(MediaType("application/text+fastinfoset")?.suffix, .fastinfoset)
+    XCTAssertEqual(MediaType("application/text+wbxml")?.suffix, .wbxml)
+    XCTAssertEqual(MediaType("application/text+zip")?.suffix, .zip)
+    XCTAssertEqual(MediaType("application/text+cbor")?.suffix, .cbor)
+}
 
   func testValue() {
     XCTAssertEqual(MediaType(type: .application, tree: .vendor, subtype: "yaml", parameters: ["charset": "utf-8", "something": "else"]).value, "application/vnd.yaml;charset=utf-8;something=else")

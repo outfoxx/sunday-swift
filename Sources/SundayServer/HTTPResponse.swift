@@ -117,6 +117,13 @@ public protocol HTTPResponse: AnyObject {
   func send<V>(status: HTTP.Response.Status, value: V) where V: Encodable
   func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable
 
+  func send(statusCode: HTTP.StatusCode)
+  func send(statusCode: HTTP.StatusCode, body: Data)
+  func send(statusCode: HTTP.StatusCode, text: String)
+  func send(statusCode: HTTP.StatusCode, headers: [String: [String]], body: Data)
+  func send<V>(statusCode: HTTP.StatusCode, value: V) where V: Encodable
+  func send<V>(statusCode: HTTP.StatusCode, headers: [String: [String]], value: V) where V: Encodable
+
 }
 
 
@@ -197,6 +204,30 @@ extension HTTPResponse {
 
   func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {
     send(status: .notAcceptable, text: "Encoding Response Failed - No Encoders")
+  }
+  
+  func send(statusCode: HTTP.StatusCode) {
+    send(status: .init(code: statusCode))
+  }
+  
+  func send(statusCode: HTTP.StatusCode, body: Data) {
+    send(status: .init(code: statusCode), body: body)
+  }
+  
+  func send(statusCode: HTTP.StatusCode, text: String) {
+    send(status: .init(code: statusCode), text: text)
+  }
+  
+  func send(statusCode: HTTP.StatusCode, headers: [String: [String]], body: Data) {
+    send(status: .init(code: statusCode), headers: headers, body: body)
+  }
+  
+  func send<V>(statusCode: HTTP.StatusCode, value: V) where V: Encodable {
+    send(status: .init(code: statusCode), value: value)
+  }
+  
+  func send<V>(statusCode: HTTP.StatusCode, headers: [String: [String]], value: V) where V: Encodable {
+    send(status: .init(code: statusCode), headers: headers, value: value)
   }
 
 }

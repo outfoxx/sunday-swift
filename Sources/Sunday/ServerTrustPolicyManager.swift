@@ -95,7 +95,8 @@ public enum ServerTrustPolicy {
 
   // MARK: - Bundle Location
 
-  /// Returns all certificates within the given bundle with a `.cer` file extension.
+  /// Returns all certificates within the given bundle with a `.cer`, `.CER`, `.crt`, `.CRT`, `.der`, or `.DER`
+  /// file extensions.
   ///
   /// - parameter bundle: The bundle to search for all `.cer` files.
   ///
@@ -119,7 +120,8 @@ public enum ServerTrustPolicy {
     return certificates
   }
   
-  /// Returns all public keys within the given bundle with a `.cer` file extension.
+  /// Extracts and returns all public keys from certificates within the given bundle with a `.cer`, `.CER`, `.crt`,
+  /// `.CRT`, `.der`, or `.DER` file extension.
   ///
   /// - parameter bundle: The bundle to search for all `*.cer` files.
   ///

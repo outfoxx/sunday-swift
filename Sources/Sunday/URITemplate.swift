@@ -11,40 +11,9 @@
 import Foundation
 import URITemplate
 
-public struct URI: Equatable, Hashable {
+public extension URI {
 
-  public enum Error: Swift.Error {
-    case invalidURI
-  }
-  
-  private let components: URLComponents
-  
-  public var scheme: String { components.scheme! }
-  public var path: String { components.path }
-  public var query: String? { components.query }
-  public var queryItems: [URLQueryItem]? { components.queryItems }
-  public var fragment: String? { components.fragment }
-
-  public init(string: String) throws {
-    guard let components = URLComponents(string: string) else {
-      throw Error.invalidURI
-    }
-    self.init(components: components)
-  }
-  
-  public init(scheme: String, path: String, fragment: String? = nil) {
-    var components = URLComponents()
-    components.scheme = scheme
-    components.path = path
-    components.fragment = fragment
-    self.init(components: components)
-  }
-  
-  public init(components: URLComponents) {
-    self.components = components
-  }
-
-  public struct Template {
+  struct Template : ExpressibleByStringLiteral {
     
     public enum Error: Swift.Error {
       case missingParameterValue(name: String)
@@ -54,34 +23,37 @@ public struct URI: Equatable, Hashable {
     private static var implCache = [String: URITemplate]()
     private static let lock = NSRecursiveLock()
     
-    public let template: String
+    public let format: String
     public let parameters: Parameters
     
-    public init(template: String, parameters: Parameters = [:]) {
-      self.template = template.hasSuffix("/") ? String(template.dropLast()) : template
+    public init(format: String, parameters: Parameters = [:]) {
+      self.format = format
       self.parameters = parameters
     }
     
+    public init(stringLiteral format: String) {
+      self.init(format: format)
+    }    
     
     /// Builds a complete URL with the provided path arguments
     ///
     /// - Parameters:
     ///   - relative: Template for the relative portion of the complete URL
-    ///   - parameters: Parameters for the template; these take precedence
+    ///   - parameters: Parameters for the format; these take precedence
     ///     when encountering duplicates
     public func complete(relative: String = "", parameters: Parameters = [:]) throws -> URL {
       
       let full: String
       if relative == "" {
-        full = template
-      } else if template.hasSuffix("/") && relative.hasPrefix("/")  {
-        full = "\(template)\(relative.dropFirst())"
+        full = format
+      } else if format.hasSuffix("/") && relative.hasPrefix("/")  {
+        full = "\(format)\(relative.dropFirst())"
       }
-      else if template.hasSuffix("/") || relative.hasPrefix("/") {
-        full = "\(template)\(relative)"
+      else if format.hasSuffix("/") || relative.hasPrefix("/") {
+        full = "\(format)\(relative)"
       }
       else {
-        full = "\(template)/\(relative)"
+        full = "\(format)/\(relative)"
       }
       
       let impl = try Self.impl(for: full)
@@ -93,10 +65,10 @@ public struct URI: Equatable, Hashable {
         switch parameters[variableName] {
         case let value as CustomPathConvertible:
           variables[variableName] = value.pathDescription
-        case let value as CustomStringConvertible:
-          variables[variableName] = value.description
         case let value as VariableValue:
           variables[variableName] = value
+        case let value as CustomStringConvertible:
+          variables[variableName] = value.description
         case nil:
           throw Error.missingParameterValue(name: variableName)
         case let value:
@@ -130,18 +102,4 @@ public struct URI: Equatable, Hashable {
     
   }
 
-}
-
-extension URI: Codable {
-  
-  public init(from decoder: Decoder) throws {
-    let container = try decoder.singleValueContainer()
-    try self.init(string: container.decode(String.self))
-  }
-  
-  public func encode(to encoder: Encoder) throws {
-    var container = encoder.singleValueContainer()
-    try container.encode(components.string!)
-  }
-  
 }

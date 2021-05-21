@@ -36,14 +36,14 @@ public struct MediaTypeEncoders {
     }
 
     public func registerDefault() -> Builder {
-      return registerURL().registerData().registerJSON().registerCBOR()
+      return registerURL().registerData().registerJSON().registerCBOR().registerText()
     }
 
-    public func registerURL(arrayEndcoding: URLEncoder.ArrayEncoding = .bracketed,
-                            boolEncoding: URLEncoder.BoolEncoding = .numeric,
-                            dateEncoding: URLEncoder.DateEncoding = .millisecondsSince1970,
+    public func registerURL(arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .unbracketed,
+                            boolEncoding: WWWFormURLEncoder.BoolEncoding = .literal,
+                            dateEncoding: WWWFormURLEncoder.DateEncoding = .secondsSince1970,
                             encoder: AnyValueEncoder = .default) -> Builder {
-      return register(encoder: URLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
+      return register(encoder: WWWFormURLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
                                           dateEncoding: dateEncoding, encoder: encoder),
                       forTypes: .wwwFormUrlEncoded)
     }
@@ -52,9 +52,13 @@ public struct MediaTypeEncoders {
       return register(encoder: DataEncoder(), forTypes: .octetStream)
     }
 
+    public func registerText() -> Builder {
+      return register(encoder: TextEncoder(), forTypes: .anyText)
+    }
+
     public func registerJSON() -> Builder {
       let encoder = JSON.Encoder()
-      encoder.dateEncodingStrategy = .millisecondsSince1970
+      encoder.dateEncodingStrategy = .secondsSince1970
       return registerJSON(encoder: encoder)
     }
 
@@ -64,7 +68,7 @@ public struct MediaTypeEncoders {
 
     public func registerCBOR() -> Builder {
       let encoder = CBOR.Encoder()
-      encoder.dateEncodingStrategy = .millisecondsSince1970
+      encoder.dateEncodingStrategy = .secondsSince1970
       return registerCBOR(encoder: encoder)
     }
 

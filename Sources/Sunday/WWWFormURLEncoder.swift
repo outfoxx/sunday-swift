@@ -1,5 +1,5 @@
 //
-//  URLEncoder.swift
+//  WWWFormURLEncoder.swift
 //  Sunday
 //
 //  Copyright © 2019 Outfox, inc.
@@ -12,9 +12,9 @@ import Foundation
 import PotentCodables
 
 
-public struct URLEncoder: MediaTypeEncoder {
+public struct WWWFormURLEncoder: MediaTypeEncoder {
 
-  public static let `default` = URLEncoder()
+  public static let `default` = WWWFormURLEncoder()
 
   /// Configures how `Array` parameters are encoded.
   ///
@@ -53,10 +53,10 @@ public struct URLEncoder: MediaTypeEncoder {
   /// Configures how `Date` parameters are encoded.
   ///
   public enum DateEncoding {
-    /// Encode the `Date` as a UNIX timestamp (floating point seconds since epoch).
+    /// Encode the `Date` as a UNIX timestamp (decimal seconds since epoch).
     case secondsSince1970
 
-    /// Encode the `Date` as UNIX millisecond timestamp (integer milliseconds since epoch).
+    /// Encode the `Date` as UNIX millisecond timestamp (milliseconds since epoch).
     case millisecondsSince1970
 
     /// Encode the `Date` as an ISO-8601-formatted string (in RFC 3339 format).
@@ -73,7 +73,11 @@ public struct URLEncoder: MediaTypeEncoder {
       }
     }
 
-    private static let iso8601Formatter = ISO8601DateFormatter()
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+      let fmt = ISO8601DateFormatter()
+      fmt.formatOptions.insert(.withFractionalSeconds)
+      return fmt
+    }()
   }
 
   enum Error: Swift.Error {
@@ -100,7 +104,7 @@ public struct URLEncoder: MediaTypeEncoder {
       throw Error.encodedValueNotDictionary
     }
 
-    guard let data = encodeQueryString(parameters: parameters).data(using: .ascii) else {
+    guard let data = encodeQueryString(parameters: parameters).data(using: .utf8) else {
       throw Error.stringEncodingFailed
     }
 
@@ -108,21 +112,21 @@ public struct URLEncoder: MediaTypeEncoder {
   }
 
   public func encodeQueryString(parameters: Parameters) -> String {
-    var components: [(String, String)] = []
+    var components: [String] = []
 
-    for key in parameters.keys.sorted(by: <) {
-        let value = parameters[key]!
-        components += encodeQueryComponent(fromKey: key, value: value)
+    for (key, value) in parameters.sorted(by: { (left, right) in left.key < right.key }) {
+      components += encodeQueryComponent(fromKey: key, value: value)
     }
-    return components.map { "\($0)=\($1)" }.joined(separator: "&")
+    return components.joined(separator: "&")
   }
 
-  public func encodeQueryComponent(fromKey key: String, value: Any) -> [(String, String)] {
-    var components: [(String, String)] = []
+  public func encodeQueryComponent(fromKey key: String, value: Any?) -> [String] {
+    var components: [String] = []
 
     if let dictionary = value as? [String: Any] {
-      for (nestedKey, value) in dictionary {
-        components += encodeQueryComponent(fromKey: "\(key)[\(nestedKey)]", value: value)
+      for nestedKey in dictionary.keys.sorted(by: <) {
+        let nestedValue = dictionary[nestedKey]!
+        components += encodeQueryComponent(fromKey: "\(key)[\(nestedKey)]", value: nestedValue)
       }
     }
     else if let array = value as? [Any] {
@@ -131,34 +135,32 @@ public struct URLEncoder: MediaTypeEncoder {
       }
     }
     else if let date = value as? Date {
-      components.append((escape(key), escape(dateEncoding.encode(value: date))))
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(dateEncoding.encode(value: date)))
     }
     else if let value = value as? NSNumber {
       if CFGetTypeID(value) == CFBooleanGetTypeID() {
-        components.append((escape(key), escape(boolEncoding.encode(value: value.boolValue))))
+        components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(boolEncoding.encode(value: value.boolValue)))
       }
       else {
-        components.append((escape(key), escape("\(value)")))
+        components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
       }
     }
     else if let bool = value as? Bool {
-      components.append((escape(key), escape(boolEncoding.encode(value: bool))))
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(boolEncoding.encode(value: bool)))
     }
-    else {
-      components.append((escape(key), escape("\(value)")))
+    else if let value = value {
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
+    } else {
+      components.append(Self.encodeURIComponent(key))
     }
 
     return components
   }
 
-  public func escape(_ string: String) -> String {
-      let generalDelimitersToEncode = ":#[]@" // does not include "?" or "/" due to RFC 3986 - Section 3.4
-      let subDelimitersToEncode = "!$&'()*+,;="
+  private static let escapeCharacters = CharacterSet(charactersIn: " *;:@&=+$,/?%#[]").inverted
 
-      var allowedCharacterSet = CharacterSet.urlQueryAllowed
-      allowedCharacterSet.remove(charactersIn: "\(generalDelimitersToEncode)\(subDelimitersToEncode)")
-
-      return string.addingPercentEncoding(withAllowedCharacters: allowedCharacterSet) ?? string
+  public static func encodeURIComponent(_ string: String) -> String {
+    return string.addingPercentEncoding(withAllowedCharacters: escapeCharacters) ?? string
   }
 
 }

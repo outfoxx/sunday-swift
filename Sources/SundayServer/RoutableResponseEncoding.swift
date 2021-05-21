@@ -153,7 +153,9 @@ class EncodingHTTPResponse: HTTPResponse {
   }
 
   func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {
-    guard let contentType = MediaType(response.header(forName: HTTP.StdHeaders.contentType) ?? "") else {
+    let contentTypeHeader =
+      headers[HTTP.StdHeaders.contentType]?.first ?? response.header(forName: HTTP.StdHeaders.contentType)
+    guard let contentType = MediaType(contentTypeHeader ?? "") else {
       return send(status: .notAcceptable, text: "Response Content-Type Not Present")
     }
 

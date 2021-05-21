@@ -21,10 +21,11 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", from: "1.7.1"),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", from: "1.8.1"),
     .package(url: "https://github.com/outfoxx/OSLogTrace.git", from: "1.1.1"),
     .package(url: "https://github.com/sharplet/Regex.git", from: "2.1.0"),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", from: "2.1.0")
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", from: "2.1.0"),
+    .package(url: "https://github.com/groue/CombineExpectations.git", from: "0.7.0")
   ],
   targets: [
     .target(
@@ -47,6 +48,7 @@ let package = Package(
       dependencies: [
         "Sunday",
         "SundayServer",
+        "CombineExpectations"
       ]
     ),
   ]
