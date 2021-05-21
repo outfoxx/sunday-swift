@@ -55,7 +55,7 @@ class EventSourceTests: XCTestCase {
     eventSource.connect()
     eventSource.connect()
 
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
 
   func testSimpleData() throws {
@@ -106,7 +106,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
 
   func testJSONData() throws {
@@ -157,7 +157,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
     
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
 
   func testCallbacks() throws {
@@ -171,16 +171,11 @@ class EventSourceTests: XCTestCase {
             
             let invocations = res.properties["invocations"] as! Int
             if invocations == 0 {
-              
-              res.start(status: .ok, headers: [
-                HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-                HTTP.StdHeaders.transferEncoding: ["chunked"]
-              ])
-              res.send(chunk: "event: test\n".data(using: .utf8)!)
-              res.send(chunk: "id: 123\n".data(using: .utf8)!)
-              res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-              res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
-              res.finish(trailers: [:])
+              res.send(
+                status: .ok,
+                headers: [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]],
+                body: "event: test\ndata: some data\n\n".data(using: .utf8)!
+              )
             }
             else {
               
@@ -232,7 +227,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
 
   func testEventListenerRemove() throws {
@@ -310,7 +305,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
     
     XCTAssertEqual(eventSource.retryTime, .milliseconds(123456789))
   }
@@ -365,7 +360,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
     
     XCTAssertEqual(eventSource.retryTime, .milliseconds(500))
   }
@@ -426,7 +421,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
   
   func testReconnectsWithLastEventIdIgnoringInvalidIDs() throws {
@@ -489,7 +484,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
   
   func testEventTimeoutCheckWithExpiration() throws {
@@ -524,7 +519,7 @@ class EventSourceTests: XCTestCase {
     defer { session.close(cancelOutstandingTasks: true) }
     
     let eventSource =
-      EventSource(eventTimeoutInterval: .milliseconds(100)) {
+      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
         let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
@@ -535,13 +530,13 @@ class EventSourceTests: XCTestCase {
     eventSource.onError { error in
       if let error = error as? EventSource.Error, EventSource.Error.eventTimeout == error {
         eventSource.close()
-        errorX.fulfill()
+         errorX.fulfill()
       }
     }
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 3.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
   
   func testEventTimeoutCheckWithoutExpiration() throws {
@@ -561,7 +556,7 @@ class EventSourceTests: XCTestCase {
             
             res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
             
-            req.server.queue.asyncAfter(deadline: .now() + .milliseconds(2500)) {
+            req.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
               session.close(cancelOutstandingTasks: true)
             }
           }
@@ -579,7 +574,7 @@ class EventSourceTests: XCTestCase {
     defer { server.stop() }
     
     let eventSource =
-      EventSource {
+      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
         let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
@@ -594,7 +589,7 @@ class EventSourceTests: XCTestCase {
     
     eventSource.connect()
     
-    waitForExpectations(timeout: 3.0, handler: nil)
+    waitForExpectations(timeout: 5.0, handler: nil)
   }
 
 }
