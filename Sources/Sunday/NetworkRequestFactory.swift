@@ -78,7 +78,11 @@ public class NetworkRequestFactory: RequestFactory {
   }
   
   public func registerProblem(type: URL, problemType: Problem.Type) {
-    self.problemTypes[type.absoluteString] = problemType
+    registerProblem(type: type.absoluteString, problemType: problemType)
+  }
+  
+  public func registerProblem(type: String, problemType: Problem.Type) {
+    self.problemTypes[type] = problemType
   }
 
   public func request<B: Encodable>(

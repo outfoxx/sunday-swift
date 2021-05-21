@@ -17,6 +17,7 @@ public protocol RequestFactory {
   var baseURL: URI.Template { get }
   
   func registerProblem(type: URL, problemType: Problem.Type)
+  func registerProblem(type: String, problemType: Problem.Type)
   
   func request<B: Encodable>(method: HTTP.Method, pathTemplate: String,
                              pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
