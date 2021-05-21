@@ -215,8 +215,9 @@ open class EventSource {
     logger.debug("Checking Event Timeout")
     
     let eventTimeoutDeadline = lastEventReceivedTime + eventTimeoutInterval
-    let now = DispatchTime.now()
-    guard now >= eventTimeoutDeadline else {
+
+    // If time has not expired, return
+    guard DispatchTime.now() >= eventTimeoutDeadline else {
       return
     }
     
@@ -364,6 +365,8 @@ open class EventSource {
 
   private func dispatchParsedEvent(_ info: EventInfo) {
       
+    lastEventReceivedTime = .now()
+
     // Update retry time if it's a valid integer
     if let retry = info.retry {
       
@@ -396,8 +399,6 @@ open class EventSource {
         logger.debug("event id contains null, unable to use for last-event-id")
       }
     }
-
-    lastEventReceivedTime = .now()
 
     if let onMessageCallback = onMessageCallback {
 
