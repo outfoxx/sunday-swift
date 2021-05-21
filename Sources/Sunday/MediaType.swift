@@ -79,7 +79,7 @@ public struct MediaType {
     return headers.flatMap { header in header.components(separatedBy: ",") }.compactMap { MediaType($0) }
   }
 
-  private static let fullRegex = Regex(##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##, options: [.ignoreCase])
+  private static let fullRegex = Regex(##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs|x)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##, options: [.ignoreCase])
   private static let paramRegex = Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
 
   public init?(_ string: String) {
@@ -125,17 +125,25 @@ public struct MediaType {
   public func parameter(_ name: StandardParameterName) -> String? {
     return parameters[name.rawValue]
   }
-
+  
+  public func parameter(_ name: String) -> String? {
+    return parameters[name]
+  }
+  
   public func with(type: Type? = nil, tree: Tree? = nil, subtype: String? = nil, parameters: [String: String]? = nil) -> MediaType {
     let type = type ?? self.type
     let tree = tree ?? self.tree
     let subtype = subtype?.lowercased() ?? self.subtype
-    let parameters = parameters.map { Dictionary(uniqueKeysWithValues: $0.map { key, value in (key.lowercased(), value.lowercased()) }) } ?? self.parameters
+    let parameters = self.parameters.merging(parameters ?? [:]) { _, r in r }
     return MediaType(type: type, tree: tree, subtype: subtype, suffix: suffix, parameters: parameters)
   }
 
   public func with(_ value: String, forParameter name: StandardParameterName) -> MediaType {
     return with(parameters: [name.rawValue: value])
+  }
+
+  public func with(_ value: String, forParameter name: String) -> MediaType {
+    return with(parameters: [name: value])
   }
 
   public var value: String {
