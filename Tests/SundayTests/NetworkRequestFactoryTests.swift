@@ -28,8 +28,8 @@ class NetworkRequestFactoryTests: XCTestCase {
   func testEnsureDefaultsCanBeOverridden() {
         
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
-                                               mediaTypeEncoders: .Builder().build(),
-                                               mediaTypeDecoders: .Builder().build())
+                                               mediaTypeEncoders: MediaTypeEncoders.Builder().build(),
+                                               mediaTypeDecoders: MediaTypeDecoders.Builder().build())
     
     XCTAssertNil(try? requestFactory.mediaTypeEncoders.find(for: .json))
     XCTAssertNil(try? requestFactory.mediaTypeDecoders.find(for: .json))
@@ -60,7 +60,7 @@ class NetworkRequestFactoryTests: XCTestCase {
   func testFailsWhenNoQueryParamEncoderIsRegisteredAndQueryParamsAreProvided() throws {
     
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
-                                               mediaTypeEncoders: .Builder().build())
+                                               mediaTypeEncoders: MediaTypeEncoders.Builder().build())
     
     let request$ =
       requestFactory.request(method: .get,
@@ -115,7 +115,7 @@ class NetworkRequestFactoryTests: XCTestCase {
   func testFailsIfNoneOfTheAcceptTypesHasADecoder() throws {
     
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
-                                               mediaTypeDecoders: .Builder().build())
+                                               mediaTypeDecoders: MediaTypeDecoders.Builder().build())
     
     let request$ =
       requestFactory.request(method: .get,
@@ -138,7 +138,7 @@ class NetworkRequestFactoryTests: XCTestCase {
   func testFailsIfNoneOfTheContentTypesHasAnEncoder() throws {
     
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com",
-                                               mediaTypeEncoders: .Builder().build())
+                                               mediaTypeEncoders: MediaTypeEncoders.Builder().build())
     
     let request$ =
       requestFactory.request(method: .get,
