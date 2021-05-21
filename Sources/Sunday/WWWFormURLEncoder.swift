@@ -112,17 +112,16 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
   }
 
   public func encodeQueryString(parameters: Parameters) -> String {
-    var components: [(String, String)] = []
+    var components: [String] = []
 
-    for key in parameters.keys.sorted(by: <) {
-        let value = parameters[key]!
-        components += encodeQueryComponent(fromKey: key, value: value)
+    for (key, value) in parameters.sorted(by: { (left, right) in left.key < right.key }) {
+      components += encodeQueryComponent(fromKey: key, value: value)
     }
-    return components.map { "\($0)=\($1)" }.joined(separator: "&")
+    return components.joined(separator: "&")
   }
 
-  public func encodeQueryComponent(fromKey key: String, value: Any) -> [(String, String)] {
-    var components: [(String, String)] = []
+  public func encodeQueryComponent(fromKey key: String, value: Any?) -> [String] {
+    var components: [String] = []
 
     if let dictionary = value as? [String: Any] {
       for nestedKey in dictionary.keys.sorted(by: <) {
@@ -136,21 +135,23 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
       }
     }
     else if let date = value as? Date {
-      components.append((Self.encodeURIComponent(key), Self.encodeURIComponent(dateEncoding.encode(value: date))))
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(dateEncoding.encode(value: date)))
     }
     else if let value = value as? NSNumber {
       if CFGetTypeID(value) == CFBooleanGetTypeID() {
-        components.append((Self.encodeURIComponent(key), Self.encodeURIComponent(boolEncoding.encode(value: value.boolValue))))
+        components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(boolEncoding.encode(value: value.boolValue)))
       }
       else {
-        components.append((Self.encodeURIComponent(key), Self.encodeURIComponent("\(value)")))
+        components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
       }
     }
     else if let bool = value as? Bool {
-      components.append((Self.encodeURIComponent(key), Self.encodeURIComponent(boolEncoding.encode(value: bool))))
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(boolEncoding.encode(value: bool)))
     }
-    else {
-      components.append((Self.encodeURIComponent(key), Self.encodeURIComponent("\(value)")))
+    else if let value = value {
+      components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
+    } else {
+      components.append(Self.encodeURIComponent(key))
     }
 
     return components

@@ -147,7 +147,7 @@ public struct HTTP {
 }
 
 
-public typealias Parameters = [String: Any]
+public typealias Parameters = [String: Any?]
 
 
 extension URL {

@@ -185,5 +185,19 @@ class WWWFormURLEncoderTests: XCTestCase {
       "test=1494837000123&test=1529116810123"
     )
   }
+  
+  func testNullsAreEncodedAsFlagged() {
+    
+    let encoder = WWWFormURLEncoder(arrayEncoding: .unbracketed,
+                                    boolEncoding: .literal,
+                                    dateEncoding: .millisecondsSince1970)
+    
+    XCTAssertEqual(
+      encoder.encodeQueryString(parameters: [
+        "flagged":  nil
+      ]),
+      "flagged"
+    )
+  }
 
 }
