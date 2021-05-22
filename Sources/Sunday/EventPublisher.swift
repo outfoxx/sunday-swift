@@ -15,16 +15,20 @@ import Combine
 private let logger = logging.for(category: "Event Publisher")
 
 
-public struct EventPublisher<Output: Decodable>: Publisher {
+public struct EventPublisher<Output>: Publisher {
   
   public typealias Failure = Error
   
   private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private let decoder: TextMediaTypeDecoder
-  private let eventTypes: [String: Output.Type]
+  private let eventTypes: [String: AnyTextMediaTypeDecodable]
   
-  public init(eventTypes: [String: Output.Type], decoder: TextMediaTypeDecoder, queue: DispatchQueue,
-              requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
+  public init(
+    eventTypes: [String: AnyTextMediaTypeDecodable],
+    decoder: TextMediaTypeDecoder,
+    queue: DispatchQueue,
+    requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+  ) {
     self.requestor = requestor
     self.decoder = decoder
     self.eventTypes = eventTypes
@@ -65,7 +69,7 @@ private extension EventPublisher {
       
       if source == nil {
         source = EventSource(requestor: parent.requestor)
-        source!.onMessage(handleMessage(id:event:data:))
+        source!.onMessage(handleMessage(event:id:data:))
       }
       
       self.demand += demand
@@ -73,7 +77,7 @@ private extension EventPublisher {
       source!.connect()
     }
     
-    func handleMessage(id: String?, event: String?, data: String?) {
+    func handleMessage(event: String?, id: String?, data: String?) {
       lock.lock()
       defer {
         lock.unlock()
@@ -83,13 +87,19 @@ private extension EventPublisher {
         return
       }
       
-      let eventType = parent.eventTypes[event ?? ""] ?? Output.self
+      guard let eventType = parent.eventTypes[event ?? ""] else {
+        logger.info("Unknown event type, ignoring event: type=\(event)")
+        return
+      }
 
       
       // Parse JSON and pass event on
       
       do {
-        let event = try parent.decoder.decode(eventType, from: data ?? "{}")
+        guard let event = try eventType.decode(parent.decoder, data ?? "") as? Output else {
+          logger.error("Unable to decode event: no value returned")
+          return
+        }
         
         demand += subscriber.receive(event)
       }

@@ -903,7 +903,7 @@ class NetworkRequestFactoryTests: XCTestCase {
                                             pathParameters: nil, queryParameters: nil,
                                             body: Empty.none, contentTypes: [.json],
                                             acceptTypes: [.json], headers: nil,
-                                            eventTypes: ["test": TestEvent.self])
+                                            eventTypes: ["test": .erase(TestEvent.self)]) as RequestEventPublisher<TestEvent>
 
     let completeX = expectation(description: "complete received")
 

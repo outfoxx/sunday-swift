@@ -56,11 +56,11 @@ public protocol RequestFactory {
     headers: Parameters?
   ) -> EventSource
 
-  func eventStream<B: Encodable, D: Decodable>(
+  func eventStream<B: Encodable, D>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-    headers: Parameters?, eventTypes: [String: D.Type]
+    headers: Parameters?, eventTypes: [String: AnyTextMediaTypeDecodable]
   ) -> RequestEventPublisher<D>
 
   func close(cancelOutstandingRequests: Bool)
