@@ -2,7 +2,7 @@
 //  RoutingHTTPServer.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -20,10 +20,18 @@ open class RoutingHTTPServer: NetworkHTTPServer {
     return _routable
   }
 
-  public init(port: NWEndpoint.Port = .any, localOnly: Bool = true,
-              serviceName: String? = nil, serviceType: String? = nil) throws {
-    try super.init(port: port, localOnly: localOnly,
-                   serviceName: serviceName, serviceType: serviceType) { request, response in
+  public init(
+    port: NWEndpoint.Port = .any,
+    localOnly: Bool = true,
+    serviceName: String? = nil,
+    serviceType: String? = nil
+  ) throws {
+    try super.init(
+      port: port,
+      localOnly: localOnly,
+      serviceName: serviceName,
+      serviceType: serviceType
+    ) { request, response in
       let routingServer = request.server as! RoutingHTTPServer
       do {
         let route = Route(matched: "", unmatched: request.url.path, parameters: [:])
@@ -40,9 +48,13 @@ open class RoutingHTTPServer: NetworkHTTPServer {
     }
   }
 
-  public convenience init(port: NWEndpoint.Port = .any, localOnly: Bool = true,
-                          serviceName: String? = nil, serviceType: String? = nil,
-                          @RoutableBuilder routableBuilder: () -> Routable) throws {
+  public convenience init(
+    port: NWEndpoint.Port = .any,
+    localOnly: Bool = true,
+    serviceName: String? = nil,
+    serviceType: String? = nil,
+    @RoutableBuilder routableBuilder: () -> Routable
+  ) throws {
     try self.init(port: port, localOnly: localOnly, serviceName: serviceName, serviceType: serviceType)
     _routable = routableBuilder()
   }

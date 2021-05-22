@@ -2,7 +2,7 @@
 //  HTTPServer.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -34,8 +34,13 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
   public private(set) var state: NWListener.State?
   @objc public private(set) dynamic var isReady: Bool = false
 
-  public init(port: NWEndpoint.Port = .any, localOnly: Bool = true,
-              serviceName: String? = nil, serviceType: String? = nil, dispatcher: @escaping Dispatcher) throws {
+  public init(
+    port: NWEndpoint.Port = .any,
+    localOnly: Bool = true,
+    serviceName: String? = nil,
+    serviceType: String? = nil,
+    dispatcher: @escaping Dispatcher
+  ) throws {
     self.dispatcher = dispatcher
 
     listener = try NWListener(using: .tcp, on: port)
@@ -58,7 +63,7 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
     }
 
     if let serviceType = serviceType {
-      let serviceName = serviceName ?? String(format: "%qx", UInt64.random(in: 0...UInt64.max))
+      let serviceName = serviceName ?? String(format: "%qx", UInt64.random(in: 0 ... UInt64.max))
       listener.service = NWListener.Service(name: serviceName, type: serviceType)
     }
 
@@ -73,10 +78,12 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
 
       starter.enter()
 
-      locator = ServiceLocator(instance: service.name ?? "",
-                               type: service.type,
-                               domain: service.domain ?? "",
-                               signal: { starter.leave() })
+      locator = ServiceLocator(
+        instance: service.name ?? "",
+        type: service.type,
+        domain: service.domain ?? "",
+        signal: { starter.leave() }
+      )
     }
     else {
 
@@ -105,18 +112,20 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
     }
 
   }
-  
+
   public func stop() {
     listener.cancel()
   }
 
   func connect(with connection: NWConnection) {
 
-    let httpConnection = NetworkHTTPConnection(transport: connection,
-                                               server: self,
-                                               id: UUID().uuidString,
-                                               log: logging.for(category: "HTTP Connection"),
-                                               dispatcher: dispatcher)
+    let httpConnection = NetworkHTTPConnection(
+      transport: connection,
+      server: self,
+      id: UUID().uuidString,
+      log: logging.for(category: "HTTP Connection"),
+      dispatcher: dispatcher
+    )
 
     mgrQueue.sync {
       connections[httpConnection.id] = httpConnection

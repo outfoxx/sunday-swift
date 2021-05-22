@@ -2,7 +2,7 @@
 //  HTTPURLResponses.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -30,7 +30,8 @@ public extension HTTPURLResponse {
       return value(forHTTPHeaderField: field)
     }
     else {
-      return allHeaderFields.first { $0.key.description.lowercased() == field.lowercased() }.map { String(describing: $0.value) }
+      return allHeaderFields.first { $0.key.description.lowercased() == field.lowercased() }
+        .map { String(describing: $0.value) }
     }
   }
 

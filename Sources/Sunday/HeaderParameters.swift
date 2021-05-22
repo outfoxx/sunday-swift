@@ -13,7 +13,7 @@ import Foundation
 
 enum HeaderParameters {
 
-  enum Error : Swift.Error {
+  enum Error: Swift.Error {
     case unsupportedHeaderParameterValue(header: String, type: Any.Type)
     case invalidEncodedValue(header: String, invalidValue: String)
   }
@@ -41,7 +41,7 @@ enum HeaderParameters {
 
   private static func encode(header: String, parameter: Any) throws -> [String] {
 
-    if let array = parameter as? Array<Any> {
+    if let array = parameter as? [Any] {
       return try array.map { try encode(header: header, value: $0) }
     }
 

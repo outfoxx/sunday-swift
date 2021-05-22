@@ -20,3 +20,7 @@ build-test-tvos:
 	$(call buildtest,tvOS,platform=tvOS Simulator$(comma)name=Apple TV)
 
 build-test-all: build-test-macos build-test-ios build-test-tvos
+
+
+format:
+	swiftformat --config .swiftformat Sources/ Tests/

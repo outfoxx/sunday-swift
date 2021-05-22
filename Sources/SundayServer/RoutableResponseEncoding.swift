@@ -2,7 +2,7 @@
 //  RoutableResponseEncoding.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -46,7 +46,11 @@ public struct ResponseEncoding: Routable {
   public let encoders: MediaTypeEncoders
   public let routable: Routable
 
-  public init(scheme: Scheme = .negotiated(default: nil), encoders: MediaTypeEncoders = .default, @RoutableBuilder buildRoutable: () -> Routable) {
+  public init(
+    scheme: Scheme = .negotiated(default: nil),
+    encoders: MediaTypeEncoders = .default,
+    @RoutableBuilder buildRoutable: () -> Routable
+  ) {
     self.scheme = scheme
     self.encoders = encoders
     routable = buildRoutable()
@@ -139,11 +143,11 @@ class EncodingHTTPResponse: HTTPResponse {
   func send(body: Data) {
     response.send(body: body)
   }
-  
+
   func send(body: Data, final: Bool) {
     response.send(body: body, final: final)
   }
-  
+
   func send(chunk: Data) {
     response.send(chunk: chunk)
   }

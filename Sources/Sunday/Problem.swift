@@ -2,7 +2,7 @@
 //  Problem.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -19,7 +19,7 @@ import PotentCodables
  * media type `application/problem+json`.
  */
 open class Problem: Error, Codable, CustomStringConvertible {
-  
+
   public let type: URL
 
   public let title: String
@@ -31,7 +31,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
   public let instance: URL?
 
   public let parameters: [String: AnyValue]?
-  
+
   public var statusCode: HTTP.StatusCode? {
     HTTP.StatusCode(rawValue: status)
   }
@@ -62,7 +62,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
   ) {
     self.type = type
     self.title = title
-    self.status = statusCode.rawValue
+    status = statusCode.rawValue
     self.detail = detail
     self.instance = instance
     self.parameters = parameters
@@ -71,7 +71,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
   public convenience init(statusCode: Int) {
     self.init(type: URL(string: "about:blank")!, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
   }
-  
+
   public convenience init(statusCode: HTTP.StatusCode) {
     self.init(statusCode: statusCode.rawValue)
   }
@@ -92,53 +92,62 @@ open class Problem: Error, Codable, CustomStringConvertible {
 
   public required init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: AnyCodingKey.self)
-    
+
     var decodedType: URL?
     var decodedTitle: String?
     var decodedStatus: Int?
     var detail: String?
     var instance: URL?
     var parameters: [String: AnyValue] = [:]
-    
+
     let isCustom = Swift.type(of: self) != Problem.self
-    
+
     for key in container.allKeys {
-      switch (key) {
+      switch key {
       case CodingKeys.type:
         decodedType = try container.decode(URL.self, forKey: key)
-        
+
       case CodingKeys.title:
         decodedTitle = try container.decode(String.self, forKey: key)
-        
+
       case CodingKeys.status:
         decodedStatus = try container.decode(Int.self, forKey: key)
-        
+
       case CodingKeys.detail:
         detail = try container.decodeIfPresent(String.self, forKey: key)
-        
+
       case CodingKeys.instance:
         instance = try container.decodeIfPresent(URL.self, forKey: key)
-        
+
       default:
         if !isCustom {
           parameters[key.stringValue] = try container.decode(AnyValue.self, forKey: key)
         }
       }
     }
-    
+
     guard let type = decodedType else {
-      throw DecodingError.dataCorruptedError(forKey: CodingKeys.type, in: container,
-                                             debugDescription: "Required Value Missing")
+      throw DecodingError.dataCorruptedError(
+        forKey: CodingKeys.type,
+        in: container,
+        debugDescription: "Required Value Missing"
+      )
     }
-    
+
     guard let title = decodedTitle else {
-      throw DecodingError.dataCorruptedError(forKey: CodingKeys.title, in: container,
-                                             debugDescription: "Required Value Missing")
+      throw DecodingError.dataCorruptedError(
+        forKey: CodingKeys.title,
+        in: container,
+        debugDescription: "Required Value Missing"
+      )
     }
-    
+
     guard let status = decodedStatus else {
-      throw DecodingError.dataCorruptedError(forKey: CodingKeys.status, in: container,
-                                             debugDescription: "Required Value Missing")
+      throw DecodingError.dataCorruptedError(
+        forKey: CodingKeys.status,
+        in: container,
+        debugDescription: "Required Value Missing"
+      )
     }
 
     self.type = type
@@ -148,7 +157,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
     self.instance = instance
     self.parameters = parameters.isEmpty ? nil : parameters
   }
-  
+
   open func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: AnyCodingKey.self)
     try container.encode(type, forKey: CodingKeys.type)
@@ -168,9 +177,9 @@ open class Problem: Error, Codable, CustomStringConvertible {
   open var description: String {
     var builder =
       DescriptionBuilder(Self.self)
-      .add(type, named: "type")
-      .add(title, named: "title")
-      .add(status, named: "status")
+        .add(type, named: "type")
+        .add(title, named: "title")
+        .add(status, named: "status")
     if let detail = detail {
       builder = builder.add(detail, named: "detail")
     }
@@ -183,14 +192,14 @@ open class Problem: Error, Codable, CustomStringConvertible {
     return builder.build()
   }
 
-  private struct CodingKeys {
+  private enum CodingKeys {
     static let type = AnyCodingKey("type")
     static let title = AnyCodingKey("title")
     static let status = AnyCodingKey("status")
     static let detail = AnyCodingKey("detail")
     static let instance = AnyCodingKey("instance")
   }
-  
+
   private static let stdType = URL(string: "about:blank")!
 
 }

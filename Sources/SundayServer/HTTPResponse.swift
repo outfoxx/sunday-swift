@@ -2,7 +2,7 @@
 //  HTTPResponse.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -152,19 +152,21 @@ extension HTTPResponse {
   }
 
   func addCookie(_ value: String, forName name: String, options: HTTPCookieOption...) {
-    let options = Dictionary(uniqueKeysWithValues: options
-      .compactMap { option -> (HTTPCookiePropertyKey, Any)? in
-        switch option {
-        case .domain(let domain): return (.domain, domain)
-        case .expires(let expires): return (.expires, expires)
-        case .httpOnly: return nil
-        case .maxAge(let maxAge): return (.maximumAge, maxAge)
-        case .path(let path): return (.path, path)
-        case .sameSite: return nil
-        case .secure(let secure): return (.secure, secure)
-        case .discard(let discard): return (.discard, discard)
-        }
-    } + [(.name, name), (.value, value)])
+    let options = Dictionary(
+      uniqueKeysWithValues: options
+        .compactMap { option -> (HTTPCookiePropertyKey, Any)? in
+          switch option {
+          case .domain(let domain): return (.domain, domain)
+          case .expires(let expires): return (.expires, expires)
+          case .httpOnly: return nil
+          case .maxAge(let maxAge): return (.maximumAge, maxAge)
+          case .path(let path): return (.path, path)
+          case .sameSite: return nil
+          case .secure(let secure): return (.secure, secure)
+          case .discard(let discard): return (.discard, discard)
+          }
+        } + [(.name, name), (.value, value)]
+    )
 
     guard let cookie = HTTPCookie(properties: options) else {
       return
@@ -205,27 +207,27 @@ extension HTTPResponse {
   func send<V>(status: HTTP.Response.Status, headers: [String: [String]], value: V) where V: Encodable {
     send(status: .notAcceptable, text: "Encoding Response Failed - No Encoders")
   }
-  
+
   func send(statusCode: HTTP.StatusCode) {
     send(status: .init(code: statusCode))
   }
-  
+
   func send(statusCode: HTTP.StatusCode, body: Data) {
     send(status: .init(code: statusCode), body: body)
   }
-  
+
   func send(statusCode: HTTP.StatusCode, text: String) {
     send(status: .init(code: statusCode), text: text)
   }
-  
+
   func send(statusCode: HTTP.StatusCode, headers: [String: [String]], body: Data) {
     send(status: .init(code: statusCode), headers: headers, body: body)
   }
-  
+
   func send<V>(statusCode: HTTP.StatusCode, value: V) where V: Encodable {
     send(status: .init(code: statusCode), value: value)
   }
-  
+
   func send<V>(statusCode: HTTP.StatusCode, headers: [String: [String]], value: V) where V: Encodable {
     send(status: .init(code: statusCode), headers: headers, value: value)
   }

@@ -2,7 +2,7 @@
 //  HTTPRequest.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -40,11 +40,11 @@ public extension HTTPRequest {
   var url: URLComponents { raw.url }
 
   var headers: HTTP.Headers { raw.headers }
-  
+
   func headers(for name: String) -> [String] {
     return raw.headers.first { name.caseInsensitiveCompare($0.key) == .orderedSame }?.value ?? []
   }
-  
+
   func header(for name: String) -> String? { headers(for: name).first }
 
   var body: Data? { raw.body }

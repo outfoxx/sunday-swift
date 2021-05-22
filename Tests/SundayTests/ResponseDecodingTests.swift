@@ -2,7 +2,7 @@
 //  ResponseDecodingTests.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -63,9 +63,16 @@ class ResponseDecodingTests: ParameterizedTest {
     defer { requestFactory.close() }
 
     let requestCancel =
-      requestFactory.result(method: .post, pathTemplate: "echo",
-                            pathParameters: nil, queryParameters: nil, body: sourceObject,
-                            contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
+      requestFactory.result(
+        method: .post,
+        pathTemplate: "echo",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: sourceObject,
+        contentTypes: [contentType],
+        acceptTypes: [acceptType],
+        headers: nil
+      )
       .sink(
         receiveCompletion: { completion in
           if case .failure(let error) = completion {

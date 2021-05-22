@@ -2,14 +2,14 @@
 //  NetworkRequestFactory.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Combine
+import Foundation
 import PotentCodables
 
 
@@ -23,11 +23,14 @@ public class NetworkRequestFactory: RequestFactory {
   public let mediaTypeDecoders: MediaTypeDecoders
   private var problemTypes: [String: Problem.Type] = [:]
 
-  public init(baseURL: URI.Template,
-              session: NetworkSession,
-              adapter: NetworkRequestAdapter? = nil,
-              requestQueue: DispatchQueue = .global(qos: .utility),
-              mediaTypeEncoders: MediaTypeEncoders = .default, mediaTypeDecoders: MediaTypeDecoders = .default) {
+  public init(
+    baseURL: URI.Template,
+    session: NetworkSession,
+    adapter: NetworkRequestAdapter? = nil,
+    requestQueue: DispatchQueue = .global(qos: .utility),
+    mediaTypeEncoders: MediaTypeEncoders = .default,
+    mediaTypeDecoders: MediaTypeDecoders = .default
+  ) {
     self.baseURL = baseURL
     self.session = session
     self.adapter = adapter
@@ -35,7 +38,7 @@ public class NetworkRequestFactory: RequestFactory {
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
   }
-  
+
   public convenience init(
     baseURL: URI.Template, adapter: NetworkRequestAdapter? = nil,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
@@ -53,68 +56,72 @@ public class NetworkRequestFactory: RequestFactory {
       mediaTypeDecoders: mediaTypeDecoders
     )
   }
-  
+
   deinit {
     session.close(cancelOutstandingTasks: true)
   }
-  
+
   public func with(sessionConfiguration: URLSessionConfiguration) -> NetworkRequestFactory {
-    NetworkRequestFactory(baseURL: baseURL,
-                          adapter: adapter,
-                          serverTrustPolicyManager: session.serverTrustPolicyManager,
-                          sessionConfiguration: sessionConfiguration,
-                          requestQueue: requestQueue,
-                          mediaTypeEncoders: mediaTypeEncoders,
-                          mediaTypeDecoders: mediaTypeDecoders)
+    NetworkRequestFactory(
+      baseURL: baseURL,
+      adapter: adapter,
+      serverTrustPolicyManager: session.serverTrustPolicyManager,
+      sessionConfiguration: sessionConfiguration,
+      requestQueue: requestQueue,
+      mediaTypeEncoders: mediaTypeEncoders,
+      mediaTypeDecoders: mediaTypeDecoders
+    )
   }
-  
+
   public func with(session: NetworkSession) -> NetworkRequestFactory {
-    NetworkRequestFactory(baseURL: baseURL,
-                          session: session,
-                          adapter: adapter,
-                          requestQueue: requestQueue,
-                          mediaTypeEncoders: mediaTypeEncoders,
-                          mediaTypeDecoders: mediaTypeDecoders)
+    NetworkRequestFactory(
+      baseURL: baseURL,
+      session: session,
+      adapter: adapter,
+      requestQueue: requestQueue,
+      mediaTypeEncoders: mediaTypeEncoders,
+      mediaTypeDecoders: mediaTypeDecoders
+    )
   }
-  
+
   public func registerProblem(type: URL, problemType: Problem.Type) {
     registerProblem(type: type.absoluteString, problemType: problemType)
   }
-  
+
   public func registerProblem(type: String, problemType: Problem.Type) {
-    self.problemTypes[type] = problemType
+    problemTypes[type] = problemType
   }
 
   public func request<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestPublisher {
-    
+
     Deferred { [self] () -> AnyPublisher<URLRequest, Error> in
       do {
         var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
-        
+
         // Encode & add query parameters to url
         if let queryParameters = queryParameters, !queryParameters.isEmpty {
-          
+
           guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
             fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
           }
-          
+
           var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
           urlComponents.percentEncodedQuery = urlQueryEncoder.encodeQueryString(parameters: queryParameters)
-          
+
           guard let queryUrl = urlComponents.url else {
             throw SundayError.invalidURL(urlComponents)
           }
-          
+
           url = queryUrl
         }
-        
+
         // Build basic request
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method.rawValue
-        
+
         // Encode and add headers
         if let headers = headers {
 
@@ -123,22 +130,22 @@ public class NetworkRequestFactory: RequestFactory {
               urlRequest.addValue(entry.value, forHTTPHeaderField: entry.name)
             }
         }
-        
+
         // Determine & add accept header
         if let acceptTypes = acceptTypes {
           let supportedAcceptTypes = acceptTypes.filter { mediaTypeDecoders.supports(for: $0) }
           if supportedAcceptTypes.isEmpty {
             throw SundayError.requestEncodingFailed(reason: .noSupportedAcceptTypes(acceptTypes))
           }
-          
-          let accept = supportedAcceptTypes.map { $0.value }.joined(separator: " , ")
-          
+
+          let accept = supportedAcceptTypes.map(\.value).joined(separator: " , ")
+
           urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
         }
-        
+
         // Determine content type
         let contentType = contentTypes?.first { mediaTypeEncoders.supports(for: $0) }
-        
+
         // If matched, add content type (even if body is nil, to match any expected server requirements)
         if let contentType = contentType {
           urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
@@ -151,7 +158,7 @@ public class NetworkRequestFactory: RequestFactory {
           }
           urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
         }
-        
+
         return adapter?.adapt(requestFactory: self, urlRequest: urlRequest).eraseToAnyPublisher() ??
           Just(urlRequest).setFailureType(to: Error.self).eraseToAnyPublisher()
       }
@@ -171,15 +178,21 @@ public class NetworkRequestFactory: RequestFactory {
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestResponsePublisher {
-    
-    return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
-                   queryParameters: queryParameters,
-                   body: body,
-                   contentTypes: contentTypes, acceptTypes: acceptTypes, headers: headers)
-      .flatMap { request in
-        return self.session.dataTaskValidatedPublisher(request: request)
-      }
-      .eraseToAnyPublisher()
+
+    return request(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    )
+    .flatMap { request in
+      return self.session.dataTaskValidatedPublisher(request: request)
+    }
+    .eraseToAnyPublisher()
   }
 
   public func parse<D: Decodable>(response: HTTPURLResponse, data: Data?) throws -> D {
@@ -206,14 +219,15 @@ public class NetworkRequestFactory: RequestFactory {
     let mediaTypeDecoder = try mediaTypeDecoders.find(for: contentType)
 
     do {
-      
+
       guard let value = try mediaTypeDecoder.decode(D.self, from: validData) as D? else {
         throw SundayError.responseDecodingFailed(reason: .missingValue)
       }
-      
+
       return value
-      
-    } catch {
+
+    }
+    catch {
       throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: contentType, error: error))
     }
   }
@@ -223,7 +237,8 @@ public class NetworkRequestFactory: RequestFactory {
     // Check if this is an HTTP error response
     guard
       case SundayError.responseValidationFailed(reason: let reason) = error,
-      case ResponseValidationFailureReason.unacceptableStatusCode(response: let response, data: let possibleData) = reason
+      case ResponseValidationFailureReason
+      .unacceptableStatusCode(response: let response, data: let possibleData) = reason
     else {
       return error
     }
@@ -236,13 +251,13 @@ public class NetworkRequestFactory: RequestFactory {
     else {
       return Problem(statusCode: response.statusCode)
     }
-    
+
     // Ensure data is available
     guard let data = possibleData, !data.isEmpty else {
       // Return standard problem
       return Problem(statusCode: response.statusCode)
     }
-    
+
     // Find decoder
     let mediaTypeDecoder: MediaTypeDecoder
     do {
@@ -251,7 +266,7 @@ public class NetworkRequestFactory: RequestFactory {
     catch {
       return error
     }
-    
+
     // Parse data to dictionary
     var problemData: [String: AnyValue]
     do {
@@ -260,7 +275,7 @@ public class NetworkRequestFactory: RequestFactory {
     catch {
       return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
     }
-    
+
     // Find registered problem type
     guard
       let type = problemData.removeValue(forKey: "type")?.stringValue,
@@ -269,7 +284,7 @@ public class NetworkRequestFactory: RequestFactory {
       // Return generic problem
       return Problem(statusCode: response.statusCode, data: problemData)
     }
-    
+
     // Parse registered problem type
     do {
       return try mediaTypeDecoder.decode(problemType, from: data)
@@ -283,16 +298,20 @@ public class NetworkRequestFactory: RequestFactory {
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestResultPublisher<D> {
-    
-    return response(method: method,
-                    pathTemplate: pathTemplate, pathParameters: pathParameters,
-                    queryParameters: queryParameters,
-                    body: body,
-                    contentTypes: contentTypes, acceptTypes: acceptTypes,
-                    headers: headers)
-      .tryMap { try self.parse(response: $0.response, data: $0.data) }
-      .mapError { self.parse(error: $0) }
-      .eraseToAnyPublisher()
+
+    return response(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    )
+    .tryMap { try self.parse(response: $0.response, data: $0.data) }
+    .mapError { self.parse(error: $0) }
+    .eraseToAnyPublisher()
   }
 
   public func result<D: Decodable>(request: URLRequest) -> RequestResultPublisher<D> {
@@ -304,7 +323,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func result(request: URLRequest) -> RequestCompletePublisher {
     return response(request: request)
-      .tryMap { (response, data) in _ = try self.parse(response: response, data: data) as Empty }
+      .tryMap { response, data in _ = try self.parse(response: response, data: data) as Empty }
       .mapError { self.parse(error: $0) }
       .eraseToAnyPublisher()
   }
@@ -313,31 +332,37 @@ public class NetworkRequestFactory: RequestFactory {
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
     body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: Parameters?
   ) -> RequestCompletePublisher {
-    
-    return response(method: method,
-                    pathTemplate: pathTemplate, pathParameters: pathParameters,
-                    queryParameters: queryParameters,
-                    body: body,
-                    contentTypes: contentTypes, acceptTypes: acceptTypes,
-                    headers: headers)
-      .tryMap { (response, data) in _ = try self.parse(response: response, data: data) as Empty }
-      .mapError { self.parse(error: $0) }
-      .eraseToAnyPublisher()
+
+    return response(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    )
+    .tryMap { response, data in _ = try self.parse(response: response, data: data) as Empty }
+    .mapError { self.parse(error: $0) }
+    .eraseToAnyPublisher()
   }
 
   public func eventSource<B>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
-  ) -> EventSource where B : Encodable {
-    
-    self.eventSource(from: self.request(method: method,
-                                        pathTemplate: pathTemplate,
-                                        pathParameters: pathParameters,
-                                        queryParameters: queryParameters,
-                                        body: body,
-                                        contentTypes: contentTypes,
-                                        acceptTypes: acceptTypes,
-                                        headers: headers))
+  ) -> EventSource where B: Encodable {
+
+    eventSource(from: request(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    ))
   }
 
   public func eventSource(from request$: RequestPublisher) -> EventSource {
@@ -353,43 +378,50 @@ public class NetworkRequestFactory: RequestFactory {
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
-    eventTypes: [String : AnyTextMediaTypeDecodable]
-  ) -> RequestEventPublisher<D> where B : Encodable {
-    
-    self.eventStream(eventTypes: eventTypes,
-                     from: self.request(method: method,
-                                        pathTemplate: pathTemplate,
-                                        pathParameters: pathParameters,
-                                        queryParameters: queryParameters,
-                                        body: body,
-                                        contentTypes: contentTypes,
-                                        acceptTypes: acceptTypes,
-                                        headers: headers))
+    eventTypes: [String: AnyTextMediaTypeDecodable]
+  ) -> RequestEventPublisher<D> where B: Encodable {
+
+    eventStream(
+      eventTypes: eventTypes,
+      from: request(
+        method: method,
+        pathTemplate: pathTemplate,
+        pathParameters: pathParameters,
+        queryParameters: queryParameters,
+        body: body,
+        contentTypes: contentTypes,
+        acceptTypes: acceptTypes,
+        headers: headers
+      )
+    )
   }
 
-  public func eventStream<D>(eventTypes: [String : AnyTextMediaTypeDecodable], from request$: RequestPublisher) -> RequestEventPublisher<D> {
+  public func eventStream<D>(
+    eventTypes: [String: AnyTextMediaTypeDecodable],
+    from request$: RequestPublisher
+  ) -> RequestEventPublisher<D> {
     Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
-        
+
         guard let jsonDecoder = try mediaTypeDecoders.find(for: .json) as? TextMediaTypeDecoder else {
           fatalError("JSON media-type decoder must conform to TextMediaTypeDecoder")
         }
-        
+
         return EventPublisher<D>(eventTypes: eventTypes, decoder: jsonDecoder, queue: requestQueue) { headers in
-          
+
           request$.flatMap { request in
             self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
           }
           .eraseToAnyPublisher()
-          
+
         }
         .eraseToAnyPublisher()
-        
+
       }
       catch {
         return Fail(error: error).eraseToAnyPublisher()
       }
-      
+
     }
     .eraseToAnyPublisher()
   }
@@ -397,25 +429,49 @@ public class NetworkRequestFactory: RequestFactory {
   public func close(cancelOutstandingRequests: Bool = true) {
     session.close(cancelOutstandingTasks: cancelOutstandingRequests)
   }
-  
+
 }
 
 
 
-extension NetworkRequestFactory {
+public extension NetworkRequestFactory {
 
-  public func result<B: Encodable>(method: HTTP.Method, path: String, body: B? = nil,
-                                   contentType: MediaType? = nil,
-                                   acceptTypes: [MediaType]? = nil) -> RequestCompletePublisher {
-    return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
-                  contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
+  func result<B: Encodable>(
+    method: HTTP.Method,
+    path: String,
+    body: B? = nil,
+    contentType: MediaType? = nil,
+    acceptTypes: [MediaType]? = nil
+  ) -> RequestCompletePublisher {
+    return result(
+      method: method,
+      pathTemplate: path,
+      pathParameters: nil,
+      queryParameters: nil,
+      body: body,
+      contentTypes: contentType.flatMap { [$0] },
+      acceptTypes: acceptTypes,
+      headers: nil
+    )
   }
 
-  public func result<B: Encodable, D: Decodable>(method: HTTP.Method, path: String, body: B? = nil,
-                                                 contentType: MediaType? = nil,
-                                                 acceptTypes: [MediaType]? = nil) -> RequestResultPublisher<D> {
-    return result(method: method, pathTemplate: path, pathParameters: nil, queryParameters: nil, body: body,
-                  contentTypes: contentType.flatMap { [$0] }, acceptTypes: acceptTypes, headers: nil)
+  func result<B: Encodable, D: Decodable>(
+    method: HTTP.Method,
+    path: String,
+    body: B? = nil,
+    contentType: MediaType? = nil,
+    acceptTypes: [MediaType]? = nil
+  ) -> RequestResultPublisher<D> {
+    return result(
+      method: method,
+      pathTemplate: path,
+      pathParameters: nil,
+      queryParameters: nil,
+      body: body,
+      contentTypes: contentType.flatMap { [$0] },
+      acceptTypes: acceptTypes,
+      headers: nil
+    )
   }
 
 }

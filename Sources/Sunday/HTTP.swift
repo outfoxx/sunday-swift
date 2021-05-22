@@ -2,7 +2,7 @@
 //  HTTP.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -15,20 +15,20 @@ public struct HTTP {
 
   public enum Method: String {
     case options = "OPTIONS"
-    case get     = "GET"
-    case head    = "HEAD"
-    case post    = "POST"
-    case put     = "PUT"
-    case patch   = "PATCH"
-    case delete  = "DELETE"
-    case trace   = "TRACE"
+    case get = "GET"
+    case head = "HEAD"
+    case post = "POST"
+    case put = "PUT"
+    case patch = "PATCH"
+    case delete = "DELETE"
+    case trace = "TRACE"
     case connect = "CONNECT"
   }
 
   public enum StatusCode: Int, Codable, ExpressibleByIntegerLiteral {
     case `continue` = 100
     case switchingProtocols = 101
-    
+
     case ok = 200
     case created = 201
     case accepted = 202
@@ -36,7 +36,7 @@ public struct HTTP {
     case noContent = 204
     case resetContent = 205
     case partialContent = 206
-    
+
     case multipleChoices = 300
     case movedPermanently = 301
     case found = 302
@@ -44,7 +44,7 @@ public struct HTTP {
     case notModified = 304
     case useProxy = 305
     case temporaryRedirect = 307
-    
+
     case badRequest = 400
     case unauthenticated = 401
     case paymentRequired = 402
@@ -63,23 +63,23 @@ public struct HTTP {
     case unsupportedMediaType = 415
     case requestRangeNotSatisfiable = 416
     case expectationFailed = 417
-    
+
     case internalServerError = 500
     case notImplemented = 501
     case badGateway = 502
     case serviceUnavailable = 503
     case gatewayTimeout = 504
     case httpVersionNotSupported = 505
-    
+
     public init(integerLiteral value: IntegerLiteralType) {
       self.init(rawValue: value)!
     }
   }
-  
+
   public static let statusText: [StatusCode: String] = [
     .continue: "Continue",
     .switchingProtocols: "Switching Protocols",
-    
+
     .ok: "OK",
     .created: "Created",
     .accepted: "Accepted",
@@ -87,7 +87,7 @@ public struct HTTP {
     .noContent: "No Content",
     .resetContent: "ResetContent",
     .partialContent: "Partial Content",
-    
+
     .multipleChoices: "Multiple Choices",
     .movedPermanently: "Moved Permanently",
     .found: "Found",
@@ -95,7 +95,7 @@ public struct HTTP {
     .notModified: "Not Modified",
     .useProxy: "Use Proxy",
     .temporaryRedirect: "Temporary Redirect",
-    
+
     .badRequest: "Bad Request",
     .unauthenticated: "Unauthenticated",
     .paymentRequired: "Payment Required",
@@ -114,7 +114,7 @@ public struct HTTP {
     .unsupportedMediaType: "Unsupported Media Type",
     .requestRangeNotSatisfiable: "Request Range Not Satisfiable",
     .expectationFailed: "Expectation Failed",
-    
+
     .internalServerError: "Internal Server Error",
     .notImplemented: "Not mplemented",
     .badGateway: "Bad Gateway",
@@ -123,7 +123,7 @@ public struct HTTP {
     .httpVersionNotSupported: "Http Version Not Supported",
   ]
 
-  public struct Header : Equatable {
+  public struct Header: Equatable {
     var name: String
     var value: String
   }
@@ -133,7 +133,7 @@ public struct HTTP {
   public typealias RawHeaders = [(name: String, value: Data)]
   public typealias Version = (major: Int, minor: Int)
 
-  public struct StdHeaders {
+  public enum StdHeaders {
 
     public static let accept = "accept"
     public static let authorization = "authorization"
@@ -156,9 +156,9 @@ public struct HTTP {
 public typealias Parameters = [String: Any?]
 
 
-extension URL {
+public extension URL {
 
-  public enum Scheme: String {
+  enum Scheme: String {
     case http
     case https
   }

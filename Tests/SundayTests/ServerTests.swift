@@ -2,7 +2,7 @@
 //  ServerTests.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -23,12 +23,12 @@ struct Item: Codable, Equatable {
 class HTTPServerTests: XCTestCase {
 
   static func buildAndStartServer() -> (URL, RoutingHTTPServer) {
-    
+
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
         GET { _, res in
           res.start(status: .ok, headers: [
-            HTTP.StdHeaders.transferEncoding: ["chunked"]
+            HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
           res.send(chunk: "12345".data(using: .utf8)!)
           res.send(chunk: "67890".data(using: .utf8)!)
@@ -47,11 +47,11 @@ class HTTPServerTests: XCTestCase {
           POST(.path("type"), .body(Item.self)) { _, res, _, body in
             res.send(status: .created, value: body)
           }
-          
-          PUT(.path("type"), .body(Item.self)) { req, res, _, body in
+
+          PUT(.path("type"), .body(Item.self)) { _, res, _, body in
             res.send(status: .created, value: body)
           }
-          
+
           Path("/{id}") {
 
             GET(.path("id", Int.self)) { _, res, _ in
@@ -66,17 +66,17 @@ class HTTPServerTests: XCTestCase {
         }
       }
     }
-    
+
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
       fatalError()
     }
-    
+
     return (serverURL, server)
   }
 
   func testPOST() throws {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
@@ -101,12 +101,12 @@ class HTTPServerTests: XCTestCase {
       .sink(
         receiveCompletion: { completion in
           defer { postCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { postDataX.fulfill() }
 
           guard let data = data else {
@@ -119,7 +119,7 @@ class HTTPServerTests: XCTestCase {
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           do {
             let item = try JSONDecoder.default.decode(Item.self, from: data)
             XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
@@ -127,7 +127,7 @@ class HTTPServerTests: XCTestCase {
           catch {
             XCTFail("Decode/Compare failed: \(error)")
           }
-          
+
         }
       )
 
@@ -137,10 +137,10 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testGETList() {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
-    
+
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
@@ -155,25 +155,25 @@ class HTTPServerTests: XCTestCase {
       .sink(
         receiveCompletion: { completion in
           defer { listCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { listDataX.fulfill() }
 
           guard let data = data else {
             XCTFail("No response data")
             return
           }
-          
+
           guard response.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8)!
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           do {
             let items = try JSONDecoder.default.decode([Item].self, from: data)
             XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
@@ -182,7 +182,7 @@ class HTTPServerTests: XCTestCase {
           catch {
             XCTFail("Decode/Compare failed: \(error)")
           }
-          
+
         }
       )
 
@@ -192,10 +192,10 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testGETItem() {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
-    
+
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
@@ -210,25 +210,25 @@ class HTTPServerTests: XCTestCase {
       .sink(
         receiveCompletion: { completion in
           defer { itemCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { itemDataX.fulfill() }
-          
+
           guard let data = data else {
             XCTFail("No response data")
             return
           }
-          
+
           guard response.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8)!
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           do {
             let item = try JSONDecoder.default.decode(Item.self, from: data)
             XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
@@ -246,10 +246,10 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testDELETE() {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
-    
+
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
@@ -264,25 +264,25 @@ class HTTPServerTests: XCTestCase {
       .sink(
         receiveCompletion: { completion in
           defer { deleteCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { deleteDataX.fulfill() }
 
           guard let data = data else {
             XCTFail("No response data")
             return
           }
-          
+
           guard response.statusCode == 204 else {
             let message = String(data: data, encoding: .utf8)!
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           XCTAssertEqual(data.count, 0)
 
         }
@@ -294,10 +294,10 @@ class HTTPServerTests: XCTestCase {
   }
 
   func testPUTExpect() throws {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
-    
+
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
@@ -308,37 +308,37 @@ class HTTPServerTests: XCTestCase {
       let name: String
       let cost: Double
     }
-    
+
     var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
     urlRequest.httpMethod = "PUT"
     urlRequest.addValue("100-continue", forHTTPHeaderField: "expect")
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "content-type")
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     urlRequest.httpBody = try JSONEncoder.default.encode(Params(name: "ghi", cost: 19.20))
-    
+
     let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
       .sink(
         receiveCompletion: { completion in
           defer { putCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { putDataX.fulfill() }
 
           guard let data = data else {
             XCTFail("No response data")
             return
           }
-          
+
           guard response.statusCode == 201 else {
             let message = String(data: data, encoding: .utf8)!
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           do {
             let item = try JSONDecoder.default.decode(Item.self, from: data)
             XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
@@ -349,28 +349,28 @@ class HTTPServerTests: XCTestCase {
 
         }
       )
-    
+
     waitForExpectations(timeout: 2) { _ in
       requestCancel.cancel()
     }
   }
 
   func testChunked() {
-    
+
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
-    
+
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let getChunkedCompleteX = expectation(description: "GET (chunked) - complete")
     let getChunkedDataX = expectation(description: "GET (chunked) - data")
-    
+
     struct Params: Codable {
       let name: String
       let cost: Double
     }
-    
+
     var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
@@ -378,29 +378,29 @@ class HTTPServerTests: XCTestCase {
       .sink(
         receiveCompletion: { completion in
           defer { getChunkedCompleteX.fulfill() }
-          
+
           if case .failure(let error) = completion {
             XCTFail("Request failed: \(error)")
           }
         },
-        receiveValue: { (response, data) in
+        receiveValue: { response, data in
           defer { getChunkedDataX.fulfill() }
-          
+
           guard let data = data else {
             XCTFail("No response data")
             return
           }
-          
+
           guard response.statusCode == 200 else {
             let message = String(data: data, encoding: .utf8)!
             XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
             return
           }
-          
+
           XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
         }
       )
-    
+
     waitForExpectations(timeout: 2) { _ in
       requestCancel.cancel()
     }

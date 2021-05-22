@@ -2,7 +2,7 @@
 //  Routable.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -36,7 +36,7 @@ public protocol Routable {
 
 
 @_functionBuilder
-public struct RoutableBuilder {
+public enum RoutableBuilder {
 
   public static func buildBlock(_ routables: Routable...) -> Routable {
     return Routables(routables)

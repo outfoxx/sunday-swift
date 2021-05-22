@@ -2,15 +2,15 @@
 //  HeaderParametersTests.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import XCTest
 @testable import Sunday
+import XCTest
 
 
 class HeaderParametersTests: XCTestCase {
@@ -20,12 +20,15 @@ class HeaderParametersTests: XCTestCase {
     let values = [MediaType.json, MediaType.cbor]
 
     let headers = try HeaderParameters.encode(headers: [
-      "test": values
+      "test": values,
     ])
 
-    XCTAssertEqual(headers, [
-                    HTTP.Header(name: "test", value: MediaType.json.value),
-                    HTTP.Header(name: "test", value: MediaType.cbor.value)]
+    XCTAssertEqual(
+      headers,
+      [
+        HTTP.Header(name: "test", value: MediaType.json.value),
+        HTTP.Header(name: "test", value: MediaType.cbor.value),
+      ]
     )
   }
 
@@ -59,7 +62,7 @@ class HeaderParametersTests: XCTestCase {
 
   func testCustomHeaderConvertibleValues() throws {
 
-    struct Tester : CustomHeaderConvertible {
+    struct Tester: CustomHeaderConvertible {
       var headerDescription: String { "abcd3f" }
     }
 
@@ -70,7 +73,7 @@ class HeaderParametersTests: XCTestCase {
 
   func testLosslessStringConvertibleValues() throws {
 
-    struct SpecialParam : LosslessStringConvertible {
+    struct SpecialParam: LosslessStringConvertible {
 
       let value: String
 

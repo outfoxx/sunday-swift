@@ -2,7 +2,7 @@
 //  HTTPExchange.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -23,9 +23,14 @@ public extension HTTP {
     public let rawHeaders: HTTP.RawHeaders
     public let body: Data?
 
-    public init(method: HTTP.Method, url: URL, version: HTTP.Version,
-                headers: HTTP.Headers, rawHeaders: HTTP.RawHeaders,
-                body: Data?) {
+    public init(
+      method: HTTP.Method,
+      url: URL,
+      version: HTTP.Version,
+      headers: HTTP.Headers,
+      rawHeaders: HTTP.RawHeaders,
+      body: Data?
+    ) {
       self.method = method
       self.url = URLComponents(url: url, resolvingAgainstBaseURL: true)!
       self.version = version
@@ -46,11 +51,11 @@ public extension HTTP {
         self.code = code
         self.info = info
       }
-      
+
       public init(code: StatusCode) {
         self.init(code: code.rawValue, info: HTTP.statusText[code]!.uppercased())
       }
-      
+
       public var description: String {
         return "\(code) \(info)"
       }
@@ -123,10 +128,13 @@ extension HTTP.Request: CustomStringConvertible {
 
   public var description: String {
     var lines: [String] = []
-    lines.append("\(method.rawValue.uppercased()) \(url.url?.absoluteString ?? "/") HTTP/\(version.major).\(version.minor)")
+    lines
+      .append(
+        "\(method.rawValue.uppercased()) \(url.url?.absoluteString ?? "/") HTTP/\(version.major).\(version.minor)"
+      )
     for (header, values) in headers {
       for value in values {
-        lines.append("\(header.lowercased().split(separator: "-").map { $0.capitalized }.joined(separator: "-")): \(value)")
+        lines.append("\(header.lowercased().split(separator: "-").map(\.capitalized).joined(separator: "-")): \(value)")
       }
     }
     return lines.joined(separator: "\n")

@@ -2,7 +2,7 @@
 //  HTTPHeaderParser.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -12,15 +12,15 @@ import Foundation
 import Sunday
 
 
-extension HTTP {
+public extension HTTP {
 
-  public struct RequestLine {
+  struct RequestLine {
     let method: HTTP.Method
     let uri: URL
     let version: HTTP.Version
   }
 
-  public enum TransferEncoding: String {
+  enum TransferEncoding: String {
     case identity
     case chunked
   }
@@ -138,9 +138,16 @@ public struct HTTPRequestParser {
           guard let headers = headers, let body = detectRequestBodyType(headers: headers) else {
             return try finish()
           }
-          
-          if headers.contains(where: { $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)! }) {
-            connection.send(data: "HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".data(using: .utf8)!, context: "Sending continuation for expectation")
+
+          if headers
+            .contains(where: {
+              $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)!
+            })
+          {
+            connection.send(
+              data: "HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".data(using: .utf8)!,
+              context: "Sending continuation for expectation"
+            )
           }
 
           // switch to body parsing mode
@@ -187,7 +194,9 @@ public struct HTTPRequestParser {
             return nil
           }
 
-          guard let lengthStr = String(data: lengthLineBytes, encoding: .ascii), let length = Int(lengthStr, radix: 16) else {
+          guard let lengthStr = String(data: lengthLineBytes, encoding: .ascii),
+                let length = Int(lengthStr, radix: 16)
+          else {
             throw Error.invalidChunkFormat
           }
 

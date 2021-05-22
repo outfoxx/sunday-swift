@@ -2,7 +2,7 @@
 //  RoutableRequestDecoding.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -45,7 +45,11 @@ public struct RequestDecoding: Routable {
   public let decoders: MediaTypeDecoders
   public let routable: Routable
 
-  public init(scheme: Scheme = .negotiated(default: nil), decoders: MediaTypeDecoders = .default, @RoutableBuilder buildRoutable: () -> Routable) {
+  public init(
+    scheme: Scheme = .negotiated(default: nil),
+    decoders: MediaTypeDecoders = .default,
+    @RoutableBuilder buildRoutable: () -> Routable
+  ) {
     self.scheme = scheme
     self.decoders = decoders
     routable = buildRoutable()
@@ -69,7 +73,9 @@ public struct RequestDecoding: Routable {
 
           // Find content-type header
 
-          if let foundContentTypeHeaders = request.headers[HTTP.StdHeaders.contentType], let foundContentTypeHeader = foundContentTypeHeaders.first {
+          if let foundContentTypeHeaders = request.headers[HTTP.StdHeaders.contentType],
+             let foundContentTypeHeader = foundContentTypeHeaders.first
+          {
 
             // Parse content-type header
 

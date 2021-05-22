@@ -2,7 +2,7 @@
 //  WWWFormURLEncoder.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -90,8 +90,12 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
   private let boolEncoding: BoolEncoding
   private let dateEncoding: DateEncoding
 
-  public init(arrayEncoding: ArrayEncoding = .bracketed, boolEncoding: BoolEncoding = .numeric,
-              dateEncoding: DateEncoding = .iso8601, encoder: AnyValueEncoder = .default) {
+  public init(
+    arrayEncoding: ArrayEncoding = .bracketed,
+    boolEncoding: BoolEncoding = .numeric,
+    dateEncoding: DateEncoding = .iso8601,
+    encoder: AnyValueEncoder = .default
+  ) {
     self.encoder = encoder
     self.arrayEncoding = arrayEncoding
     self.boolEncoding = boolEncoding
@@ -114,7 +118,7 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
   public func encodeQueryString(parameters: Parameters) -> String {
     var components: [String] = []
 
-    for (key, value) in parameters.sorted(by: { (left, right) in left.key < right.key }) {
+    for (key, value) in parameters.sorted(by: { left, right in left.key < right.key }) {
       components += encodeQueryComponent(fromKey: key, value: value)
     }
     return components.joined(separator: "&")
@@ -139,7 +143,11 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
     }
     else if let value = value as? NSNumber {
       if CFGetTypeID(value) == CFBooleanGetTypeID() {
-        components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent(boolEncoding.encode(value: value.boolValue)))
+        components
+          .append(
+            Self.encodeURIComponent(key) + "=" + Self
+              .encodeURIComponent(boolEncoding.encode(value: value.boolValue))
+          )
       }
       else {
         components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
@@ -150,7 +158,8 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
     }
     else if let value = value {
       components.append(Self.encodeURIComponent(key) + "=" + Self.encodeURIComponent("\(value)"))
-    } else {
+    }
+    else {
       components.append(Self.encodeURIComponent(key))
     }
 

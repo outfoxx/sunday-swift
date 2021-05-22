@@ -2,7 +2,7 @@
 //  RoutablePath.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -36,10 +36,14 @@ public struct Path: Routable {
       paraeters[name] = value!
     }
 
-    return try routable.route(Route(matched: matched,
-                                    unmatched: unmatched,
-                                    parameters: paraeters),
-                              request: request)
+    return try routable.route(
+      Route(
+        matched: matched,
+        unmatched: unmatched,
+        parameters: paraeters
+      ),
+      request: request
+    )
   }
 
   private static let variableMatcher = Regex(#"\{([_a-zA-Z][_a-zA-Z0-9]*)\}?"#)

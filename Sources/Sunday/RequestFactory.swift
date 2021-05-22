@@ -2,30 +2,30 @@
 //  RequestFactory.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Combine
+import Foundation
 
 
 public protocol RequestFactory {
 
   var baseURL: URI.Template { get }
-  
+
   func registerProblem(type: URL, problemType: Problem.Type)
   func registerProblem(type: String, problemType: Problem.Type)
-  
+
   func request<B: Encodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?
   ) -> RequestPublisher
-  
+
   func response<B: Encodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,

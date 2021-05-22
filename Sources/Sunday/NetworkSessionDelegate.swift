@@ -2,7 +2,7 @@
 //  NetworkSessionDelegate.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -23,7 +23,7 @@ internal class NetworkSessionDelegate: NSObject {
   internal func delegate<D: URLSessionDelegate>(for task: URLSessionTask, as: D.Type) -> D? {
     return (owner?.taskDelegates[task] as? D) ?? (delegate as? D)
   }
-  
+
 }
 
 extension NetworkSessionDelegate: URLSessionDelegate {
@@ -33,9 +33,11 @@ extension NetworkSessionDelegate: URLSessionDelegate {
     owner?.taskDelegates.values.forEach { delegate in delegate.urlSession?(session, didBecomeInvalidWithError: error) }
   }
 
-  public func urlSession(_ session: URLSession,
-                         didReceive challenge: URLAuthenticationChallenge,
-                         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
     guard
       challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
       let serverTrustPolicyManager = owner?.serverTrustPolicyManager,
@@ -58,18 +60,18 @@ extension NetworkSessionDelegate: URLSessionDelegate {
       disposition = .cancelAuthenticationChallenge
       credential = nil
     }
-    
+
     completionHandler(disposition, credential)
   }
 
   #if !os(macOS)
 
-  public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-    delegate?.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
-    owner?.taskDelegates.values.forEach { delegate in
-      delegate.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
+    public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+      delegate?.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
+      owner?.taskDelegates.values.forEach { delegate in
+        delegate.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
+      }
     }
-  }
 
   #endif
 
@@ -77,9 +79,12 @@ extension NetworkSessionDelegate: URLSessionDelegate {
 
 extension NetworkSessionDelegate: URLSessionTaskDelegate {
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         willBeginDelayedRequest request: URLRequest,
-                         completionHandler: @escaping (URLSession.DelayedRequestDisposition, URLRequest?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    willBeginDelayedRequest request: URLRequest,
+    completionHandler: @escaping (URLSession.DelayedRequestDisposition, URLRequest?) -> Void
+  ) {
     guard
       let delegate = delegate(for: task, as: URLSessionTaskDelegate.self),
       let delegateMethod = delegate.urlSession(_:task:willBeginDelayedRequest:completionHandler:)
@@ -94,9 +99,13 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
       .urlSession?(session, taskIsWaitingForConnectivity: task)
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         willPerformHTTPRedirection response: HTTPURLResponse,
-                         newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+    newRequest request: URLRequest,
+    completionHandler: @escaping (URLRequest?) -> Void
+  ) {
     guard
       let delegate = delegate(for: task, as: URLSessionTaskDelegate.self),
       let delegateMethod = delegate.urlSession(_:task:willPerformHTTPRedirection:newRequest:completionHandler:)
@@ -106,9 +115,12 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
     return delegateMethod(session, task, response, request, completionHandler)
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         didReceive challenge: URLAuthenticationChallenge,
-                         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
     guard
       let delegate = delegate(for: task, as: URLSessionTaskDelegate.self),
       let delegateMethod = delegate.urlSession(_:task:didReceive:completionHandler:)
@@ -118,8 +130,11 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
     return delegateMethod(session, task, challenge, completionHandler)
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         needNewBodyStream completionHandler: @escaping (InputStream?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    needNewBodyStream completionHandler: @escaping (InputStream?) -> Void
+  ) {
     guard
       let delegate = delegate(for: task, as: URLSessionTaskDelegate.self),
       let delegateMethod = delegate.urlSession(_:task:needNewBodyStream:)
@@ -129,25 +144,37 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
     return delegateMethod(session, task, completionHandler)
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         didSendBodyData bytesSent: Int64,
-                         totalBytesSent: Int64,
-                         totalBytesExpectedToSend: Int64) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didSendBodyData bytesSent: Int64,
+    totalBytesSent: Int64,
+    totalBytesExpectedToSend: Int64
+  ) {
     delegate(for: task, as: URLSessionTaskDelegate.self)?
-      .urlSession?(session, task: task,
-                   didSendBodyData: bytesSent,
-                   totalBytesSent: totalBytesSent,
-                   totalBytesExpectedToSend: totalBytesExpectedToSend)
+      .urlSession?(
+        session,
+        task: task,
+        didSendBodyData: bytesSent,
+        totalBytesSent: totalBytesSent,
+        totalBytesExpectedToSend: totalBytesExpectedToSend
+      )
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         didFinishCollecting metrics: URLSessionTaskMetrics) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didFinishCollecting metrics: URLSessionTaskMetrics
+  ) {
     delegate(for: task, as: URLSessionTaskDelegate.self)?
       .urlSession?(session, task: task, didFinishCollecting: metrics)
   }
 
-  public func urlSession(_ session: URLSession, task: URLSessionTask,
-                         didCompleteWithError error: Error?) {
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    didCompleteWithError error: Error?
+  ) {
     delegate(for: task, as: URLSessionTaskDelegate.self)?
       .urlSession?(session, task: task, didCompleteWithError: error)
     owner?.taskDelegates.removeValue(forKey: task)
@@ -157,9 +184,12 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
 
 extension NetworkSessionDelegate: URLSessionDataDelegate {
 
-  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                         didReceive response: URLResponse,
-                         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
     guard
       let delegate = delegate(for: dataTask, as: URLSessionDataDelegate.self),
       let delegateMethod = delegate.urlSession(_:dataTask:didReceive:completionHandler:)
@@ -169,33 +199,45 @@ extension NetworkSessionDelegate: URLSessionDataDelegate {
     return delegateMethod(session, dataTask, response, completionHandler)
   }
 
-  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                         didBecome downloadTask: URLSessionDownloadTask) {
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didBecome downloadTask: URLSessionDownloadTask
+  ) {
     guard let delegate = delegate(for: dataTask, as: URLSessionDataDelegate.self) else {
       return
     }
     delegate.urlSession?(session, dataTask: dataTask, didBecome: downloadTask)
   }
 
-  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                         didBecome streamTask: URLSessionStreamTask) {
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didBecome streamTask: URLSessionStreamTask
+  ) {
     guard let delegate = delegate(for: dataTask, as: URLSessionDataDelegate.self) else {
       return
     }
     delegate.urlSession?(session, dataTask: dataTask, didBecome: streamTask)
   }
 
-  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                         didReceive data: Data) {
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive data: Data
+  ) {
     guard let delegate = delegate(for: dataTask, as: URLSessionDataDelegate.self) else {
       return
     }
     delegate.urlSession?(session, dataTask: dataTask, didReceive: data)
   }
 
-  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask,
-                         willCacheResponse proposedResponse: CachedURLResponse,
-                         completionHandler: @escaping (CachedURLResponse?) -> Void) {
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    willCacheResponse proposedResponse: CachedURLResponse,
+    completionHandler: @escaping (CachedURLResponse?) -> Void
+  ) {
     guard
       let delegate = delegate(for: dataTask, as: URLSessionDataDelegate.self),
       let delegateMethod = delegate.urlSession(_:dataTask:willCacheResponse:completionHandler:)
@@ -210,36 +252,51 @@ extension NetworkSessionDelegate: URLSessionDataDelegate {
 extension NetworkSessionDelegate: URLSessionDownloadDelegate {
 
 
-  public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                         didFinishDownloadingTo location: URL) {
+  public func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didFinishDownloadingTo location: URL
+  ) {
     guard let delegate = delegate(for: downloadTask, as: URLSessionDownloadDelegate.self) else {
       return
     }
     delegate.urlSession(session, downloadTask: downloadTask, didFinishDownloadingTo: location)
   }
 
-  public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                         didWriteData bytesWritten: Int64,
-                         totalBytesWritten: Int64,
-                         totalBytesExpectedToWrite: Int64) {
+  public func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didWriteData bytesWritten: Int64,
+    totalBytesWritten: Int64,
+    totalBytesExpectedToWrite: Int64
+  ) {
     guard let delegate = delegate(for: downloadTask, as: URLSessionDownloadDelegate.self) else {
       return
     }
-    delegate.urlSession?(session, downloadTask: downloadTask,
-                         didWriteData: bytesWritten,
-                         totalBytesWritten: totalBytesWritten,
-                         totalBytesExpectedToWrite: totalBytesExpectedToWrite)
+    delegate.urlSession?(
+      session,
+      downloadTask: downloadTask,
+      didWriteData: bytesWritten,
+      totalBytesWritten: totalBytesWritten,
+      totalBytesExpectedToWrite: totalBytesExpectedToWrite
+    )
   }
 
-  public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                         didResumeAtOffset fileOffset: Int64,
-                         expectedTotalBytes: Int64) {
+  public func urlSession(
+    _ session: URLSession,
+    downloadTask: URLSessionDownloadTask,
+    didResumeAtOffset fileOffset: Int64,
+    expectedTotalBytes: Int64
+  ) {
     guard let delegate = delegate(for: downloadTask, as: URLSessionDownloadDelegate.self) else {
       return
     }
-    delegate.urlSession?(session, downloadTask: downloadTask,
-                         didResumeAtOffset: fileOffset,
-                         expectedTotalBytes: expectedTotalBytes)
+    delegate.urlSession?(
+      session,
+      downloadTask: downloadTask,
+      didResumeAtOffset: fileOffset,
+      expectedTotalBytes: expectedTotalBytes
+    )
   }
 
 }
@@ -267,8 +324,12 @@ extension NetworkSessionDelegate: URLSessionStreamDelegate {
     delegate.urlSession?(session, betterRouteDiscoveredFor: streamTask)
   }
 
-  public func urlSession(_ session: URLSession, streamTask: URLSessionStreamTask,
-                         didBecome inputStream: InputStream, outputStream: OutputStream) {
+  public func urlSession(
+    _ session: URLSession,
+    streamTask: URLSessionStreamTask,
+    didBecome inputStream: InputStream,
+    outputStream: OutputStream
+  ) {
     guard let delegate = delegate(for: streamTask, as: URLSessionStreamDelegate.self) else {
       return
     }
@@ -279,8 +340,11 @@ extension NetworkSessionDelegate: URLSessionStreamDelegate {
 
 extension NetworkSessionDelegate: URLSessionWebSocketDelegate {
 
-  public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
-                         didOpenWithProtocol protocol: String?) {
+  public func urlSession(
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
+    didOpenWithProtocol protocol: String?
+  ) {
     guard let delegate = delegate(for: webSocketTask, as: URLSessionWebSocketDelegate.self) else {
       return
     }
@@ -288,9 +352,12 @@ extension NetworkSessionDelegate: URLSessionWebSocketDelegate {
   }
 
 
-  public func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask,
-                         didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
-                         reason: Data?) {
+  public func urlSession(
+    _ session: URLSession,
+    webSocketTask: URLSessionWebSocketTask,
+    didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+    reason: Data?
+  ) {
     guard let delegate = delegate(for: webSocketTask, as: URLSessionWebSocketDelegate.self) else {
       return
     }

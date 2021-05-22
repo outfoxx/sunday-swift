@@ -2,7 +2,7 @@
 //  ServiceLocator.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -14,11 +14,15 @@ import Foundation
 
 public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
 
-  public static func locate(instance: String?, type: String, domain: String = "",
-                            timeout: TimeInterval = 20.0) -> Service? {
+  public static func locate(
+    instance: String?,
+    type: String,
+    domain: String = "",
+    timeout: TimeInterval = 20.0
+  ) -> Service? {
     let sema = DispatchSemaphore(value: 0)
     let locator = ServiceLocator(instance: instance, type: type, domain: domain) { sema.signal() }
-    guard sema.wait(timeout: .now() + .milliseconds(Int(timeout * 1_000))) == .success else {
+    guard sema.wait(timeout: .now() + .milliseconds(Int(timeout * 1000))) == .success else {
       return nil
     }
     return locator.located.first!
@@ -44,12 +48,12 @@ public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDele
     self.instance = instance
     self.signal = signal
 
-    self.browser = NetServiceBrowser()
+    browser = NetServiceBrowser()
 
     super.init()
 
-    self.browser.delegate = self
-    self.browser.searchForServices(ofType: type, inDomain: domain)
+    browser.delegate = self
+    browser.searchForServices(ofType: type, inDomain: domain)
 
     Thread.detachNewThread {
       self.browser.schedule(in: RunLoop.current, forMode: .default)

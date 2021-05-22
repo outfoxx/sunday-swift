@@ -2,7 +2,7 @@
 //  MediaType.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -67,19 +67,31 @@ public struct MediaType {
   public let suffix: Suffix?
   public let parameters: [String: String]
 
-  public init(type: Type, tree: Tree = .standard, subtype: String = "*", suffix: Suffix? = nil, parameters: [String: String] = [:]) {
+  public init(
+    type: Type,
+    tree: Tree = .standard,
+    subtype: String = "*",
+    suffix: Suffix? = nil,
+    parameters: [String: String] = [:]
+  ) {
     self.type = type
     self.tree = tree
     self.subtype = subtype.lowercased()
     self.suffix = suffix
-    self.parameters = Dictionary(uniqueKeysWithValues: parameters.map { key, value in (key.lowercased(), value.lowercased()) })
+    self
+      .parameters = Dictionary(uniqueKeysWithValues: parameters.map { key, value in
+        (key.lowercased(), value.lowercased())
+      })
   }
 
   public static func from(accept headers: [String]) -> [MediaType] {
     return headers.flatMap { header in header.components(separatedBy: ",") }.compactMap { MediaType($0) }
   }
 
-  private static let fullRegex = Regex(##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs|x)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##, options: [.ignoreCase])
+  private static let fullRegex = Regex(
+    ##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs|x)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##,
+    options: [.ignoreCase]
+  )
   private static let paramRegex = Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
 
   public init?(_ string: String) {
@@ -110,12 +122,14 @@ public struct MediaType {
     }
 
     if let encodedParameters = match.captures[4] {
-      parameters = Dictionary(uniqueKeysWithValues:
+      parameters = Dictionary(
+        uniqueKeysWithValues:
         Self.paramRegex.allMatches(in: encodedParameters)
           .compactMap { parameterMatch -> (String, String)? in
             guard let key = parameterMatch.captures[0], let value = parameterMatch.captures[1] else { return nil }
             return (key.lowercased(), value.lowercased())
-      })
+          }
+      )
     }
     else {
       parameters = [:]
@@ -125,12 +139,17 @@ public struct MediaType {
   public func parameter(_ name: StandardParameterName) -> String? {
     return parameters[name.rawValue]
   }
-  
+
   public func parameter(_ name: String) -> String? {
     return parameters[name]
   }
-  
-  public func with(type: Type? = nil, tree: Tree? = nil, subtype: String? = nil, parameters: [String: String]? = nil) -> MediaType {
+
+  public func with(
+    type: Type? = nil,
+    tree: Tree? = nil,
+    subtype: String? = nil,
+    parameters: [String: String]? = nil
+  ) -> MediaType {
     let type = type ?? self.type
     let tree = tree ?? self.tree
     let subtype = subtype?.lowercased() ?? self.subtype
@@ -195,14 +214,15 @@ extension MediaType: Codable {
 }
 
 
-extension MediaType {
+public extension MediaType {
 
-  public static func compatible(lhs: MediaType, rhs: MediaType) -> Bool {
+  static func compatible(lhs: MediaType, rhs: MediaType) -> Bool {
     if lhs.type != .any, rhs.type != .any, lhs.type != rhs.type { return false }
     if lhs.tree != .any, rhs.tree != .any, lhs.tree != rhs.tree { return false }
     if lhs.subtype != "*", rhs.subtype != "*", lhs.subtype != rhs.subtype { return false }
     if lhs.suffix != rhs.suffix { return false }
-    return Set(lhs.parameters.keys).intersection(rhs.parameters.keys).allSatisfy { lhs.parameters[$0] == rhs.parameters[$0] }
+    return Set(lhs.parameters.keys).intersection(rhs.parameters.keys)
+      .allSatisfy { lhs.parameters[$0] == rhs.parameters[$0] }
   }
 
 }

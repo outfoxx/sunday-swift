@@ -2,94 +2,94 @@
 //  EventParserTests.swift
 //  Sunday
 //
-//  Copyright © 2020 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
 import Foundation
-import XCTest
 @testable import Sunday
+import XCTest
 
 class EventParserTests: XCTestCase {
-  
+
   func testDispatchOfEventsWithLineFeeds() {
     let eventBuffer = "event: hello\nid: 12345\ndata: Hello World!\n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, "12345")
     XCTAssertEqual(event.event, "hello")
     XCTAssertEqual(event.data, "Hello World!")
   }
-  
+
   func testDispatchOfEventsWithCarriageReturns() {
     let eventBuffer = "event: hello\rid: 12345\rdata: Hello World!\r\r".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, "12345")
     XCTAssertEqual(event.event, "hello")
     XCTAssertEqual(event.data, "Hello World!")
   }
-  
+
   func testDispatchOfEventsWithCarriageReturnLineFeeds() {
     let eventBuffer = "event: hello\r\nid: 12345\r\ndata: Hello World!\r\n\r\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, "12345")
     XCTAssertEqual(event.event, "hello")
     XCTAssertEqual(event.data, "Hello World!")
   }
-  
+
   func testDispatchOfEventsWithMixedCarriageReturnLineFeeds() {
     let eventBuffer = "event: hello\nid: 12345\rdata: Hello World!\r\n\r\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, "12345")
     XCTAssertEqual(event.event, "hello")
     XCTAssertEqual(event.data, "Hello World!")
   }
-  
+
   func testDispatchesChunkedEvents() {
     let eventBuffers = [
       "eve".data(using: .utf8)!,
@@ -103,16 +103,16 @@ class EventParserTests: XCTestCase {
       "event: hello\nid: 123".data(using: .utf8)!,
       "45\rdata: Hello World!\r\n\r\n".data(using: .utf8)!,
       "45\rdata: Hello World!\r\n\r\n".data(using: .utf8)!,
-      "\r\n\r\n\r\n\r\n".data(using: .utf8)!
+      "\r\n\r\n\r\n\r\n".data(using: .utf8)!,
     ]
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     eventBuffers.forEach { eventBuffer in
       parser.process(data: eventBuffer) { events.append($0) }
     }
-    
+
     XCTAssertEqual(events.count, 4)
 
     let event1 = events.removeFirst()
@@ -139,96 +139,96 @@ class EventParserTests: XCTestCase {
     XCTAssertEqual(event4.event, nil)
     XCTAssertEqual(event4.data, "Hello World!")
   }
-  
+
   func testConcatenatesDataFields() {
     let eventBuffer = "event: hello\ndata: Hello \ndata: World!\n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, nil)
     XCTAssertEqual(event.event, "hello")
     XCTAssertEqual(event.data, "Hello \nWorld!")
   }
-  
+
   func testAllowsEmptyValuesForFields() {
     let eventBuffer = "retry: \nevent: \nid: \ndata: \n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, "")
     XCTAssertEqual(event.id, "")
     XCTAssertEqual(event.event, "")
     XCTAssertEqual(event.data, "")
   }
-  
+
   func testAllowsEmptyValuesForFieldsWithoutSpaces() {
     let eventBuffer = "retry:\nevent:\nid:\ndata:\n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, "")
     XCTAssertEqual(event.id, "")
     XCTAssertEqual(event.event, "")
     XCTAssertEqual(event.data, "")
   }
-  
+
   func testAllowsEmptyValuesForFieldsWithoutColons() {
     let eventBuffer = "retry\nevent\nid\ndata\n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, "")
     XCTAssertEqual(event.id, "")
     XCTAssertEqual(event.event, "")
     XCTAssertEqual(event.data, "")
   }
-  
+
   func testIgnoresCommentLines() {
     let eventBuffer = ": this is a common\nevent\nid\ndata\n\n".data(using: .utf8)!
-    
+
     let parser = EventParser()
-    
+
     var events: [EventInfo] = []
     parser.process(data: eventBuffer) { events.append($0) }
-    
+
     XCTAssertEqual(events.count, 1)
     guard let event = events.first else {
       return
     }
-    
+
     XCTAssertEqual(event.retry, nil)
     XCTAssertEqual(event.id, "")
     XCTAssertEqual(event.event, "")

@@ -2,14 +2,14 @@
 //  NetworkRequestAdapters.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
 
-import Foundation
 import Combine
+import Foundation
 
 
 /// Composing request adapter that applies another request adapter
@@ -52,6 +52,7 @@ open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
     self.token = token
   }
 
+
   // MARK: NetworkRequestAdapter
 
   public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
@@ -77,7 +78,7 @@ public struct TokenAuthorization {
 }
 
 open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
-  
+
   public typealias RefreshResult = AnyPublisher<TokenAuthorization, Error>
 
   private let header: String
@@ -98,6 +99,7 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   func update(urlRequest: URLRequest, accessToken: String) -> URLRequest {
     urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(accessToken)"]])
   }
+
 
   // MARK: NetworkRequestFactory
 

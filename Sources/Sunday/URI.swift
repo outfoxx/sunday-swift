@@ -2,7 +2,7 @@
 //  URI.swift
 //  Sunday
 //
-//  Copyright © 2018 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -16,9 +16,9 @@ public struct URI: Equatable, Hashable {
   public enum Error: Swift.Error {
     case invalidURI
   }
-  
+
   private let components: URLComponents
-  
+
   public var scheme: String { components.scheme! }
   public var host: String? { components.host }
   public var path: String { components.path }
@@ -32,7 +32,7 @@ public struct URI: Equatable, Hashable {
     }
     self.init(components: components)
   }
-  
+
   public init(scheme: String, host: String, path: String, queryItems: [URLQueryItem] = [], fragment: String? = nil) {
     var components = URLComponents()
     components.scheme = scheme
@@ -42,7 +42,7 @@ public struct URI: Equatable, Hashable {
     components.fragment = fragment
     self.init(components: components)
   }
-  
+
   public init(components: URLComponents) {
     self.components = components
   }
@@ -50,15 +50,15 @@ public struct URI: Equatable, Hashable {
 }
 
 extension URI: Codable {
-  
+
   public init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
     try self.init(string: container.decode(String.self))
   }
-  
+
   public func encode(to encoder: Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(components.string!)
   }
-  
+
 }

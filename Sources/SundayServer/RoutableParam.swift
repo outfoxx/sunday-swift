@@ -2,7 +2,7 @@
 //  RoutableParam.swift
 //  Sunday
 //
-//  Copyright © 2019 Outfox, inc.
+//  Copyright © 2021 Outfox, inc.
 //
 //
 //  Distributed under the MIT License, See LICENSE for details.
@@ -63,7 +63,7 @@ public struct Param<T> {
 
   public static func query<U>(_ name: String, _ type: [U].Type) -> Param<[U]> where U: StringInitializable {
     return Param<[U]>(name: name) { _, req, _ in
-      guard let values = req.url.queryItems?.filter({ $0.name == name }).compactMap({ $0.value }) else { return nil }
+      guard let values = req.url.queryItems?.filter({ $0.name == name }).compactMap(\.value) else { return nil }
       return values.compactMap { U($0) }
     }
   }
@@ -94,8 +94,11 @@ public struct Param<T> {
   public static func body<T>(ref: T.Type) -> Param<T> {
     return body(ref: ref, using: Ref.self)
   }
-  
-  public static func body<T, TKP: TypeKeyProvider, VKP: ValueKeyProvider, TI: TypeIndex>(ref: T.Type, using refType: CustomRef<TKP, VKP, TI>.Type) -> Param<T> {
+
+  public static func body<T, TKP: TypeKeyProvider, VKP: ValueKeyProvider, TI: TypeIndex>(
+    ref: T.Type,
+    using refType: CustomRef<TKP, VKP, TI>.Type
+  ) -> Param<T> {
     return Param<T>(name: "@body") { _, req, res in
       guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
@@ -106,8 +109,11 @@ public struct Param<T> {
   public static func body<T>(embebbedRef: T.Type) -> Param<T> {
     return body(embeddedRef: embebbedRef, using: EmbeddedRef.self)
   }
-  
-  public static func body<T, TKP: TypeKeyProvider, TI: TypeIndex>(embeddedRef: T.Type, using refType: CustomEmbeddedRef<TKP, TI>.Type) -> Param<T> {
+
+  public static func body<T, TKP: TypeKeyProvider, TI: TypeIndex>(
+    embeddedRef: T.Type,
+    using refType: CustomEmbeddedRef<TKP, TI>.Type
+  ) -> Param<T> {
     return Param<T>(name: "@body") { _, req, res in
       guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }

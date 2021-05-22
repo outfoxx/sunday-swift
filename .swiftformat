@@ -1,13 +1,11 @@
---swiftversion 5.1
+--swiftversion 5.4
 --indent 2
+--maxwidth 120
 --elseposition next-line
 --patternlet inline
 --stripunusedargs closure-only
---wraparguments after-first
---binarygrouping none
---decimalgrouping none
---hexgrouping none
---octalgrouping none
+--wraparguments before-first
+--wraparguments before-first
 --header "//\n//  {file}\n//  Sunday\n//\n//  Copyright © {created.year} Outfox, inc.\n//\n//\n//  Distributed under the MIT License, See LICENSE for details.\n//"
 --enable blankLinesBetweenScopes
---disable consecutiveBlankLines,blankLinesAtStartOfScope,blankLinesAtEndOfScope
+--disable consecutiveBlankLines,blankLinesAtEndOfScope,blankLinesAtStartOfScope,redundantReturn
