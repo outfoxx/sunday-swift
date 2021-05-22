@@ -316,7 +316,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { req, res in
           let headers = [HTTP.StdHeaders.contentType: ["bad/x-unknown"]]
-          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8)!)
+          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8) ?? Data())
         }
       }
     }
@@ -354,7 +354,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { req, res in
           let headers = [HTTP.StdHeaders.contentType: ["application/x-unknown"]]
-          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8)!)
+          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8) ?? Data())
         }
       }
     }
@@ -392,7 +392,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { req, res in
           let headers = [HTTP.StdHeaders.contentType: [MediaType.json.value]]
-          res.send(status: .ok, headers: headers, body: "bad".data(using: .utf8)!)
+          res.send(status: .ok, headers: headers, body: "bad".data(using: .utf8) ?? Data())
         }
       }
     }
@@ -476,7 +476,7 @@ class NetworkRequestFactoryTests: XCTestCase {
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
     
     let result$ =
-      requestFactory.response(request: URLRequest(url: URL(string: "/api", relativeTo: serverURL)!))
+      requestFactory.response(request: URLRequest(url: try XCTUnwrap(URL(string: "/api", relativeTo: serverURL))))
       .record()
     
     let result = try wait(for: result$.single, timeout: 1.0)
@@ -808,17 +808,17 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testEventSourceBuilding() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/events") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"]
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
       }
@@ -864,17 +864,17 @@ class NetworkRequestFactoryTests: XCTestCase {
       var some: String
     }
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/events") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"]
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
       }
