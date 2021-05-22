@@ -18,7 +18,7 @@ class EventSourceTests: XCTestCase {
 
   func testIgnoresDoubleConnect() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         GET { _, res in
           res.send(status: .ok, text: "data: test\n\n")
@@ -37,10 +37,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -60,16 +61,16 @@ class EventSourceTests: XCTestCase {
 
   func testSimpleData() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"]
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: some test data\n\n".data(using: .utf8)!)
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: some test data\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
       }
@@ -86,10 +87,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -111,17 +113,17 @@ class EventSourceTests: XCTestCase {
 
   func testJSONData() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/json") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"]
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
       }
@@ -138,10 +140,11 @@ class EventSourceTests: XCTestCase {
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/json", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/json", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -162,19 +165,19 @@ class EventSourceTests: XCTestCase {
 
   func testCallbacks() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         TrackInvocations(name: "invocations") {
           GET { _, res in
             
             // Send event for first request, fail after  that
             
-            let invocations = res.properties["invocations"] as! Int
+            let invocations = res.properties["invocations"] as? Int ?? 0
             if invocations == 0 {
               res.send(
                 status: .ok,
                 headers: [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]],
-                body: "event: test\ndata: some data\n\n".data(using: .utf8)!
+                body: "event: test\ndata: some data\n\n".data(using: .utf8) ?? Data()
               )
             }
             else {
@@ -198,10 +201,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -234,10 +238,11 @@ class EventSourceTests: XCTestCase {
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "http://example.com/simple"))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "http://example.com/simple")!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -252,7 +257,7 @@ class EventSourceTests: XCTestCase {
 
   func testValidRetryTimeoutUpdate() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         GET { _, res in
           
@@ -263,14 +268,14 @@ class EventSourceTests: XCTestCase {
           
           // Send retry time update
           
-          res.send(chunk: "retry: 123456789\n\n".data(using: .utf8)!)
+          res.send(chunk: "retry: 123456789\n\n".data(using: .utf8) ?? Data())
           
           // Send real message to complete test
           
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           
           res.finish(trailers: [:])
         }
@@ -288,10 +293,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -312,7 +318,7 @@ class EventSourceTests: XCTestCase {
 
   func testInvalidRetryTimeoutUpdateIgnored() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         GET { _, res in
           
@@ -321,11 +327,11 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"]
           ])
           
-          res.send(chunk: "retry: abc\n".data(using: .utf8)!)
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          res.send(chunk: "retry: abc\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           
           res.finish(trailers: [:])
         }
@@ -343,10 +349,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -369,19 +376,19 @@ class EventSourceTests: XCTestCase {
     
     let reconnectX = expectation(description: "reconnection")
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         TrackInvocations(name: "invocations") {
           GET { req, res in
             
-            let invocations = res.properties["invocations"] as! Int
+            let invocations = res.properties["invocations"] as? Int ?? 0
             if (invocations == 0) {
               res.start(status: .ok, headers: [
                 HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
                 HTTP.StdHeaders.transferEncoding: ["chunked"]
               ])
               
-              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8) ?? Data())
               res.finish(trailers: [:])
             }
             else {
@@ -407,10 +414,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -428,22 +436,22 @@ class EventSourceTests: XCTestCase {
     
     let reconnectX = expectation(description: "reconnection")
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         TrackInvocations(name: "invocations") {
           GET { req, res in
             
-            let invocations = res.properties["invocations"] as! Int
+            let invocations = res.properties["invocations"] as? Int ?? 0
             if (invocations == 0) {
               res.start(status: .ok, headers: [
                 HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
                 HTTP.StdHeaders.transferEncoding: ["chunked"]
               ])
               
-              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8) ?? Data())
               
               // Send event ID with NULL character
-              res.send(chunk: "id: a\0c\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+              res.send(chunk: "id: a\0c\nevent: test\ndata: Hello!\n\n".data(using: .utf8) ?? Data())
               
               res.finish(trailers: [:])
             }
@@ -470,10 +478,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -489,7 +498,7 @@ class EventSourceTests: XCTestCase {
   
   func testEventTimeoutCheckWithExpiration() throws {
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         TrackInvocations(name: "invocations") {
           GET { req, res in
@@ -499,7 +508,7 @@ class EventSourceTests: XCTestCase {
               HTTP.StdHeaders.transferEncoding: ["chunked"]
             ])
             
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8) ?? Data())
             
           }
         }
@@ -517,10 +526,11 @@ class EventSourceTests: XCTestCase {
     
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
@@ -544,7 +554,7 @@ class EventSourceTests: XCTestCase {
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
     
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         TrackInvocations(name: "invocations") {
           GET { req, res in
@@ -554,7 +564,7 @@ class EventSourceTests: XCTestCase {
               HTTP.StdHeaders.transferEncoding: ["chunked"]
             ])
             
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8) ?? Data())
             
             req.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
               session.close(cancelOutstandingTasks: true)
@@ -572,10 +582,11 @@ class EventSourceTests: XCTestCase {
       return
     }
     defer { server.stop() }
-    
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
-        let request = URLRequest(url: URL(string: "/simple", relativeTo: serverURL)!).adding(httpHeaders: $0)
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
         return session.dataTaskStreamPublisher(for: request)
           .eraseToAnyPublisher()
       }
