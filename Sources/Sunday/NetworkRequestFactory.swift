@@ -353,8 +353,8 @@ public class NetworkRequestFactory: RequestFactory {
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
-    eventTypes: [String : D.Type]
-  ) -> RequestEventPublisher<D> where B : Encodable, D : Decodable {
+    eventTypes: [String : AnyTextMediaTypeDecodable]
+  ) -> RequestEventPublisher<D> where B : Encodable {
     
     self.eventStream(eventTypes: eventTypes,
                      from: self.request(method: method,
@@ -367,7 +367,7 @@ public class NetworkRequestFactory: RequestFactory {
                                         headers: headers))
   }
 
-  public func eventStream<D: Decodable>(eventTypes: [String : D.Type], from request$: RequestPublisher) -> RequestEventPublisher<D> {
+  public func eventStream<D>(eventTypes: [String : AnyTextMediaTypeDecodable], from request$: RequestPublisher) -> RequestEventPublisher<D> {
     Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
         
