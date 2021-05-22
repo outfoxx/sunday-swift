@@ -28,13 +28,12 @@ open class EventSource {
     case closed
   }
   
-  
-  public static let eventTimeoutIntervalDefault = DispatchTimeInterval.seconds(75)
-  private static let eventTimeoutCheckInterval = DispatchTimeInterval.seconds(2)
   private static let maxRetryTimeMultiplier = 30
   
-
-  public private(set) var readyState = State.closed
+  
+  public var readyState: State { readyStateValue.current }
+  private var readyStateValue: StateValue
+  
   public private(set) var retryTime = DispatchTimeInterval.milliseconds(500)
 
   private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
@@ -57,18 +56,23 @@ open class EventSource {
   private var retryAttempt = 0
   
   private let eventTimeoutInterval: DispatchTimeInterval?
+  private let eventTimeoutCheckInterval: DispatchTimeInterval
   private var eventTimeoutTask: DispatchWorkItem?
   
   private let eventParser = EventParser()
   
 
-  public init(queue: DispatchQueue = .global(qos: .background),
-              eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
-              requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>) {
-
+  public init(
+    queue: DispatchQueue = .global(qos: .background),
+    eventTimeoutInterval: DispatchTimeInterval? = DispatchTimeInterval.seconds(75),
+    eventTimeoutCheckInterval: DispatchTimeInterval = DispatchTimeInterval.seconds(2),
+    requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+  ) {
+    self.queue = DispatchQueue(label: "io.outfoxx.sunday.EventSource", attributes: [], target: queue)
+    self.readyStateValue = StateValue(.closed, queue: queue)
     self.requestor = requestor
-    self.queue = queue
     self.eventTimeoutInterval = eventTimeoutInterval
+    self.eventTimeoutCheckInterval = eventTimeoutCheckInterval
     self.receivedString = nil
   }
   
@@ -110,17 +114,23 @@ open class EventSource {
   // MARK: Connect
 
   open func connect() {
-    if readyState == .connecting || readyState == .open {
+    if readyStateValue.isNotClosed {
       return
     }
+    
+    readyStateValue.update(forceTo: .connecting)
     
     internalConnect()
   }
   
   private func internalConnect() {
-    logger.debug("Connecting")
     
-    readyState = .connecting
+    guard readyStateValue.isNotClosed else {
+      logger.debug("Skipping connect due to close")
+      return
+    }
+
+    logger.debug("Connecting")
     
     // Build default headers for passing to request builder
     
@@ -137,13 +147,15 @@ open class EventSource {
     data$Cancel =
       requestor(headers)
       .tryMap { event -> Void in
-          switch event {
-          case .connect(let response):
-            try self.receivedHeaders(response)
-          case .data(let data):
-            try self.receivedData(data)
-          }
+        
+        switch event {
+        case .connect(let response):
+          try self.receivedHeaders(response)
+        case .data(let data):
+          try self.receivedData(data)
         }
+        
+      }
       .sink(receiveCompletion: { end in
         switch end {
         case .finished:
@@ -159,9 +171,9 @@ open class EventSource {
   // MARK: Close
   
   open func close() {
-    logger.debug("Close Requested")
+    logger.debug("Closed")
 
-    readyState = .closed
+    readyStateValue.update(forceTo: .closed)
     
     internalClose()
   }
@@ -192,9 +204,23 @@ open class EventSource {
     self.lastEventReceivedTime = lastEventReceivedTime
     
     // Schedule check
-    eventTimeoutTask = DispatchWorkItem(block: checkEventTimeout)
+    eventTimeoutTask = DispatchWorkItem { [weak self] in
+      guard
+        let strongSelf = self,
+        let eventTimeoutTask = strongSelf.eventTimeoutTask,
+        !eventTimeoutTask.isCancelled
+      else {
+        return
+      }
+      
+      strongSelf.checkEventTimeout()
+      
+      if !eventTimeoutTask.isCancelled {
+        strongSelf.queue.asyncAfter(deadline: .now() + strongSelf.eventTimeoutCheckInterval, execute: eventTimeoutTask)
+      }
+    }
     queue.asyncAfter(
-      deadline: .now() + Self.eventTimeoutCheckInterval,
+      deadline: .now() + eventTimeoutCheckInterval,
       execute: eventTimeoutTask!
     )
   }
@@ -234,7 +260,7 @@ open class EventSource {
 
   private func receivedHeaders(_ response: HTTPURLResponse) throws {
     
-    guard readyState == .connecting else {
+    guard readyStateValue.ifNotClosed(updateTo: .open) else {
       logger.error("invalid state for receiving headers: state=\(readyState)")
       
       fireErrorEvent(error: .invalidState)
@@ -242,16 +268,15 @@ open class EventSource {
       scheduleReconnect()
       return
     }
+    
+    logger.debug("Opened")
 
     connectionOrigin = response.url
     retryAttempt = 0
-    readyState = .open
 
     // Start event timeout check, treating this
     // connect as last time we received an event
     startEventTimeoutCheck(lastEventReceivedTime: .now())
-    
-    logger.debug("Opened")
 
     if let onOpenCallback = onOpenCallback {
       queue.async {
@@ -308,6 +333,10 @@ open class EventSource {
     
     internalClose()
     
+    guard readyStateValue.ifNotClosed(updateTo: .connecting) else {
+      return
+    }
+    
     let lastConnectTime = connectionAttemptTime?.distance(to: .now()) ?? .microseconds(0)
     
     let retryDelay = Self.calculateRetryDelay(retryAttempt: retryAttempt,
@@ -317,9 +346,18 @@ open class EventSource {
     logger.debug("Scheduling Reconnect delay=\(retryDelay)")
     
     retryAttempt += 1
-    readyState = .connecting
     
-    reconnectTimeoutTask = DispatchWorkItem(block: internalConnect)
+    reconnectTimeoutTask = DispatchWorkItem { [weak self] in
+      guard
+        let strongSelf = self,
+        let reconnectTimeoutTask = strongSelf.reconnectTimeoutTask,
+        !reconnectTimeoutTask.isCancelled
+      else {
+        return
+      }
+      
+      strongSelf.internalConnect()
+    }
     queue.asyncAfter(deadline: .now() + retryDelay, execute: reconnectTimeoutTask!)
   }
   
@@ -431,6 +469,42 @@ open class EventSource {
       queue.async { onErrorCallback(error) }
     }
 
+  }
+  
+  struct StateValue {
+    
+    private var currentState: State
+    private let queue: DispatchQueue
+    
+    init(_ initialState: State, queue: DispatchQueue) {
+      self.currentState = initialState
+      self.queue = queue
+    }
+
+    var current: State { queue.sync { currentState } }
+    
+    var isClosed: Bool { queue.sync { currentState == .closed } }
+    var isNotClosed: Bool { queue.sync { currentState != .closed } }
+    
+    mutating func ifNotClosed(updateTo newState: State) -> Bool {
+      return queue.sync {
+        
+        guard currentState != .closed else {
+          return false
+        }
+        
+        currentState = newState
+        
+        return true
+      }
+    }
+    
+    mutating func update(forceTo newState: State) {
+      return queue.sync {
+        currentState = newState
+      }
+    }
+    
   }
   
 }
