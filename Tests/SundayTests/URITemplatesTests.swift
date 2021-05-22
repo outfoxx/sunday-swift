@@ -103,12 +103,22 @@ class URITemplatesTests: XCTestCase {
     )
   }
   
-  func testCustomStringConvertibleAreSerializedCorrectly() {
+  func testLosslessStringConvertibleAreSerializedCorrectly() {
     
-    struct SpecialParam : CustomStringConvertible {
-      
+    struct SpecialParam : LosslessStringConvertible {
+
+      let value: String
+
+      init() {
+        value = "special-string"
+      }
+
+      init?(_ description: String) {
+        value = description
+      }
+
       var description: String {
-        "special-string"
+        value
       }
       
     }
@@ -130,8 +140,8 @@ class URITemplatesTests: XCTestCase {
     XCTAssertEqual(template.format, "http://example.com/{id}")
     
     XCTAssertEqual(
-      try template.complete(parameters: ["id": ["test": 1]]).absoluteString.removingPercentEncoding,
-      "http://example.com/[\"test\": 1]"
+      try template.complete(parameters: ["id": ["test": "1"]]).absoluteString.removingPercentEncoding,
+      "http://example.com/test,1"
     )
   }
   
