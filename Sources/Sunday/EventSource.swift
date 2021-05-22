@@ -261,7 +261,7 @@ open class EventSource {
   private func receivedHeaders(_ response: HTTPURLResponse) throws {
     
     guard readyStateValue.ifNotClosed(updateTo: .open) else {
-      logger.error("invalid state for receiving headers: state=\(readyState)")
+      logger.error("invalid state for receiving headers: state=\(readyStateValue.current)")
       
       fireErrorEvent(error: .invalidState)
 
@@ -287,8 +287,8 @@ open class EventSource {
 
   private func receivedData(_ data: Data) throws {
     
-    guard readyState == .open else {
-      logger.error("invalid state for receiving data: state=\(readyState)")
+    guard readyStateValue.current == .open else {
+      logger.error("invalid state for receiving data: state=\(readyStateValue.current)")
 
       fireErrorEvent(error: .invalidState)
       
@@ -302,7 +302,8 @@ open class EventSource {
   }
 
   private func receivedError(error: Swift.Error) {
-    if readyState == .closed {
+
+    if readyStateValue.isClosed {
       return
     }
 
@@ -310,13 +311,14 @@ open class EventSource {
     
     fireErrorEvent(error: error)
     
-    if readyState != .closed {
+    if readyStateValue.isNotClosed {
       scheduleReconnect()
     }
   }
 
   private func receivedComplete() {
-    if readyState == .closed {
+
+    if readyStateValue.isClosed {
       return
     }
     
