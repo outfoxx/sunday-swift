@@ -47,7 +47,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -56,7 +56,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    let request = try wait(for: request$.single, timeout: 1.0)
+    let request = try wait(for: requestRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(request.url?.absoluteString, "http://example.com/api?limit=5&search=1%20%26%202")
   }
@@ -68,7 +68,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       mediaTypeEncoders: MediaTypeEncoders.Builder().build()
     )
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -77,7 +77,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: requestRecorder.single, timeout: 1.0)) { error in
       guard
         case SundayError.requestEncodingFailed(reason: let reason) = error,
         case RequestEncodingFailureReason.unsupportedContentType = reason
@@ -92,7 +92,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -104,7 +104,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    let request = try wait(for: request$.single, timeout: 1.0)
+    let request = try wait(for: requestRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345,Bearer 67890")
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.accept), "application/json,application/cbor")
@@ -114,7 +114,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -123,7 +123,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    let request = try wait(for: request$.single, timeout: 1.0)
+    let request = try wait(for: requestRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.accept), "application/json , application/cbor")
   }
@@ -135,7 +135,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       mediaTypeDecoders: MediaTypeDecoders.Builder().build()
     )
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -144,7 +144,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: requestRecorder.single, timeout: 1.0)) { error in
       guard
         case SundayError.requestEncodingFailed(reason: let reason) = error,
         case RequestEncodingFailureReason.noSupportedAcceptTypes = reason
@@ -162,7 +162,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       mediaTypeEncoders: MediaTypeEncoders.Builder().build()
     )
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .get,
         pathTemplate: "/api",
@@ -171,7 +171,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    XCTAssertThrowsError(try wait(for: request$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: requestRecorder.single, timeout: 1.0)) { error in
       guard
         case SundayError.requestEncodingFailed(reason: let reason) = error,
         case RequestEncodingFailureReason.noSupportedContentTypes = reason
@@ -186,7 +186,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .post,
         pathTemplate: "/api",
@@ -195,7 +195,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    let request = try wait(for: request$.single, timeout: 1.0)
+    let request = try wait(for: requestRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(request.httpBody, #"{"a":5}"#.data(using: .utf8))
   }
@@ -204,7 +204,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
 
-    let request$ =
+    let requestRecorder =
       requestFactory.request(
         method: .post,
         pathTemplate: "/api",
@@ -213,7 +213,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       )
       .record()
 
-    let request = try wait(for: request$.single, timeout: 1.0)
+    let request = try wait(for: requestRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType), "application/json")
   }
@@ -251,7 +251,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -260,7 +260,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<Tester>)
       .record()
 
-    let result = try wait(for: result$.single, timeout: 1.0)
+    let result = try wait(for: resultRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(result, tester)
   }
@@ -285,7 +285,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -294,7 +294,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<[String]>)
       .record()
 
-    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: resultRecorder.single, timeout: 1.0)) { error in
 
       guard case SundayError.unexpectedEmptyResponse = error else {
         return XCTFail("unexected error")
@@ -323,7 +323,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -332,7 +332,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<[String]>)
       .record()
 
-    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: resultRecorder.single, timeout: 1.0)) { error in
 
       guard
         case SundayError.responseDecodingFailed(reason: let reason) = error,
@@ -363,7 +363,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -372,7 +372,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<[String]>)
       .record()
 
-    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: resultRecorder.single, timeout: 1.0)) { error in
 
       guard
         case SundayError.responseDecodingFailed(reason: let reason) = error,
@@ -403,7 +403,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -412,7 +412,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<[String]>)
       .record()
 
-    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: resultRecorder.single, timeout: 1.0)) { error in
 
       guard
         case SundayError.responseDecodingFailed(reason: let reason) = error,
@@ -443,7 +443,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       (requestFactory.result(
         method: .get,
         pathTemplate: "/api",
@@ -452,7 +452,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       ) as RequestResultPublisher<[String]>)
       .record()
 
-    XCTAssertThrowsError(try wait(for: result$.single, timeout: 1.0)) { error in
+    XCTAssertThrowsError(try wait(for: resultRecorder.single, timeout: 1.0)) { error in
 
       guard
         case SundayError.responseDecodingFailed(reason: let reason) = error,
@@ -482,8 +482,8 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$: RequestCompletePublisher =
-      requestFactory.result(
+    let resultRecorder = requestFactory
+      .result(
         method: .post,
         pathTemplate: "/api",
         pathParameters: nil,
@@ -493,8 +493,9 @@ class NetworkRequestFactoryTests: XCTestCase {
         acceptTypes: nil,
         headers: nil
       )
+      .record()
 
-    _ = try wait(for: result$.record().single, timeout: 1.0)
+    _ = try wait(for: resultRecorder.single, timeout: 1.0)
   }
 
   func testExecutesManualRequestsForResponses() throws {
@@ -517,11 +518,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
 
-    let result$ =
+    let resultRecorder =
       requestFactory.response(request: URLRequest(url: try XCTUnwrap(URL(string: "/api", relativeTo: serverURL))))
         .record()
 
-    let result = try wait(for: result$.single, timeout: 1.0)
+    let result = try wait(for: resultRecorder.single, timeout: 1.0)
 
     XCTAssertEqual(String(data: result.data ?? Data(), encoding: .utf8), "[]")
   }
@@ -980,7 +981,7 @@ class NetworkRequestFactoryTests: XCTestCase {
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
 
-    let event$ = requestFactory.eventStream(
+    let eventPublisher = requestFactory.eventStream(
       method: .get,
       pathTemplate: "/events",
       pathParameters: nil,
@@ -989,17 +990,16 @@ class NetworkRequestFactoryTests: XCTestCase {
       contentTypes: [.json],
       acceptTypes: [.json],
       headers: nil,
-      eventTypes: ["test": .erase(
-        TestEvent
-          .self
-      )]
+      eventTypes: [
+        "test": .erase(TestEvent.self),
+      ]
     ) as RequestEventPublisher<TestEvent>
 
     let completeX = expectation(description: "complete received")
 
     var cancels: Set<AnyCancellable> = []
 
-    event$.sink(
+    eventPublisher.sink(
       receiveCompletion: { _ in
 
         XCTFail("unexpected complete")

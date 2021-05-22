@@ -7,6 +7,7 @@
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
+//  swiftlint:disable cyclomatic_complexity function_body_length
 
 import Foundation
 import Sunday
@@ -139,11 +140,10 @@ public struct HTTPRequestParser {
             return try finish()
           }
 
-          if headers
-            .contains(where: {
-              $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)!
-            })
-          {
+          if headers.contains(where: {
+            $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)!
+          }) {
+
             connection.send(
               data: "HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".data(using: .utf8)!,
               context: "Sending continuation for expectation"

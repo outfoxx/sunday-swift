@@ -74,8 +74,7 @@ public struct RequestDecoding: Routable {
           // Find content-type header
 
           if let foundContentTypeHeaders = request.headers[HTTP.StdHeaders.contentType],
-             let foundContentTypeHeader = foundContentTypeHeaders.first
-          {
+             let foundContentTypeHeader = foundContentTypeHeaders.first {
 
             // Parse content-type header
 

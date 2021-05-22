@@ -15,7 +15,7 @@ import Foundation
 public class NetworkSession {
 
   internal let session: URLSession
-  internal let delegate: NetworkSessionDelegate
+  internal let delegate: NetworkSessionDelegate // swiftlint:disable:this weak_delegate
   internal var taskDelegates: [URLSessionTask: URLSessionTaskDelegate] = [:]
   internal let delegateQueue = OperationQueue()
   internal let serverTrustPolicyManager: ServerTrustPolicyManager?

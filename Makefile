@@ -6,6 +6,9 @@ comma:=,
 clean:
 	rm -rf TestResults
 
+make-test-results-dir:
+	mkdir -p TestResults
+
 define buildtest
 	xcodebuild -scheme $(project)-Package -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' test
 endef
@@ -21,6 +24,11 @@ build-test-tvos:
 
 build-test-all: build-test-macos build-test-ios build-test-tvos
 
-
-format:
+format:	
 	swiftformat --config .swiftformat Sources/ Tests/
+
+lint: make-test-results-dir
+	swiftlint lint --reporter html > TestResults/lint.html
+
+view_lint: lint
+	open TestResults/lint.html

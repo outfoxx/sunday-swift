@@ -7,6 +7,7 @@
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
+//  swiftlint:disable function_body_length
 
 import Foundation
 
@@ -181,11 +182,11 @@ public enum ServerTrustPolicy {
         let pinnedCertificatesDataArray = certificateData(for: pinnedCertificates)
 
         outerLoop: for serverCertificateData in serverCertificatesDataArray {
-          for pinnedCertificateData in pinnedCertificatesDataArray {
-            if serverCertificateData == pinnedCertificateData {
-              serverTrustIsValid = true
-              break outerLoop
-            }
+          for pinnedCertificateData in pinnedCertificatesDataArray
+            where serverCertificateData == pinnedCertificateData {
+
+            serverTrustIsValid = true
+            break outerLoop
           }
         }
       }
@@ -204,7 +205,7 @@ public enum ServerTrustPolicy {
       if certificateChainEvaluationPassed {
         let comparableServerKeys = Set(Self.publicKeys(for: serverTrust).compactMap { Self.data(for: $0) })
         let comparablePinnedPublicKeys = Set(pinnedPublicKeys.compactMap { Self.data(for: $0) })
-        serverTrustIsValid = !comparableServerKeys.intersection(comparablePinnedPublicKeys).isEmpty
+        serverTrustIsValid = !comparableServerKeys.isDisjoint(with: comparablePinnedPublicKeys)
       }
 
     case .disableEvaluation:
@@ -288,4 +289,3 @@ public enum ServerTrustPolicy {
   }
 
 }
-

@@ -22,7 +22,8 @@ public extension HTTPURLResponse {
 
    - Parameters:
      - field: The header field name to use for the lookup (case-insensitive).
-   - Returns: The value associated with the given header field, or nil if there  is no value associated with the given header field.
+   - Returns: The value associated with the given header field, or nil if there  is no value associated with
+              the given header field.
    */
 
   func value(forHttpHeaderField field: String) -> String? {

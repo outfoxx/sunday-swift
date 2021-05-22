@@ -149,13 +149,13 @@ class EventSourceTests: XCTestCase {
           .eraseToAnyPublisher()
       }
 
-    let x = expectation(description: "Event Received")
+    let messagedX = expectation(description: "Event Received")
 
     eventSource.onMessage { event, id, data in
       XCTAssertEqual(event, "test")
       XCTAssertEqual(id, "123")
       XCTAssertEqual(data, "{\"some\":\n\"test data\"}")
-      x.fulfill()
+      messagedX.fulfill()
     }
 
     eventSource.connect()

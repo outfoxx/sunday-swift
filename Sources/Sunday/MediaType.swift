@@ -89,6 +89,7 @@ public struct MediaType {
   }
 
   private static let fullRegex = Regex(
+    // swiftlint:disable:next line_length
     ##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs|x)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##,
     options: [.ignoreCase]
   )
@@ -153,7 +154,7 @@ public struct MediaType {
     let type = type ?? self.type
     let tree = tree ?? self.tree
     let subtype = subtype?.lowercased() ?? self.subtype
-    let parameters = self.parameters.merging(parameters ?? [:]) { _, r in r }
+    let parameters = self.parameters.merging(parameters ?? [:]) { _, override in override }
     return MediaType(type: type, tree: tree, subtype: subtype, suffix: suffix, parameters: parameters)
   }
 

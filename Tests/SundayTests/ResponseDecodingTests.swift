@@ -55,7 +55,7 @@ class ResponseDecodingTests: ParameterizedTest {
     let completeX = expectation(description: "echo repsonse - complete")
     let dataX = expectation(description: "echo repsonse - data")
 
-    let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
+    let sourceObject = TestObject(aaa: 1, bbb: 2.0, ccc: Date.millisecondDate(), ddd: "Hello", eee: ["World"])
 
     let baseURL = URI.Template(format: url.absoluteString)
 
@@ -94,9 +94,9 @@ class ResponseDecodingTests: ParameterizedTest {
 }
 
 struct TestObject: Codable, Equatable {
-  let a: Int
-  let b: Double
-  let c: Date
-  let d: String
-  let e: [String]
+  let aaa: Int
+  let bbb: Double
+  let ccc: Date
+  let ddd: String
+  let eee: [String]
 }

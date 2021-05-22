@@ -17,9 +17,11 @@ public enum CharSets {
     case invalidCharSetName
   }
 
-  public static func determineEncoding(of mediaType: MediaType, default: String.Encoding = .utf8) throws -> String
-    .Encoding
-  {
+  public static func determineEncoding(
+    of mediaType: MediaType,
+    default: String.Encoding = .utf8
+  ) throws -> String.Encoding {
+
     guard let charset = mediaType.parameter(.charSet) else { return `default` }
 
     let encoding = CFStringConvertIANACharSetNameToEncoding(charset as CFString)

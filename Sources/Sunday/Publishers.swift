@@ -17,4 +17,3 @@ public typealias RequestResponsePublisher = AnyPublisher<(response: HTTPURLRespo
 public typealias RequestResultPublisher<T> = AnyPublisher<T, Error>
 public typealias RequestCompletePublisher = RequestResultPublisher<Void>
 public typealias RequestEventPublisher<E> = AnyPublisher<E, Error>
-

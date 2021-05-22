@@ -7,6 +7,7 @@
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
+//  swiftlint:disable type_body_length
 
 import Combine
 import Foundation
@@ -37,7 +38,7 @@ open class EventSource {
   public private(set) var retryTime = DispatchTimeInterval.milliseconds(500)
 
   private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
-  private var data$Cancel: AnyCancellable?
+  private var dataCancel: AnyCancellable?
   private var receivedString: String?
 
   private var onOpenCallback: (() -> Void)?
@@ -150,7 +151,7 @@ open class EventSource {
 
     connectionAttemptTime = .now()
 
-    data$Cancel =
+    dataCancel =
       requestor(headers)
         .tryMap { event -> Void in
 
@@ -187,8 +188,8 @@ open class EventSource {
 
   private func internalClose() {
 
-    data$Cancel?.cancel()
-    data$Cancel = nil
+    dataCancel?.cancel()
+    dataCancel = nil
 
     cancelReconnect()
 
@@ -526,28 +527,4 @@ open class EventSource {
 
 public extension HTTP.StdHeaders {
   static let lastEventId = "Last-Event-Id"
-}
-
-private extension DispatchTimeInterval {
-
-  var totalMilliseconds: Int {
-    switch self {
-    case .seconds(let secs): return secs * 1000
-    case .milliseconds(let millis): return millis
-    case .microseconds(let micros): return micros / 1000
-    case .nanoseconds(let nanos): return nanos / 1_000_000
-    default: return Int.max
-    }
-  }
-
-  var totalSeconds: TimeInterval {
-    switch self {
-    case .seconds(let secs): return Double(secs) * 1000.0
-    case .milliseconds(let millis): return Double(millis)
-    case .microseconds(let micros): return Double(micros) / 1000.0
-    case .nanoseconds(let nanos): return Double(nanos) / 1_000_000.0
-    default: return TimeInterval.nan
-    }
-  }
-
 }

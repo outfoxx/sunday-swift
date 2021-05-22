@@ -7,6 +7,7 @@
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
+//  swiftlint:disable type_body_length function_parameter_count
 
 import Combine
 import Foundation
@@ -198,9 +199,12 @@ public class NetworkRequestFactory: RequestFactory {
   public func parse<D: Decodable>(response: HTTPURLResponse, data: Data?) throws -> D {
 
     guard !emptyDataStatusCodes.contains(response.statusCode) else {
+
       guard D.self == Empty.self else {
         throw SundayError.unexpectedEmptyResponse
       }
+
+      // swiftlint:disable:next force_cast
       return Empty.instance as! D
     }
 
@@ -365,10 +369,10 @@ public class NetworkRequestFactory: RequestFactory {
     ))
   }
 
-  public func eventSource(from request$: RequestPublisher) -> EventSource {
+  public func eventSource(from requestPublisher: RequestPublisher) -> EventSource {
 
     return EventSource(queue: requestQueue) { headers in
-      request$.flatMap { request in
+      requestPublisher.flatMap { request in
         self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers))
       }
       .eraseToAnyPublisher()
@@ -398,7 +402,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func eventStream<D>(
     eventTypes: [String: AnyTextMediaTypeDecodable],
-    from request$: RequestPublisher
+    from requestPublisher: RequestPublisher
   ) -> RequestEventPublisher<D> {
     Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
@@ -409,7 +413,7 @@ public class NetworkRequestFactory: RequestFactory {
 
         return EventPublisher<D>(eventTypes: eventTypes, decoder: jsonDecoder, queue: requestQueue) { headers in
 
-          request$.flatMap { request in
+          requestPublisher.flatMap { request in
             self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
           }
           .eraseToAnyPublisher()

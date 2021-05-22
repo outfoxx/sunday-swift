@@ -32,6 +32,7 @@ open class RoutingHTTPServer: NetworkHTTPServer {
       serviceName: serviceName,
       serviceType: serviceType
     ) { request, response in
+      // swiftlint:disable:next force_cast
       let routingServer = request.server as! RoutingHTTPServer
       do {
         let route = Route(matched: "", unmatched: request.url.path, parameters: [:])

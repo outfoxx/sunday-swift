@@ -7,6 +7,7 @@
 //
 //  Distributed under the MIT License, See LICENSE for details.
 //
+//  swiftlint:disable function_body_length
 
 import Foundation
 import PotentCodables

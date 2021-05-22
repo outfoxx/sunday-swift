@@ -266,15 +266,19 @@ extension HTTPConnection.Request: CustomStringConvertible {
 
   public var description: String {
     var lines: [String] = []
-    lines
-      .append(
-        "\(method.rawValue.uppercased()) \(url.url?.absoluteString ?? "/") HTTP/\(raw.version.major).\(raw.version.minor)"
-      )
+
+    let method = self.method.rawValue.uppercased()
+    let request = url.url?.absoluteString ?? "/"
+    let version = "\(raw.version.major).\(raw.version.minor)"
+
+    lines.append("\(method) \(request) HTTP/\(version)")
+
     for (header, values) in headers {
       for value in values {
         lines.append("\(header.lowercased().split(separator: "-").map(\.capitalized).joined(separator: "-")): \(value)")
       }
     }
+
     return lines.joined(separator: "\n")
   }
 

@@ -123,6 +123,7 @@ public struct DataDecoder: MediaTypeDecoder {
         error: Error.translationNotSupported
       ))
     }
+    // swiftlint:disable:next force_cast
     return (data as! T)
   }
 
@@ -144,6 +145,7 @@ public struct TextDecoder: MediaTypeDecoder, TextMediaTypeDecoder {
         error: Error.translationNotSupported
       ))
     }
+    // swiftlint:disable:next force_cast
     return (String(data: data, encoding: .utf8) as! T)
   }
 
@@ -154,6 +156,7 @@ public struct TextDecoder: MediaTypeDecoder, TextMediaTypeDecoder {
         error: Error.translationNotSupported
       ))
     }
+    // swiftlint:disable:next force_cast
     return (data as! T)
   }
 

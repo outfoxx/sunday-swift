@@ -54,6 +54,7 @@ public struct Path: Routable {
 
   private static func pathMatcher(for template: String) -> Regex {
     let pathPattern = template.replacingAll(matching: variableMatcher, with: #"([^/]*)"#)
+    // swiftlint:disable:next force_try
     return try! Regex(string: "^\(pathPattern)(.*)$")
   }
 

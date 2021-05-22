@@ -20,7 +20,7 @@ internal class NetworkSessionDelegate: NSObject {
     self.delegate = delegate
   }
 
-  internal func delegate<D: URLSessionDelegate>(for task: URLSessionTask, as: D.Type) -> D? {
+  internal func delegate<D: URLSessionDelegate>(for task: URLSessionTask, as type: D.Type) -> D? {
     return (owner?.taskDelegates[task] as? D) ?? (delegate as? D)
   }
 

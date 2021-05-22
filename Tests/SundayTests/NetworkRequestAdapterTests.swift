@@ -25,41 +25,41 @@ class NetworkRequestAdapterTests: XCTestCase {
     let marker = MarkingAdapter()
     let adapter = HostMatchingAdapter(hostname: "example.com", adapter: marker)
 
-    let matched$ =
+    let matchedRecorder =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
         .record()
 
-    let matched = try wait(for: matched$.next(), timeout: 1.0)
+    let matched = try wait(for: matchedRecorder.next(), timeout: 1.0)
     XCTAssertTrue(matched.isMarked)
 
-    let unmatched$ =
+    let unmatchedRecorder =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: URL(string: "http://other.com")!))
         .record()
 
-    let unmatched = try wait(for: unmatched$.next(), timeout: 1.0)
+    let unmatched = try wait(for: unmatchedRecorder.next(), timeout: 1.0)
     XCTAssertFalse(unmatched.isMarked)
 
 
     let setAdapater = HostMatchingAdapter(hostnames: ["example.com", "api.example.com"], adapter: marker)
 
-    let setMatched$ =
+    let setMatchedRecorder =
       setAdapater.adapt(
         requestFactory: Self.requestFactory,
         urlRequest: URLRequest(url: URL(string: "http://api.example.com")!)
       )
       .record()
 
-    let setMatched = try wait(for: setMatched$.next(), timeout: 1.0)
+    let setMatched = try wait(for: setMatchedRecorder.next(), timeout: 1.0)
     XCTAssertTrue(setMatched.isMarked)
 
-    let setUnatched$ =
+    let setUnatchedRecorder =
       adapter.adapt(
         requestFactory: Self.requestFactory,
         urlRequest: URLRequest(url: URL(string: "http://other.example.com")!)
       )
       .record()
 
-    let setUnatched = try wait(for: setUnatched$.next(), timeout: 1.0)
+    let setUnatched = try wait(for: setUnatchedRecorder.next(), timeout: 1.0)
     XCTAssertFalse(setUnatched.isMarked)
   }
 
@@ -67,11 +67,11 @@ class NetworkRequestAdapterTests: XCTestCase {
 
     let adapter = HeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", token: "12345")
 
-    let request$ =
+    let requestPublisher =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
         .record()
 
-    let request = try wait(for: request$.next(), timeout: 1.0)
+    let request = try wait(for: requestPublisher.next(), timeout: 1.0)
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345")
   }
@@ -93,22 +93,22 @@ class NetworkRequestAdapterTests: XCTestCase {
 
     let adapter = RefreshingHeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", refresh: refresher)
 
-    let request1$ =
+    let request1Recorder =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
         .record()
-    let request1 = try wait(for: request1$.next(), timeout: 0.05)
+    let request1 = try wait(for: request1Recorder.next(), timeout: 0.05)
 
-    let request2$ =
+    let request2Recorder =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
         .record()
-    let request2 = try wait(for: request2$.next(), timeout: 0.05)
+    let request2 = try wait(for: request2Recorder.next(), timeout: 0.05)
 
     Thread.sleep(until: Date().advanced(by: 0.25))
 
-    let request3$ =
+    let request3Recorder =
       adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
         .record()
-    let request3 = try wait(for: request3$.next(), timeout: 0.05)
+    let request3 = try wait(for: request3Recorder.next(), timeout: 0.05)
 
     XCTAssertEqual(request1.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
     XCTAssertEqual(request2.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
