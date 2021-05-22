@@ -18,7 +18,7 @@ import PotentCodables
  * Swift `Error` compatible `struct` for RFC 7807 with the
  * media type `application/problem+json`.
  */
-open class Problem: Error, Codable {
+open class Problem: Error, Codable, CustomStringConvertible {
   
   public let type: URL
 
@@ -164,28 +164,13 @@ open class Problem: Error, Codable {
   public static func statusTitle(statusCode: Int) -> String {
     return HTTP.StatusCode(rawValue: statusCode).map { HTTP.statusText[$0]! } ?? "Unknown"
   }
-  
-  private struct CodingKeys {
-    static let type = AnyCodingKey("type")
-    static let title = AnyCodingKey("title")
-    static let status = AnyCodingKey("status")
-    static let detail = AnyCodingKey("detail")
-    static let instance = AnyCodingKey("instance")
-  }
-  
-  private static let stdType = URL(string: "about:blank")!
-
-}
-
-
-extension Problem: CustomStringConvertible {
 
   open var description: String {
     var builder =
       DescriptionBuilder(Self.self)
-        .add(type, named: "type")
-        .add(title, named: "title")
-        .add(status, named: "status")
+      .add(type, named: "type")
+      .add(title, named: "title")
+      .add(status, named: "status")
     if let detail = detail {
       builder = builder.add(detail, named: "detail")
     }
@@ -197,6 +182,16 @@ extension Problem: CustomStringConvertible {
     }
     return builder.build()
   }
+
+  private struct CodingKeys {
+    static let type = AnyCodingKey("type")
+    static let title = AnyCodingKey("title")
+    static let status = AnyCodingKey("status")
+    static let detail = AnyCodingKey("detail")
+    static let instance = AnyCodingKey("instance")
+  }
+  
+  private static let stdType = URL(string: "about:blank")!
 
 }
 

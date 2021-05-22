@@ -44,6 +44,8 @@ class ProblemTests: XCTestCase {
       try container.encode(extra, forKey: AnyCodingKey("extra"))
       try super.encode(to: encoder)
     }
+
+    override var description: String { "CustomDesc" }
     
   }
   
