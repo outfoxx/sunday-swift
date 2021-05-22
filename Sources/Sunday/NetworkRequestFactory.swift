@@ -87,7 +87,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func request<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestPublisher {
     
     Deferred { [self] () -> AnyPublisher<URLRequest, Error> in
@@ -115,11 +115,13 @@ public class NetworkRequestFactory: RequestFactory {
         var urlRequest = URLRequest(url: url)
         urlRequest.httpMethod = method.rawValue
         
-        // Add headers
-        headers?.forEach { key, values in
-          values.forEach { value in
-            urlRequest.setValue(value, forHTTPHeaderField: key)
-          }
+        // Encode and add headers
+        if let headers = headers {
+
+          try HeaderParameters.encode(headers: headers)
+            .forEach { entry in
+              urlRequest.addValue(entry.value, forHTTPHeaderField: entry.name)
+            }
         }
         
         // Determine & add accept header
@@ -167,7 +169,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func response<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestResponsePublisher {
     
     return request(method: method, pathTemplate: pathTemplate, pathParameters: pathParameters,
@@ -279,7 +281,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func result<B: Encodable, D: Decodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> RequestResultPublisher<D> {
     
     return response(method: method,
@@ -309,7 +311,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func result<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: HTTP.Headers?
+    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: Parameters?
   ) -> RequestCompletePublisher {
     
     return response(method: method,
@@ -325,7 +327,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func eventSource<B>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> EventSource where B : Encodable {
     
     self.eventSource(from: self.request(method: method,
@@ -350,9 +352,9 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: HTTP.Headers? = nil,
-    eventTypes: [String : D.Type]
-  ) -> RequestEventPublisher<D> where B : Encodable, D : Decodable {
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
+    eventTypes: [String : AnyTextMediaTypeDecodable]
+  ) -> RequestEventPublisher<D> where B : Encodable {
     
     self.eventStream(eventTypes: eventTypes,
                      from: self.request(method: method,
@@ -365,7 +367,7 @@ public class NetworkRequestFactory: RequestFactory {
                                         headers: headers))
   }
 
-  public func eventStream<D: Decodable>(eventTypes: [String : D.Type], from request$: RequestPublisher) -> RequestEventPublisher<D> {
+  public func eventStream<D>(eventTypes: [String : AnyTextMediaTypeDecodable], from request$: RequestPublisher) -> RequestEventPublisher<D> {
     Deferred { [self] () -> AnyPublisher<D, Error> in
       do {
         

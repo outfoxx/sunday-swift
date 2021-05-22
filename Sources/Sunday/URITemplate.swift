@@ -67,7 +67,7 @@ public extension URI {
           variables[variableName] = value.pathDescription
         case let value as VariableValue:
           variables[variableName] = value
-        case let value as CustomStringConvertible:
+        case let value as LosslessStringConvertible:
           variables[variableName] = value.description
         case nil:
           throw Error.missingParameterValue(name: variableName)

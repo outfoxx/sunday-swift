@@ -16,6 +16,7 @@ public enum RequestEncodingFailureReason {
   case noSupportedAcceptTypes([MediaType])
   case unsupportedContentType(MediaType)
   case serializationFailed(contentType: MediaType, error: Error?)
+  case unsupportedHeaderParameterValue(Any)
 }
 
 public enum ResponseDecodingFailureReason {

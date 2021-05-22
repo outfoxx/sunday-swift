@@ -223,7 +223,7 @@ public func ~= (pattern: MediaType, value: String) -> Bool {
 
 
 
-extension MediaType: CustomStringConvertible {
+extension MediaType: CustomStringConvertible, LosslessStringConvertible {
 
   public var description: String {
     return value

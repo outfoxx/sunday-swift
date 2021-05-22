@@ -88,12 +88,16 @@ class NetworkRequestFactoryTests: XCTestCase {
       requestFactory.request(method: .get,
                              pathTemplate: "/api",
                              body: Empty.none,
-                             headers: [HTTP.StdHeaders.authorization: ["Bearer 12345"]])
+                             headers: [
+                              HTTP.StdHeaders.authorization: ["Bearer 12345", "Bearer 67890"],
+                              HTTP.StdHeaders.accept: [MediaType.json, MediaType.cbor],
+                             ])
       .record()
     
     let request = try wait(for: request$.single, timeout: 1.0)
-    
-    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345")
+
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345,Bearer 67890")
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.accept), "application/json,application/cbor")
   }
   
   func testAddsAcceptHeader() throws {
@@ -899,7 +903,7 @@ class NetworkRequestFactoryTests: XCTestCase {
                                             pathParameters: nil, queryParameters: nil,
                                             body: Empty.none, contentTypes: [.json],
                                             acceptTypes: [.json], headers: nil,
-                                            eventTypes: ["test": TestEvent.self])
+                                            eventTypes: ["test": .erase(TestEvent.self)]) as RequestEventPublisher<TestEvent>
 
     let completeX = expectation(description: "complete received")
 

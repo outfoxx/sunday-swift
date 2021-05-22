@@ -123,6 +123,12 @@ public struct HTTP {
     .httpVersionNotSupported: "Http Version Not Supported",
   ]
 
+  public struct Header : Equatable {
+    var name: String
+    var value: String
+  }
+
+  public typealias HeaderList = [Header]
   public typealias Headers = [String: [String]]
   public typealias RawHeaders = [(name: String, value: Data)]
   public typealias Version = (major: Int, minor: Int)
