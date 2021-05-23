@@ -1,3 +1,5 @@
+opt_in_rules:
+- file_header
 
 included:
 - Sources
