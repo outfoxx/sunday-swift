@@ -1,12 +1,18 @@
-//
-//  RoutablePath.swift
-//  Sunday
-//
-//  Copyright © 2019 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
 import Regex
@@ -36,10 +42,14 @@ public struct Path: Routable {
       paraeters[name] = value!
     }
 
-    return try routable.route(Route(matched: matched,
-                                    unmatched: unmatched,
-                                    parameters: paraeters),
-                              request: request)
+    return try routable.route(
+      Route(
+        matched: matched,
+        unmatched: unmatched,
+        parameters: paraeters
+      ),
+      request: request
+    )
   }
 
   private static let variableMatcher = Regex(#"\{([_a-zA-Z][_a-zA-Z0-9]*)\}?"#)
@@ -50,6 +60,7 @@ public struct Path: Routable {
 
   private static func pathMatcher(for template: String) -> Regex {
     let pathPattern = template.replacingAll(matching: variableMatcher, with: #"([^/]*)"#)
+    // swiftlint:disable:next force_try
     return try! Regex(string: "^\(pathPattern)(.*)$")
   }
 

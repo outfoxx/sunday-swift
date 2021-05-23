@@ -1,12 +1,18 @@
-//
-//  ResponseDecodingTests.swift
-//  Sunday
-//
-//  Copyright © 2019 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import PotentCodables
 @testable import Sunday
@@ -55,7 +61,7 @@ class ResponseDecodingTests: ParameterizedTest {
     let completeX = expectation(description: "echo repsonse - complete")
     let dataX = expectation(description: "echo repsonse - data")
 
-    let sourceObject = TestObject(a: 1, b: 2.0, c: Date.millisecondDate(), d: "Hello", e: ["World"])
+    let sourceObject = TestObject(aaa: 1, bbb: 2.0, ccc: Date.millisecondDate(), ddd: "Hello", eee: ["World"])
 
     let baseURL = URI.Template(format: url.absoluteString)
 
@@ -63,9 +69,16 @@ class ResponseDecodingTests: ParameterizedTest {
     defer { requestFactory.close() }
 
     let requestCancel =
-      requestFactory.result(method: .post, pathTemplate: "echo",
-                            pathParameters: nil, queryParameters: nil, body: sourceObject,
-                            contentTypes: [contentType], acceptTypes: [acceptType], headers: nil)
+      requestFactory.result(
+        method: .post,
+        pathTemplate: "echo",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: sourceObject,
+        contentTypes: [contentType],
+        acceptTypes: [acceptType],
+        headers: nil
+      )
       .sink(
         receiveCompletion: { completion in
           if case .failure(let error) = completion {
@@ -87,9 +100,9 @@ class ResponseDecodingTests: ParameterizedTest {
 }
 
 struct TestObject: Codable, Equatable {
-  let a: Int
-  let b: Double
-  let c: Date
-  let d: String
-  let e: [String]
+  let aaa: Int
+  let bbb: Double
+  let ccc: Date
+  let ddd: String
+  let eee: [String]
 }

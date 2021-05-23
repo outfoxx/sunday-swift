@@ -1,12 +1,18 @@
-//
-//  RoutableResponseEncoding.swift
-//  Sunday
-//
-//  Copyright © 2019 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
 import Sunday
@@ -46,7 +52,11 @@ public struct ResponseEncoding: Routable {
   public let encoders: MediaTypeEncoders
   public let routable: Routable
 
-  public init(scheme: Scheme = .negotiated(default: nil), encoders: MediaTypeEncoders = .default, @RoutableBuilder buildRoutable: () -> Routable) {
+  public init(
+    scheme: Scheme = .negotiated(default: nil),
+    encoders: MediaTypeEncoders = .default,
+    @RoutableBuilder buildRoutable: () -> Routable
+  ) {
     self.scheme = scheme
     self.encoders = encoders
     routable = buildRoutable()
@@ -139,11 +149,11 @@ class EncodingHTTPResponse: HTTPResponse {
   func send(body: Data) {
     response.send(body: body)
   }
-  
+
   func send(body: Data, final: Bool) {
     response.send(body: body, final: final)
   }
-  
+
   func send(chunk: Data) {
     response.send(chunk: chunk)
   }

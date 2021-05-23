@@ -1,12 +1,18 @@
-//
-//  HTTPConnection.swift
-//  Sunday
-//
-//  Copyright © 2019 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
 import Network
@@ -49,7 +55,8 @@ public class HTTPConnection {
       self.connection = connection
 
       // Add server header
-      headers[HTTP.StdHeaders.server] = ["SundayServer \(Bundle(for: HTTPConnection.self).infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
+      headers[HTTP.StdHeaders.server] =
+        ["SundayServer \(Bundle(for: HTTPConnection.self).infoDictionary?["CFBundleVersion"] as? String ?? "0.0")"]
       // we don't support keep-alive connection for now, just force it to be closed
       headers[HTTP.StdHeaders.connection] = ["close"]
     }
@@ -85,18 +92,19 @@ public class HTTPConnection {
 
       let responseHeaderParts = [
         "HTTP/1.1 \(status)",
-        headers.map { key, values in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }.joined(separator: "\r\n"),
+        headers.map { key, values in values.map { value in "\(key): \(value)" }.joined(separator: "\r\n") }
+          .joined(separator: "\r\n"),
         "\r\n",
       ]
 
       let responseHeader = responseHeaderParts.joined(separator: "\r\n")
       connection.send(data: responseHeader.data(using: .nonLossyASCII)!, context: "sending response header")
     }
-    
+
     func send(body: Data) {
       send(body: body, final: true)
     }
-    
+
     func send(body: Data, final: Bool = true) {
       precondition(state == .sendingBody)
       defer {
@@ -104,7 +112,7 @@ public class HTTPConnection {
           state = .complete
         }
       }
-      
+
       connection.send(data: body, context: "sending body data") { error in
         if final, error != nil || self.header(forName: HTTP.StdHeaders.connection) == "close" {
           self.connection.close()
@@ -126,7 +134,7 @@ public class HTTPConnection {
       defer { state = .complete }
 
       send(chunk: Data())
-      
+
       connection.send(data: "\r\n".data(using: .ascii)!, context: "sending final data") { [weak self] _ in
         guard let self = self else { return }
         self.connection.close()
@@ -175,14 +183,18 @@ public class HTTPConnection {
         headers.updateValue(currentValues, forKey: header.name)
       }
 
-      let request = Request(server: server,
-                            raw: HTTP.Request(method: parsedRequest.line.method,
-                                              url: parsedRequest.line.uri,
-                                              version: parsedRequest.line.version,
-                                              headers: headers,
-                                              rawHeaders: parsedRequest.headers,
-                                              body: parsedRequest.body),
-                            parameters: [:])
+      let request = Request(
+        server: server,
+        raw: HTTP.Request(
+          method: parsedRequest.line.method,
+          url: parsedRequest.line.uri,
+          version: parsedRequest.line.version,
+          headers: headers,
+          rawHeaders: parsedRequest.headers,
+          body: parsedRequest.body
+        ),
+        parameters: [:]
+      )
 
       let response = Response(server: server, connection: self)
 
@@ -213,35 +225,43 @@ public final class NetworkHTTPConnection: HTTPConnection {
 
   let transport: NWConnection
 
-  public init(transport: NWConnection, server: HTTPServer,
-              id: String, log: OSLog, dispatcher: @escaping HTTPServer.Dispatcher) {
+  public init(
+    transport: NWConnection,
+    server: HTTPServer,
+    id: String,
+    log: OSLog,
+    dispatcher: @escaping HTTPServer.Dispatcher
+  ) {
     self.transport = transport
     super.init(server: server, id: id, log: log, dispatcher: dispatcher)
 
-    self.transport.receive(minimumIncompleteLength: minHTTPReqeustLength, maximumLength: maxHTTPChunkLength,
-                           completion: handleReceive(content:context:isComplete:error:))
+    self.transport.receive(
+      minimumIncompleteLength: minHTTPReqeustLength,
+      maximumLength: maxHTTPChunkLength,
+      completion: handleReceive(content:context:isComplete:error:)
+    )
   }
 
   private func handleReceive(content: Data?, context: NWConnection.ContentContext?, isComplete: Bool, error: NWError?) {
     super.handleReceive(content: content, isComplete: isComplete, error: error)
   }
 
-  public override func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
+  override public func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
     transport.send(content: data, completion: .contentProcessed { error in
       if let error = error {
         self.log.error("send error while '\(context)': \(error)")
       }
       completion?(error)
-    })    
+    })
   }
 
-  public override func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {
+  override public func receive(minimum: Int, maximum: Int, completion: @escaping (Data?, Bool, Error?) -> Void) {
     transport.receive(minimumIncompleteLength: minimum, maximumLength: maximum) { data, _, isComplete, error in
       completion(data, isComplete, error)
     }
   }
 
-  public override func close() {
+  override public func close() {
     transport.cancel()
   }
 
@@ -252,12 +272,19 @@ extension HTTPConnection.Request: CustomStringConvertible {
 
   public var description: String {
     var lines: [String] = []
-    lines.append("\(method.rawValue.uppercased()) \(url.url?.absoluteString ?? "/") HTTP/\(raw.version.major).\(raw.version.minor)")
+
+    let method = self.method.rawValue.uppercased()
+    let request = url.url?.absoluteString ?? "/"
+    let version = "\(raw.version.major).\(raw.version.minor)"
+
+    lines.append("\(method) \(request) HTTP/\(version)")
+
     for (header, values) in headers {
       for value in values {
-        lines.append("\(header.lowercased().split(separator: "-").map { $0.capitalized }.joined(separator: "-")): \(value)")
+        lines.append("\(header.lowercased().split(separator: "-").map(\.capitalized).joined(separator: "-")): \(value)")
       }
     }
+
     return lines.joined(separator: "\n")
   }
 

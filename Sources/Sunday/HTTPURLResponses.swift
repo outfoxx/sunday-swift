@@ -1,12 +1,18 @@
-//
-//  HTTPURLResponses.swift
-//  Sunday
-//
-//  Copyright © 2019 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
 
@@ -22,7 +28,8 @@ public extension HTTPURLResponse {
 
    - Parameters:
      - field: The header field name to use for the lookup (case-insensitive).
-   - Returns: The value associated with the given header field, or nil if there  is no value associated with the given header field.
+   - Returns: The value associated with the given header field, or nil if there  is no value associated with
+              the given header field.
    */
 
   func value(forHttpHeaderField field: String) -> String? {
@@ -30,7 +37,8 @@ public extension HTTPURLResponse {
       return value(forHTTPHeaderField: field)
     }
     else {
-      return allHeaderFields.first { $0.key.description.lowercased() == field.lowercased() }.map { String(describing: $0.value) }
+      return allHeaderFields.first { $0.key.description.lowercased() == field.lowercased() }
+        .map { String(describing: $0.value) }
     }
   }
 

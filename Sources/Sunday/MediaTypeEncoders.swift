@@ -1,16 +1,22 @@
-//
-//  MediaTypeEncoders.swift
-//  Sunday
-//
-//  Copyright © 2018 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
-import PotentCodables
 import PotentCBOR
+import PotentCodables
 import PotentJSON
 
 
@@ -39,13 +45,21 @@ public struct MediaTypeEncoders {
       return registerURL().registerData().registerJSON().registerCBOR().registerText()
     }
 
-    public func registerURL(arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .unbracketed,
-                            boolEncoding: WWWFormURLEncoder.BoolEncoding = .literal,
-                            dateEncoding: WWWFormURLEncoder.DateEncoding = .secondsSince1970,
-                            encoder: AnyValueEncoder = .default) -> Builder {
-      return register(encoder: WWWFormURLEncoder(arrayEncoding: arrayEndcoding, boolEncoding: boolEncoding,
-                                          dateEncoding: dateEncoding, encoder: encoder),
-                      forTypes: .wwwFormUrlEncoded)
+    public func registerURL(
+      arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .unbracketed,
+      boolEncoding: WWWFormURLEncoder.BoolEncoding = .literal,
+      dateEncoding: WWWFormURLEncoder.DateEncoding = .secondsSince1970,
+      encoder: AnyValueEncoder = .default
+    ) -> Builder {
+      return register(
+        encoder: WWWFormURLEncoder(
+          arrayEncoding: arrayEndcoding,
+          boolEncoding: boolEncoding,
+          dateEncoding: dateEncoding,
+          encoder: encoder
+        ),
+        forTypes: .wwwFormUrlEncoded
+      )
     }
 
     public func registerData() -> Builder {
@@ -124,8 +138,10 @@ public struct DataEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let data = value as? Data else {
-      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .octetStream,
-                                                                           error: Error.translationNotSupported))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(
+        contentType: .octetStream,
+        error: Error.translationNotSupported
+      ))
     }
     return data
   }
@@ -148,12 +164,16 @@ public struct TextEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
     guard let string = value as? String else {
-      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .plain,
-                                                                           error: Error.translationNotSupported))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(
+        contentType: .plain,
+        error: Error.translationNotSupported
+      ))
     }
     guard let encoded = string.data(using: encoding) else {
-      throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: .plain,
-                                                                           error: Error.encodingFailed))
+      throw SundayError.requestEncodingFailed(reason: .serializationFailed(
+        contentType: .plain,
+        error: Error.encodingFailed
+      ))
     }
     return encoded
   }

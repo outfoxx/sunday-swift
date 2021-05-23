@@ -1,12 +1,18 @@
-//
-//  URI.swift
-//  Sunday
-//
-//  Copyright © 2018 Outfox, inc.
-//
-//
-//  Distributed under the MIT License, See LICENSE for details.
-//
+/*
+ * Copyright 2021 Outfox, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import Foundation
 import URITemplate
@@ -16,9 +22,9 @@ public struct URI: Equatable, Hashable {
   public enum Error: Swift.Error {
     case invalidURI
   }
-  
+
   private let components: URLComponents
-  
+
   public var scheme: String { components.scheme! }
   public var host: String? { components.host }
   public var path: String { components.path }
@@ -32,7 +38,7 @@ public struct URI: Equatable, Hashable {
     }
     self.init(components: components)
   }
-  
+
   public init(scheme: String, host: String, path: String, queryItems: [URLQueryItem] = [], fragment: String? = nil) {
     var components = URLComponents()
     components.scheme = scheme
@@ -42,7 +48,7 @@ public struct URI: Equatable, Hashable {
     components.fragment = fragment
     self.init(components: components)
   }
-  
+
   public init(components: URLComponents) {
     self.components = components
   }
@@ -50,15 +56,15 @@ public struct URI: Equatable, Hashable {
 }
 
 extension URI: Codable {
-  
+
   public init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
     try self.init(string: container.decode(String.self))
   }
-  
+
   public func encode(to encoder: Encoder) throws {
     var container = encoder.singleValueContainer()
     try container.encode(components.string!)
   }
-  
+
 }
