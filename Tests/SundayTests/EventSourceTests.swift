@@ -50,7 +50,7 @@ class EventSourceTests: XCTestCase {
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage { _, _, _ in
+    eventSource.onMessage = { _, _, _ in
       eventSource.close()
       messageX.fulfill()
     }
@@ -96,7 +96,7 @@ class EventSourceTests: XCTestCase {
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage { event, id, data in
+    eventSource.onMessage = { event, id, data in
       eventSource.close()
       XCTAssertEqual(id, "123")
       XCTAssertEqual(event, "test")
@@ -145,7 +145,7 @@ class EventSourceTests: XCTestCase {
 
     let messagedX = expectation(description: "Event Received")
 
-    eventSource.onMessage { event, id, data in
+    eventSource.onMessage = { event, id, data in
       XCTAssertEqual(event, "test")
       XCTAssertEqual(id, "123")
       XCTAssertEqual(data, "{\"some\":\n\"test data\"}")
@@ -204,15 +204,15 @@ class EventSourceTests: XCTestCase {
     let listenerX = expectation(description: "Listener Received")
     let errorX = expectation(description: "Error Received")
 
-    eventSource.onOpen { openX.fulfill() }
+    eventSource.onOpen = { openX.fulfill() }
 
-    eventSource.onMessage { _, _, _ in messageX.fulfill() }
+    eventSource.onMessage = { _, _, _ in messageX.fulfill() }
 
-    eventSource.addEventListener("test") { _, _, _ in
+    eventSource.addEventListener(for: "test") { _, _, _ in
       listenerX.fulfill()
     }
 
-    eventSource.onError { _ in
+    eventSource.onError = { _ in
       eventSource.close()
       errorX.fulfill()
     }
@@ -236,10 +236,10 @@ class EventSourceTests: XCTestCase {
       }
 
 
-    eventSource.addEventListener("test") { _, _, _ in }
+    let handlerId = eventSource.addEventListener(for: "test") { _, _, _ in }
     XCTAssertTrue(!eventSource.events().isEmpty)
 
-    eventSource.removeEventListener("test")
+    eventSource.removeEventListener(handlerId: handlerId, for: "test")
     XCTAssertTrue(eventSource.events().isEmpty)
   }
 
@@ -288,7 +288,7 @@ class EventSourceTests: XCTestCase {
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage { _, _, _ in
+    eventSource.onMessage = { _, _, _ in
       eventSource.close()
       messageX.fulfill()
     }
@@ -340,7 +340,7 @@ class EventSourceTests: XCTestCase {
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage { _, _, _ in
+    eventSource.onMessage = { _, _, _ in
       eventSource.close()
       messageX.fulfill()
     }
@@ -396,7 +396,7 @@ class EventSourceTests: XCTestCase {
           .eraseToAnyPublisher()
       }
 
-    eventSource.onError { _ in
+    eventSource.onError = { _ in
       eventSource.close()
     }
 
@@ -456,7 +456,7 @@ class EventSourceTests: XCTestCase {
           .eraseToAnyPublisher()
       }
 
-    eventSource.onError { _ in
+    eventSource.onError = { _ in
       eventSource.close()
     }
 
@@ -502,7 +502,7 @@ class EventSourceTests: XCTestCase {
 
     let errorX = expectation(description: "error received")
 
-    eventSource.onError { error in
+    eventSource.onError = { error in
       if let error = error as? EventSource.Error, EventSource.Error.eventTimeout == error {
         eventSource.close()
         errorX.fulfill()
@@ -554,7 +554,7 @@ class EventSourceTests: XCTestCase {
 
     let errorX = expectation(description: "error received")
 
-    eventSource.onError { _ in
+    eventSource.onError = { _ in
       eventSource.close()
       errorX.fulfill()
     }

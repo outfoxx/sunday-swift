@@ -934,7 +934,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       headers: nil
     )
 
-    eventSource.addEventListener("test") { _, _, _ in
+    eventSource.addEventListener(for: "test") { _, _, _ in
       eventSource.close()
       completeX.fulfill()
     }

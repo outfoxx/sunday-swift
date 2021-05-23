@@ -22,36 +22,107 @@ import Foundation
 
 private let logger = logging.for(category: "Event Source")
 
-
-open class EventSource {
+/// `Sunday`'s implementation of the [EventSource Web API](https://developer.mozilla.org/en-US/docs/Web/API/EventSource)
+/// for connecting to servers that produce [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html).
+///
+/// ## HTTP Requests
+///
+/// `EventSource` allows HTTP requests to be generated asynchronously and
+/// completely customized for each connection attempt.
+///
+/// Instead of providing a URL and having the `EventSource` handling the
+/// building of HTTP requests internally, `Sunday`'s implementation delegates
+/// this to an HTTP request factory method that returns a Combine `Publisher`
+/// that must ultimately produce an HTTP request.
+///
+///
+public class EventSource {
 
   public enum Error: Swift.Error {
     case invalidState
     case eventTimeout
   }
 
+  /// Possible states of the `EventSource`
   public enum State: String, CaseIterable {
+
+    /// Connection is being attempted.
     case connecting
+
+    /// Connection has been opened and the
+    /// EventSource` is receiving events.
     case open
+
+    /// No connection is open and none is
+    /// being attempted. This is the default
+    /// state.
     case closed
   }
 
+  /// Global default time interval for connection retries.
+  ///
+  ///
+  /// - Important: The setting is mutable and can be modified to
+  ///   alter the global default.
+  ///
+  /// - SeeAlso: `EventSource.retryTime`
+  ///
+  public static var retryTimeDefault = DispatchTimeInterval.milliseconds(500)
+
+  /// Global default time interval for event timeout.
+  ///
+  /// If an event is not received within the specified timeout
+  /// the connection is forcibly restarted.
+  ///
+  /// - Important: The setting is mutable and can be modified to
+  /// alter the global default. If set to `nil`, the default will
+  /// be that event timeouts are disabled. Each `EventSource` can
+  /// override this setting in its initializer.
+  ///
+  public static var eventTimeoutIntervalDefault: DispatchTimeInterval? = DispatchTimeInterval.seconds(120)
+
+  /// Global default time interval for event timeout checks.
+  ///
+  /// This setting controls the frequency that the event timeout
+  /// is checked.
+  ///
+  /// - Important: The setting is mutable and can be modified to
+  /// alter the global default. Each `EventSource` can override
+  ///  this setting in its initializer.
+  ///
+  public static var eventTimeoutCheckIntervalDefault = DispatchTimeInterval.seconds(2)
+
+  // Maximum multiplier for the backoff algorithm
   private static let maxRetryTimeMultiplier = 30
 
 
+  /// Current state of the `EventSource`.
   public var readyState: State { readyStateValue.current }
   private var readyStateValue: StateValue
 
-  public private(set) var retryTime = DispatchTimeInterval.milliseconds(500)
+  /// Current time interval for connection retries.
+  ///
+  /// The retry time defaults to the global default
+  /// value `EventSource.retryTimeDefault`. It can also
+  /// be updated by the server using retry update
+  /// messages.
+  ///
+  /// - Note: EventSource employs an exponential backoff algorithm
+  ///   for retries. This setting controls the initial retry delay
+  ///   and calculations for successive retries.
+  ///
+  /// - SeeAlso: [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+  ///
+  public private(set) var retryTime = retryTimeDefault
 
-  private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+  private let requestorFactory: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private var dataCancel: AnyCancellable?
   private var receivedString: String?
 
   private var onOpenCallback: (() -> Void)?
   private var onErrorCallback: ((Swift.Error?) -> Void)?
   private var onMessageCallback: ((_ event: String?, _ id: String?, _ data: String?) -> Void)?
-  private var eventListeners: [String: (_ event: String?, _ id: String?, _ data: String?) -> Void] = [:]
+  private var eventListeners: [String: [UUID: (_ event: String?, _ id: String?, _ data: String?) -> Void]] = [:]
 
   private var queue: DispatchQueue
 
@@ -70,15 +141,32 @@ open class EventSource {
   private let eventParser = EventParser()
 
 
+  /// Creates an `EventSource` with the specific configuration.
+  ///
+  /// - Parameters:
+  ///   - queue: Queue to use for dispatching events to handlers. Defaults to
+  ///   the global background queue.
+  ///
+  ///   - eventTimeoutInterval: Maximum amount of time `EventSource` will wait for
+  ///   an event before forcicbly reconnecting. Defaults to
+  ///   `EventSource.eventTimeoutIntervalDefault`.
+  ///
+  ///   - eventTimeoutCheckInterval: Frequency that event timeouts are checked.
+  ///   Defaults to `EventSource.eventTimeoutIntervalDefault`
+  ///
+  ///   - requestorFactory: Factory method for HTTP requests. It is provided
+  ///   a map of HTTP headers that _should_ be included in the generated request
+  ///   and returns a Combine `Publisher` that produces the HTTP request.
+  ///
   public init(
     queue: DispatchQueue = .global(qos: .background),
-    eventTimeoutInterval: DispatchTimeInterval? = DispatchTimeInterval.seconds(75),
-    eventTimeoutCheckInterval: DispatchTimeInterval = DispatchTimeInterval.seconds(2),
-    requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+    eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
+    eventTimeoutCheckInterval: DispatchTimeInterval = eventTimeoutCheckIntervalDefault,
+    requestorFactory: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   ) {
     self.queue = DispatchQueue(label: "io.outfoxx.sunday.EventSource", attributes: [], target: queue)
     readyStateValue = StateValue(.closed, queue: queue)
-    self.requestor = requestor
+    self.requestorFactory = requestorFactory
     self.eventTimeoutInterval = eventTimeoutInterval
     self.eventTimeoutCheckInterval = eventTimeoutCheckInterval
     receivedString = nil
@@ -90,36 +178,90 @@ open class EventSource {
 
 
 
-  // MARK: EventListeners
+  // MARK: Event Handlers
 
 
-  open func onOpen(_ onOpenCallback: @escaping () -> Void) {
-
-    self.onOpenCallback = onOpenCallback
+  /// Handler to be called when the connection is opened.
+  ///
+  /// - Note: This _may_ be called multiple times. Each
+  /// successful reconnection attempt will fire an open
+  /// event.
+  ///
+  public var onOpen: (() -> Void)? {
+    get { onOpenCallback }
+    set { onOpenCallback = newValue }
   }
 
-  open func onError(_ onErrorCallback: @escaping (Swift.Error?) -> Void) {
-
-    self.onErrorCallback = onErrorCallback
+  /// Handler to be called when the connection experiences an
+  /// error.
+  ///
+  /// - Note: This _may_ be called multiple times. Any
+  /// interruption to an active connection will result in a
+  /// an error event being fire; including for reconnections.
+  ///
+  public var onError: ((Swift.Error?) -> Void)? {
+    get { onErrorCallback }
+    set { onErrorCallback = newValue }
   }
 
-  open func onMessage(_ onMessageCallback: @escaping (_ event: String?, _ id: String?, _ data: String?) -> Void) {
-    self.onMessageCallback = onMessageCallback
+  /// Handler to be called when any new event is received.
+  ///
+  public var onMessage: ((_ event: String?, _ id: String?, _ data: String?) -> Void)? {
+    get { onMessageCallback }
+    set { onMessageCallback = newValue }
   }
 
-  open func addEventListener(
-    _ event: String,
-    handler: @escaping (_ event: String?, _ id: String?, _ data: String?) -> Void
-  ) {
-    eventListeners[event] = handler
+  /// Adds a new message handler for a specific type of event.
+  ///
+  /// - Parameters:
+  ///   - event: Type of event to register the handler for.
+  ///   - handler: Handler for received messages of type  event`.
+  /// - Returns: Unique id of registered handler.
+  ///
+  @discardableResult
+  public func addEventListener(
+    for event: String,
+    _ handler: @escaping (_ event: String?, _ id: String?, _ data: String?) -> Void
+  ) -> UUID {
+    queue.sync {
+      let id = UUID()
+      var handlers = eventListeners[event] ?? [:]
+      handlers[id] = handler
+      eventListeners[event] = handlers
+      return id
+    }
   }
 
-  open func removeEventListener(_ event: String) {
-    eventListeners.removeValue(forKey: event)
+  /// Adds a new message handler for a specific type of event.
+  ///
+  /// - Parameters:
+  ///   - handlerId: Id of handler returned from `addEventListener`.
+  ///   - handler: Handler for received messages of type  event`.
+  ///
+  public func removeEventListener(handlerId: UUID, for event: String) {
+    queue.sync {
+      guard var handlers = eventListeners[event] else {
+        return
+      }
+
+      handlers.removeValue(forKey: handlerId)
+
+      if handlers.isEmpty {
+        eventListeners.removeValue(forKey: event)
+      }
+      else {
+        eventListeners[event] = handlers
+      }
+    }
   }
 
-  open func events() -> [String] {
-    return Array(eventListeners.keys)
+  /// List of unique event types that handlers are
+  /// registered for.
+  ///
+  public func events() -> [String] {
+    queue.sync {
+      return Array(eventListeners.keys)
+    }
   }
 
 
@@ -127,7 +269,11 @@ open class EventSource {
   // MARK: Connect
 
 
-  open func connect() {
+  /// Opens a connection to the server.
+  ///
+  /// If the connection is already `open` or `connecting`, this does nothing.
+  ///
+  public func connect() {
     if readyStateValue.isNotClosed {
       return
     }
@@ -159,7 +305,7 @@ open class EventSource {
     connectionAttemptTime = .now()
 
     dataCancel =
-      requestor(headers)
+      requestorFactory(headers)
         .tryMap { event -> Void in
 
           switch event {
@@ -185,7 +331,11 @@ open class EventSource {
   // MARK: Close
 
 
-  open func close() {
+  /// Closes any current connection to the server.
+  ///
+  /// If the connection is not `open` or `connecting`, this does nothing.
+  ///
+  public func close() {
     logger.debug("Closed")
 
     readyStateValue.update(forceTo: .closed)
@@ -471,12 +621,16 @@ open class EventSource {
 
     }
 
-    if let event = info.event, let eventHandler = eventListeners[event] {
+    queue.async {
 
-      logger.debug("dispatch listener: event=\(info.event ?? ""), id=\(info.id ?? "")")
+      if let event = info.event, let eventHandlers = self.eventListeners[event] {
 
-      queue.async {
-        eventHandler(event, info.id, info.data)
+        for eventHandler in eventHandlers {
+
+          logger.debug("dispatch listener: event=\(info.event ?? ""), id=\(info.id ?? "")")
+
+          eventHandler.value(event, info.id, info.data)
+        }
       }
     }
 

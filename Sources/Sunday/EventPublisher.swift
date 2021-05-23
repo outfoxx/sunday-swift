@@ -25,7 +25,7 @@ public struct EventPublisher<Output>: Publisher {
 
   public typealias Failure = Error
 
-  private let requestor: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+  private let requestorFactory: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   private let decoder: TextMediaTypeDecoder
   private let eventTypes: [String: AnyTextMediaTypeDecodable]
 
@@ -33,9 +33,9 @@ public struct EventPublisher<Output>: Publisher {
     eventTypes: [String: AnyTextMediaTypeDecodable],
     decoder: TextMediaTypeDecoder,
     queue: DispatchQueue,
-    requestor: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+    requestorFactory: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
   ) {
-    self.requestor = requestor
+    self.requestorFactory = requestorFactory
     self.decoder = decoder
     self.eventTypes = eventTypes
   }
@@ -74,8 +74,8 @@ private extension EventPublisher {
       }
 
       if source == nil {
-        source = EventSource(requestor: parent.requestor)
-        source!.onMessage(handleMessage(event:id:data:))
+        source = EventSource(requestorFactory: parent.requestorFactory)
+        source!.onMessage = handleMessage(event:id:data:)
       }
 
       self.demand += demand
