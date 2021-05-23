@@ -92,7 +92,7 @@ class ResponseDecodingTests: ParameterizedTest {
         }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }

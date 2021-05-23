@@ -636,7 +636,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         receiveValue: { _ in }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -701,7 +701,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         receiveValue: { _ in }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -764,7 +764,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         receiveValue: { _ in }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -827,7 +827,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         receiveValue: { _ in }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -882,7 +882,7 @@ class NetworkRequestFactoryTests: XCTestCase {
         receiveValue: { _ in }
       )
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -907,10 +907,6 @@ class NetworkRequestFactoryTests: XCTestCase {
           res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
 
@@ -945,7 +941,7 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 5.0) { _ in
+    waitForExpectations { _ in
       eventSource.close()
     }
   }
@@ -969,10 +965,6 @@ class NetworkRequestFactoryTests: XCTestCase {
           res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
 

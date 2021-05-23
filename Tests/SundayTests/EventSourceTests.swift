@@ -30,10 +30,6 @@ class EventSourceTests: XCTestCase {
           res.send(status: .ok, text: "data: test\n\n")
         }
       }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
-      }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
@@ -62,7 +58,7 @@ class EventSourceTests: XCTestCase {
     eventSource.connect()
     eventSource.connect()
 
-    waitForExpectations(timeout: 5.0, handler: nil)
+    waitForExpectations()
   }
 
   func testSimpleData() throws {
@@ -79,10 +75,6 @@ class EventSourceTests: XCTestCase {
           res.send(chunk: "data: some test data\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
@@ -114,7 +106,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations()
   }
 
   func testJSONData() throws {
@@ -132,10 +124,6 @@ class EventSourceTests: XCTestCase {
           res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
           res.finish(trailers: [:])
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
@@ -166,7 +154,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations()
   }
 
   func testCallbacks() throws {
@@ -181,15 +169,9 @@ class EventSourceTests: XCTestCase {
             let invocations = res.properties["invocations"] as! Int
             if invocations == 0 {
 
-              res.start(status: .ok, headers: [
-                HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-                HTTP.StdHeaders.transferEncoding: ["chunked"],
-              ])
-              res.send(chunk: "event: test\n".data(using: .utf8)!)
-              res.send(chunk: "id: 123\n".data(using: .utf8)!)
-              res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-              res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
-              res.finish(trailers: [:])
+              let headers = [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]]
+
+              res.send(status: .ok, headers: headers, body: "event: test\ndata: event\n\n".data(using: .utf8) ?? Data())
             }
             else {
 
@@ -198,10 +180,6 @@ class EventSourceTests: XCTestCase {
 
           }
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
@@ -225,7 +203,6 @@ class EventSourceTests: XCTestCase {
     let messageX = expectation(description: "Message Received")
     let listenerX = expectation(description: "Listener Received")
     let errorX = expectation(description: "Error Received")
-    errorX.assertForOverFulfill = false
 
     eventSource.onOpen { openX.fulfill() }
 
@@ -242,7 +219,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations()
   }
 
   func testEventListenerRemove() throws {
@@ -291,10 +268,6 @@ class EventSourceTests: XCTestCase {
           res.finish(trailers: [:])
         }
       }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
-      }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
@@ -322,7 +295,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations()
 
     XCTAssertEqual(eventSource.retryTime, .milliseconds(123_456_789))
   }
@@ -347,10 +320,6 @@ class EventSourceTests: XCTestCase {
           res.finish(trailers: [:])
         }
       }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
-      }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
@@ -378,7 +347,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 1.0, handler: nil)
+    waitForExpectations()
 
     XCTAssertEqual(eventSource.retryTime, .milliseconds(500))
   }
@@ -394,13 +363,10 @@ class EventSourceTests: XCTestCase {
 
             let invocations = res.properties["invocations"] as! Int
             if invocations == 0 {
-              res.start(status: .ok, headers: [
-                HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-                HTTP.StdHeaders.transferEncoding: ["chunked"],
-              ])
 
-              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
-              res.finish(trailers: [:])
+              let headers = [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]]
+
+              res.send(status: .ok, headers: headers, body: "id: 123\ndata: tester\n\n".data(using: .utf8) ?? Data())
             }
             else {
               XCTAssertEqual(req.header(for: "last-event-id"), "123")
@@ -411,10 +377,6 @@ class EventSourceTests: XCTestCase {
             }
           }
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
@@ -440,7 +402,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations()
   }
 
   func testReconnectsWithLastEventIdIgnoringInvalidIDs() throws {
@@ -476,10 +438,6 @@ class EventSourceTests: XCTestCase {
           }
         }
       }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
-      }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
@@ -504,7 +462,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 2.0, handler: nil)
+    waitForExpectations()
   }
 
   func testEventTimeoutCheckWithExpiration() throws {
@@ -523,10 +481,6 @@ class EventSourceTests: XCTestCase {
 
           }
         }
-      }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
       }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
@@ -557,7 +511,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 3.0, handler: nil)
+    waitForExpectations()
   }
 
   func testEventTimeoutCheckWithoutExpiration() throws {
@@ -583,10 +537,6 @@ class EventSourceTests: XCTestCase {
           }
         }
       }
-      CatchAll { route, req, _ in
-        print(route)
-        print(req)
-      }
     }
     guard let serverURL = server.start(timeout: 2.0) else {
       XCTFail("could not start local server")
@@ -611,7 +561,7 @@ class EventSourceTests: XCTestCase {
 
     eventSource.connect()
 
-    waitForExpectations(timeout: 3.0, handler: nil)
+    waitForExpectations()
   }
 
 }
