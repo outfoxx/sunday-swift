@@ -78,7 +78,7 @@ enum HeaderParameters {
   private static func validate(header: String, encoded: String) throws {
 
     guard
-      encoded.canBeConverted(to: .nonLossyASCII),
+      encoded.canBeConverted(to: .ascii),
       encoded.rangeOfCharacter(from: disallowedCharacters) == nil
     else {
       throw Error.invalidEncodedValue(header: header, invalidValue: encoded)
