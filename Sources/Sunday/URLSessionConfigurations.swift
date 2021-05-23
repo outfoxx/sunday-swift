@@ -19,19 +19,19 @@ import Foundation
 
 public extension URLSessionConfiguration {
 
-  static let restTimeoutIntervalForRequestDefault = TimeInterval(15)
-  static let restTimeoutIntervalForResourceDefault = TimeInterval(60)
+  static var restTimeoutIntervalForRequestDefault = TimeInterval(15)
+  static var restTimeoutIntervalForResourceDefault = TimeInterval(60)
 
   static func rest(
     from config: URLSessionConfiguration = .default,
-    requestTimeout: TimeInterval? = nil,
-    resourceTimeout: TimeInterval? = nil
+    requestTimeout: TimeInterval = restTimeoutIntervalForRequestDefault,
+    resourceTimeout: TimeInterval = restTimeoutIntervalForResourceDefault
   ) -> URLSessionConfiguration {
 
     config.networkServiceType = .default
     config.httpShouldUsePipelining = true
-    config.timeoutIntervalForRequest = requestTimeout ?? restTimeoutIntervalForRequestDefault
-    config.timeoutIntervalForResource = resourceTimeout ?? restTimeoutIntervalForResourceDefault
+    config.timeoutIntervalForRequest = requestTimeout
+    config.timeoutIntervalForResource = resourceTimeout
     config.waitsForConnectivity = true
     config.allowsExpensiveNetworkAccess = true
     config.allowsConstrainedNetworkAccess = true
@@ -42,6 +42,35 @@ public extension URLSessionConfiguration {
 
   static func rest(from config: URLSessionConfiguration = .default, timeout: TimeInterval) -> URLSessionConfiguration {
     return Self.rest(from: config, requestTimeout: timeout, resourceTimeout: timeout)
+  }
+
+
+  static var eventsTimeoutIntervalForRequestDefault = TimeInterval(180)
+  static var eventsTimeoutIntervalForResourceDefault = TimeInterval(600)
+
+  static func events(
+    from config: URLSessionConfiguration = .ephemeral,
+    requestTimeout: TimeInterval = eventsTimeoutIntervalForRequestDefault,
+    resourceTimeout: TimeInterval = eventsTimeoutIntervalForResourceDefault
+  ) -> URLSessionConfiguration {
+
+    config.networkServiceType = .background
+    config.httpShouldUsePipelining = true
+    config.timeoutIntervalForRequest = requestTimeout
+    config.timeoutIntervalForResource = resourceTimeout
+    config.waitsForConnectivity = true
+    config.allowsExpensiveNetworkAccess = true
+    config.allowsConstrainedNetworkAccess = true
+    config.allowsCellularAccess = true
+
+    return config
+  }
+
+  static func events(
+    from config: URLSessionConfiguration = .default,
+    timeout: TimeInterval
+  ) -> URLSessionConfiguration {
+    return Self.events(from: config, requestTimeout: timeout, resourceTimeout: timeout)
   }
 
 }

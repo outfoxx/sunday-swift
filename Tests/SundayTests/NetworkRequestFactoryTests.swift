@@ -1016,24 +1016,4 @@ class NetworkRequestFactoryTests: XCTestCase {
     waitForExpectations(timeout: 2.0, handler: nil)
   }
 
-  func testFluent() {
-
-    let factory = NetworkRequestFactory(baseURL: "http://example.com", sessionConfiguration: .default)
-
-    let restConfig = URLSessionConfiguration.rest()
-    let restFactory = factory.with(sessionConfiguration: restConfig)
-
-    XCTAssertEqual(restFactory.session.session.configuration, restConfig)
-  }
-
-  func testFluent2() {
-
-    let factory = NetworkRequestFactory(baseURL: "http://example.com", sessionConfiguration: .default)
-
-    let restSession = NetworkSession(configuration: .rest())
-    let restFactory = factory.with(session: restSession)
-
-    XCTAssertEqual(restFactory.session.session.configuration, restSession.session.configuration)
-  }
-
 }
