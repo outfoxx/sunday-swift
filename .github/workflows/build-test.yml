@@ -20,6 +20,38 @@ jobs:
         args: --strict
 
 
+  build-test-coverage:
+  
+    runs-on: macos-latest
+
+    needs: [check]
+
+    steps:
+      
+    - uses: actions/checkout@v2
+
+    - name: Build/Test
+      run: make build-test-macos
+
+    - name: Test Coverage
+      uses: maxep/spm-lcov-action@0.3.0
+      with:
+        output-file: ./coverage/lcov.info
+
+    - name: Report Coverage
+      uses: romeovs/lcov-reporter-action@v0.2.16
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        lcov-file: ./coverage/lcov.info
+
+    - name: Updload Reports
+      uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: reports
+        path: TestResults
+
+
   build-test:
     runs-on: macos-latest
 
@@ -27,13 +59,13 @@ jobs:
 
     strategy:
       matrix:
-        platform: [macos, ios, tvos]
+        platform: [ios, tvos]
 
     steps:
 
     - uses: actions/checkout@v2
 
-    - name: Build
+    - name: Build/Test
       run: make build-test-${{ matrix.platform }}
 
     - name: Updload Reports
