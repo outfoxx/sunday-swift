@@ -38,6 +38,19 @@ public class NetworkSession {
     delegate.owner = self
   }
 
+  public func copy(
+    configuration: URLSessionConfiguration? = nil,
+    serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
+    delegate externalDelegate: URLSessionDelegate? = nil
+  ) -> NetworkSession {
+
+    return NetworkSession(
+      configuration: configuration ?? self.session.configuration,
+      serverTrustPolicyManager: serverTrustPolicyManager ?? self.serverTrustPolicyManager,
+      delegate: externalDelegate ?? self.delegate.delegate
+    )
+  }
+
   public typealias DataTaskPublisher = URLSession.DataTaskPublisher
 
   public func dataTaskPublisher(for request: URLRequest) -> DataTaskPublisher {

@@ -25,6 +25,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public let baseURL: URI.Template
   public let session: NetworkSession
+  public let eventSession: NetworkSession
   public let adapter: NetworkRequestAdapter?
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
@@ -34,6 +35,7 @@ public class NetworkRequestFactory: RequestFactory {
   public init(
     baseURL: URI.Template,
     session: NetworkSession,
+    eventSession: NetworkSession? = nil,
     adapter: NetworkRequestAdapter? = nil,
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
@@ -41,6 +43,7 @@ public class NetworkRequestFactory: RequestFactory {
   ) {
     self.baseURL = baseURL
     self.session = session
+    self.eventSession = eventSession ?? session.copy(configuration: .events())
     self.adapter = adapter
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
@@ -67,29 +70,6 @@ public class NetworkRequestFactory: RequestFactory {
 
   deinit {
     session.close(cancelOutstandingTasks: true)
-  }
-
-  public func with(sessionConfiguration: URLSessionConfiguration) -> NetworkRequestFactory {
-    NetworkRequestFactory(
-      baseURL: baseURL,
-      adapter: adapter,
-      serverTrustPolicyManager: session.serverTrustPolicyManager,
-      sessionConfiguration: sessionConfiguration,
-      requestQueue: requestQueue,
-      mediaTypeEncoders: mediaTypeEncoders,
-      mediaTypeDecoders: mediaTypeDecoders
-    )
-  }
-
-  public func with(session: NetworkSession) -> NetworkRequestFactory {
-    NetworkRequestFactory(
-      baseURL: baseURL,
-      session: session,
-      adapter: adapter,
-      requestQueue: requestQueue,
-      mediaTypeEncoders: mediaTypeEncoders,
-      mediaTypeDecoders: mediaTypeDecoders
-    )
   }
 
   public func registerProblem(type: URL, problemType: Problem.Type) {
@@ -380,7 +360,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     return EventSource(queue: requestQueue) { headers in
       requestPublisher.flatMap { request in
-        self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers))
+        self.eventSession.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers))
       }
       .eraseToAnyPublisher()
     }
@@ -421,7 +401,8 @@ public class NetworkRequestFactory: RequestFactory {
         return EventPublisher<D>(eventTypes: eventTypes, decoder: jsonDecoder, queue: requestQueue) { headers in
 
           requestPublisher.flatMap { request in
-            self.session.dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
+            self.eventSession
+              .dataTaskStreamPublisher(for: request.adding(httpHeaders: headers).with(timeoutInterval: 86400))
           }
           .eraseToAnyPublisher()
 
@@ -439,6 +420,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   public func close(cancelOutstandingRequests: Bool = true) {
     session.close(cancelOutstandingTasks: cancelOutstandingRequests)
+    eventSession.close(cancelOutstandingTasks: cancelOutstandingRequests)
   }
 
 }
