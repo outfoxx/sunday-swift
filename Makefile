@@ -14,7 +14,7 @@ define buildtest
 endef
 
 build-test-macos:
-	$(call buildtest,macOS,platform=macOS)
+	swift test --enable-code-coverage
 
 build-test-ios:
 	$(call buildtest,iOS,platform=iOS Simulator$(comma)name=iPhone 12)
