@@ -122,6 +122,17 @@ class HeaderParametersTests: XCTestCase {
 
   func testFailsOnInvalidEncodedHeaderValues() throws {
 
+    XCTAssertThrowsError(try HeaderParameters.encode(headers: ["test": "a test\0value"])) { error in
+
+      guard case HeaderParameters.Error.invalidEncodedValue(let badHeader, let badValue) = error else {
+        XCTFail("unexpected error")
+        return
+      }
+
+      XCTAssertEqual(badHeader, "test")
+      XCTAssertEqual(badValue, "a test\0value")
+    }
+
     XCTAssertThrowsError(try HeaderParameters.encode(headers: ["test": "a test\nvalue"])) { error in
 
       guard case HeaderParameters.Error.invalidEncodedValue(let badHeader, let badValue) = error else {
@@ -131,6 +142,28 @@ class HeaderParametersTests: XCTestCase {
 
       XCTAssertEqual(badHeader, "test")
       XCTAssertEqual(badValue, "a test\nvalue")
+    }
+
+    XCTAssertThrowsError(try HeaderParameters.encode(headers: ["test": "a test\rvalue"])) { error in
+
+      guard case HeaderParameters.Error.invalidEncodedValue(let badHeader, let badValue) = error else {
+        XCTFail("unexpected error")
+        return
+      }
+
+      XCTAssertEqual(badHeader, "test")
+      XCTAssertEqual(badValue, "a test\rvalue")
+    }
+
+    XCTAssertThrowsError(try HeaderParameters.encode(headers: ["test": "a test\u{1234}value"])) { error in
+
+      guard case HeaderParameters.Error.invalidEncodedValue(let badHeader, let badValue) = error else {
+        XCTFail("unexpected error")
+        return
+      }
+
+      XCTAssertEqual(badHeader, "test")
+      XCTAssertEqual(badValue, "a test\u{1234}value")
     }
   }
 

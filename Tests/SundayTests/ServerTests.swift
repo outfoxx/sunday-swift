@@ -137,7 +137,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -192,7 +192,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -246,7 +246,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -294,7 +294,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -356,7 +356,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
   }
@@ -407,7 +407,7 @@ class HTTPServerTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
 

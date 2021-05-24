@@ -79,7 +79,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       }
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
 
@@ -147,7 +147,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       )
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
 
@@ -194,7 +194,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
         XCTFail("publisher emitted value, expected error")
       }
 
-    waitForExpectations(timeout: 2) { _ in
+    waitForExpectations { _ in
       requestCancel.cancel()
     }
 
