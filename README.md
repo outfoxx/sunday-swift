@@ -2,7 +2,7 @@
 
 ---
 
-# Sunday 🙏 The framework of REST
+# Sunday 🙏 The framework of REST for Swift
 
 Swift framework for generated REST clients.
 
