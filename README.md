@@ -4,9 +4,24 @@
 
 # Sunday 🙏 The framework of REST for Swift
 
+---
+
 Swift framework for generated REST clients.
 
 ### [Read the Documentation](https://outfoxx.github.io/sunday)
+
+---
+
+Swift Package Manager
+---------------------
+
+Sunday is delivered as a Swift package using the Swift Package Manager.
+
+SPM dependency declaration:
+
+```swift
+.package(name: "Sunday", url: "https://github.com/outfoxx/sunday-swift.git", from: <version>),
+```
 
 
 License
