@@ -22,8 +22,10 @@ import Foundation
 
 private let logger = logging.for(category: "Event Source")
 
-/// `Sunday`'s implementation of the [EventSource Web API](https://developer.mozilla.org/en-US/docs/Web/API/EventSource)
-/// for connecting to servers that produce [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html).
+/// `Sunday`'s implementation of the
+/// [EventSource Web API](https://developer.mozilla.org/en-US/docs/Web/API/EventSource)
+/// for connecting to servers that produce
+/// [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html).
 ///
 /// ## HTTP Requests
 ///

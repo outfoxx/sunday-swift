@@ -23,3 +23,32 @@ public typealias RequestResponsePublisher = AnyPublisher<(response: HTTPURLRespo
 public typealias RequestResultPublisher<T> = AnyPublisher<T, Error>
 public typealias RequestCompletePublisher = RequestResultPublisher<Void>
 public typealias RequestEventPublisher<E> = AnyPublisher<E, Error>
+
+
+
+public extension RequestResultPublisher {
+
+  func nilifyResponse(
+    statusCodes: [HTTP.StatusCode],
+    problemTypes: [Problem.Type] = []
+  ) -> AnyPublisher<Output?, Error> {
+    return nilifyResponse(statuses: statusCodes.map(\.rawValue), problemTypes: problemTypes)
+  }
+
+  func nilifyResponse(statuses: [Int] = [404], problemTypes: [Problem.Type] = []) -> AnyPublisher<Output?, Error> {
+    return map { $0 as Output? }
+      .tryCatch { (error: Error) throws -> Just<Output?> in
+
+        guard
+          let problem = error as? Problem,
+          statuses.contains(problem.status) || problemTypes.contains(where: { $0 == type(of: error) })
+        else {
+          throw error
+        }
+
+        return Just(nil)
+      }
+      .eraseToAnyPublisher()
+  }
+
+}

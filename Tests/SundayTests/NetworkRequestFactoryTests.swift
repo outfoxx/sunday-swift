@@ -887,6 +887,129 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
   }
 
+  func testNilifyResponseWorksWithProblemTypess() throws {
+
+    let testProblem = TestProblem(extra: "Something Extra", instance: URL(string: "id:12345"))
+
+
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/problem") {
+          GET { _, res in
+            let headers = [HTTP.StdHeaders.contentType: [MediaType.problem.value]]
+            res.send(statusCode: TestProblem.statusCode, headers: headers, value: testProblem)
+          }
+        }
+      }
+    }
+
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let completeX = expectation(description: "typed problem - complete")
+    completeX.expectedFulfillmentCount = 2
+
+    let baseURL = URI.Template(format: serverURL.absoluteString)
+
+    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
+    defer { requestFactory.close() }
+
+    requestFactory.registerProblem(type: TestProblem.type, problemType: TestProblem.self)
+
+    let requestCancel =
+      (requestFactory.result(
+        method: .get,
+        pathTemplate: "problem",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: Empty.none,
+        contentTypes: [.json],
+        acceptTypes: [.json],
+        headers: nil
+      ) as RequestResultPublisher<String>)
+      .nilifyResponse(statuses: [], problemTypes: [TestProblem.self])
+      .sink(
+        receiveCompletion: { completion in
+          if case .failure = completion {
+            XCTFail("Should have returned nil")
+          }
+          completeX.fulfill()
+        },
+        receiveValue: { value in
+          XCTAssertNil(value)
+          completeX.fulfill()
+        }
+      )
+
+    waitForExpectations { _ in
+      requestCancel.cancel()
+    }
+  }
+
+  func testNilifyResponseWorksWithStatusCodes() throws {
+
+    let testProblem = TestProblem(extra: "Something Extra", instance: URL(string: "id:12345"))
+
+
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      ContentNegotiation {
+        Path("/problem") {
+          GET { _, res in
+            let headers = [HTTP.StdHeaders.contentType: [MediaType.problem.value]]
+            res.send(statusCode: TestProblem.statusCode, headers: headers, value: testProblem)
+          }
+        }
+      }
+    }
+
+    guard let serverURL = server.start(timeout: 2.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let completeX = expectation(description: "typed problem - complete")
+    completeX.expectedFulfillmentCount = 2
+
+    let baseURL = URI.Template(format: serverURL.absoluteString)
+
+    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
+    defer { requestFactory.close() }
+
+    requestFactory.registerProblem(type: TestProblem.type, problemType: TestProblem.self)
+
+    let requestCancel =
+      (requestFactory.result(
+        method: .get,
+        pathTemplate: "problem",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: Empty.none,
+        contentTypes: [.json],
+        acceptTypes: [.json],
+        headers: nil
+      ) as RequestResultPublisher<String>)
+      .nilifyResponse(statusCodes: [TestProblem.statusCode], problemTypes: [])
+      .sink(
+        receiveCompletion: { completion in
+          if case .failure = completion {
+            XCTFail("Should have returned nil")
+          }
+          completeX.fulfill()
+        },
+        receiveValue: { value in
+          XCTAssertNil(value)
+          completeX.fulfill()
+        }
+      )
+
+    waitForExpectations { _ in
+      requestCancel.cancel()
+    }
+  }
 
   //
   // MARK: Event Source/Stream Building
