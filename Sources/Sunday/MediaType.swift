@@ -194,6 +194,9 @@ public struct MediaType {
   public static let anyAudio = MediaType(type: .audio, subtype: "*")
   public static let anyVideo = MediaType(type: .video, subtype: "*")
 
+  public static let x509CACert = MediaType(type: .application, tree: .obsolete, subtype: "x509-ca-cert")
+  public static let x509UserCert = MediaType(type: .application, tree: .obsolete, subtype: "x509-user-cert")
+
   public static let jsonStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .json)
   public static let xmlStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .xml)
 

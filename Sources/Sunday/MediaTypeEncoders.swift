@@ -63,11 +63,11 @@ public struct MediaTypeEncoders {
     }
 
     public func registerData() -> Builder {
-      return register(encoder: DataEncoder(), forTypes: .octetStream)
+      return register(encoder: DataEncoder.default, forTypes: .octetStream)
     }
 
     public func registerText() -> Builder {
-      return register(encoder: TextEncoder(), forTypes: .anyText)
+      return register(encoder: TextEncoder.default, forTypes: .anyText)
     }
 
     public func registerJSON() -> Builder {
@@ -88,6 +88,10 @@ public struct MediaTypeEncoders {
 
     public func registerCBOR(encoder: CBOR.Encoder) -> Builder {
       return register(encoder: encoder, forTypes: .cbor)
+    }
+
+    public func registerX509() -> Builder {
+      return register(encoder: DataEncoder.default, forTypes: .x509CACert, .x509UserCert)
     }
 
     public func register(encoder: MediaTypeEncoder, forTypes types: MediaType...) -> Builder {
@@ -150,6 +154,8 @@ public struct DataEncoder: MediaTypeEncoder {
 
 
 public struct TextEncoder: MediaTypeEncoder {
+
+  public static let `default` = TextEncoder()
 
   enum Error: Swift.Error {
     case translationNotSupported

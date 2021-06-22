@@ -49,11 +49,11 @@ public struct MediaTypeDecoders {
     }
 
     public func registerData() -> Builder {
-      return register(decoder: DataDecoder(), forTypes: .octetStream)
+      return register(decoder: DataDecoder.default, forTypes: .octetStream)
     }
 
     public func registerText() -> Builder {
-      return register(decoder: TextDecoder(), forTypes: .anyText)
+      return register(decoder: TextDecoder.default, forTypes: .anyText)
     }
 
     public func registerJSON() -> Builder {
@@ -74,6 +74,10 @@ public struct MediaTypeDecoders {
 
     public func registerCBOR(decoder: CBOR.Decoder) -> Builder {
       return register(decoder: decoder, forTypes: .cbor)
+    }
+
+    public func registerX509() -> Builder {
+      return register(decoder: DataDecoder.default, forTypes: .x509CACert, .x509UserCert)
     }
 
     public func register(decoder: MediaTypeDecoder, forTypes types: MediaType...) -> Builder {
