@@ -45,7 +45,7 @@ public struct MediaTypeDecoders {
     }
 
     public func registerDefault() -> Builder {
-      return registerData().registerJSON().registerCBOR().registerText()
+      return registerData().registerJSON().registerCBOR().registerText().registerX509()
     }
 
     public func registerData() -> Builder {
