@@ -34,7 +34,7 @@ public struct URI: Equatable, Hashable {
   public var query: String? { components.query }
   public var queryItems: [URLQueryItem]? { components.queryItems }
   public var fragment: String? { components.fragment }
-  
+
   public var string: String? { components.string }
 
   public init(string: String) throws {
