@@ -299,7 +299,7 @@ public class EventSource {
     var headers = HTTP.Headers()
     headers[HTTP.StdHeaders.accept] = [MediaType.eventStream.value]
 
-    // Add laste-event-id if we are reconnecting
+    // Add last-event-id if we are reconnecting
     if let lastEventId = lastEventId {
       headers[HTTP.StdHeaders.lastEventId] = [lastEventId]
     }
