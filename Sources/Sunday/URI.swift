@@ -25,8 +25,9 @@ public struct URI: Equatable, Hashable {
 
   private let components: URLComponents
 
-  public var scheme: String { components.scheme! }
+  public var scheme: String? { components.scheme }
   public var host: String? { components.host }
+  public var port: Int? { components.port }
   public var path: String { components.path }
   public var query: String? { components.query }
   public var queryItems: [URLQueryItem]? { components.queryItems }
@@ -39,7 +40,13 @@ public struct URI: Equatable, Hashable {
     self.init(components: components)
   }
 
-  public init(scheme: String, host: String, path: String, queryItems: [URLQueryItem] = [], fragment: String? = nil) {
+  public init(
+    scheme: String? = nil,
+    host: String? = nil,
+    path: String,
+    queryItems: [URLQueryItem]? = nil,
+    fragment: String? = nil
+  ) {
     var components = URLComponents()
     components.scheme = scheme
     components.host = host
@@ -63,8 +70,16 @@ extension URI: Codable {
   }
 
   public func encode(to encoder: Encoder) throws {
+    guard let string = components.string else {
+      let context = EncodingError.Context(
+        codingPath: encoder.codingPath,
+        debugDescription: "Unable to get string for URI",
+        underlyingError: nil
+      )
+      throw EncodingError.invalidValue(self, context)
+    }
     var container = encoder.singleValueContainer()
-    try container.encode(components.string!)
+    try container.encode(string)
   }
 
 }
