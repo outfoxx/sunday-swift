@@ -30,8 +30,18 @@ class URITests: XCTestCase {
     XCTAssertEqual(uri.query, "limit=10")
     XCTAssertEqual(uri.queryItems, [URLQueryItem(name: "limit", value: "10")])
     XCTAssertEqual(uri.fragment, "block")
+    XCTAssertEqual(uri.string, "http://example.com/api/v1/items?limit=10#block")
   }
 
+  func testParseInitOpaque() throws {
+    
+    let uri = try URI(string: "mailto:test@example.com")
+    
+    XCTAssertEqual(uri.scheme, "mailto")
+    XCTAssertEqual(uri.path , "test@example.com")
+    XCTAssertEqual(uri.string, "mailto:test@example.com")
+  }
+  
   func testParseInitFailsWithBadURL() throws {
 
     XCTAssertThrowsError(try URI(string: "http:\\example-host/api/v1/items?limit=10#block")) { error in
@@ -59,6 +69,16 @@ class URITests: XCTestCase {
     XCTAssertEqual(uri.query, "limit=10")
     XCTAssertEqual(uri.queryItems, [URLQueryItem(name: "limit", value: "10")])
     XCTAssertEqual(uri.fragment, "block")
+    XCTAssertEqual(uri.string, "http://example.com/api/v1/items?limit=10#block")
+  }
+  
+  func testInitOpaque() throws {
+    
+    let uri = URI(scheme: "mailto", path: "test@example.com")
+    
+    XCTAssertEqual(uri.scheme, "mailto")
+    XCTAssertEqual(uri.path , "test@example.com")
+    XCTAssertEqual(uri.string, "mailto:test@example.com")
   }
 
   func testComponentsInit() throws {

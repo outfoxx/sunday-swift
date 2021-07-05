@@ -26,12 +26,16 @@ public struct URI: Equatable, Hashable {
   private let components: URLComponents
 
   public var scheme: String? { components.scheme }
+  public var user: String? { components.user }
+  public var password: String? { components.password }
   public var host: String? { components.host }
   public var port: Int? { components.port }
   public var path: String { components.path }
   public var query: String? { components.query }
   public var queryItems: [URLQueryItem]? { components.queryItems }
   public var fragment: String? { components.fragment }
+  
+  public var string: String? { components.string }
 
   public init(string: String) throws {
     guard let components = URLComponents(string: string) else {
