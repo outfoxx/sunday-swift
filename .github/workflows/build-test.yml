@@ -20,53 +20,39 @@ jobs:
         args: --strict
 
 
-  build-test-coverage:
-  
-    runs-on: macos-latest
-
-    needs: [check]
-
-    steps:
-      
-    - uses: actions/checkout@v2
-
-    - name: Build/Test
-      run: make build-test-macos
-
-    - name: Test Coverage
-      uses: maxep/spm-lcov-action@0.3.0
-      with:
-        output-file: ./coverage/lcov.info
-
-    - name: Report Coverage
-      uses: romeovs/lcov-reporter-action@v0.2.21
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        lcov-file: ./coverage/lcov.info
-
-    - name: Updload Reports
-      uses: actions/upload-artifact@v2
-      if: always()
-      with:
-        name: reports
-        path: TestResults
-
-
   build-test:
-    runs-on: macos-latest
+  
+    runs-on: macos-11
 
     needs: [check]
 
     strategy:
       matrix:
-        platform: [ios, tvos]
+        platform: [macos, ios, tvos]
+        xcode: ["12.5.1", "13.0"]
 
     steps:
-
+      
     - uses: actions/checkout@v2
+    
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_${{matrix.xcode}}.app/Contents/Developer
 
     - name: Build/Test
       run: make build-test-${{ matrix.platform }}
+
+    - name: Test Coverage
+      uses: maxep/spm-lcov-action@0.3.0
+      if: ${{ matrix.platform == 'macos' && matrix.xcode == '12.5.1' }}
+      with:
+        output-file: ./coverage/lcov.info
+
+    - name: Report Coverage
+      uses: romeovs/lcov-reporter-action@v0.2.21
+      if: ${{ matrix.platform == 'macos' && matrix.xcode == '12.5.1' }}
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        lcov-file: ./coverage/lcov.info
 
     - name: Updload Reports
       uses: actions/upload-artifact@v2
