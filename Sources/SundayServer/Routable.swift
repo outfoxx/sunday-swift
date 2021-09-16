@@ -41,7 +41,7 @@ public protocol Routable {
 }
 
 
-@_functionBuilder
+@resultBuilder
 public enum RoutableBuilder {
 
   public static func buildBlock(_ routables: Routable...) -> Routable {
