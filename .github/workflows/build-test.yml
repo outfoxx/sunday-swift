@@ -9,20 +9,17 @@ on:
 jobs:
 
   check:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
 
     - uses: actions/checkout@v1
-    - name: GitHub Action for SwiftLint
-      uses: norio-nomura/action-swiftlint@3.2.1
-      with:
-        args: --strict
-
+    - name: SwiftLint
+      run: ./.github/swiftlinter      
 
   build-test:
   
-    runs-on: macos-11
+    runs-on: macos-latest
 
     needs: [check]
 
