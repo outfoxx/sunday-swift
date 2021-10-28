@@ -2,18 +2,21 @@
 project:=Sunday
 comma:=,
 
+default: clean build-test-all
+
 clean:
 	rm -rf TestResults
+	rm -rf .derived-data
 
 make-test-results-dir:
 	mkdir -p TestResults
 
 define buildtest
-	xcodebuild -scheme $(project)-Package -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' -enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES test
+	xcodebuild -scheme $(project)-Package -derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' -enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES test
 endef
 
 build-test-macos:
-	swift test --enable-code-coverage
+	$(call buildtest,macOS,platform=macOS)
 
 build-test-ios:
 	$(call buildtest,iOS,platform=iOS Simulator$(comma)name=iPhone 12)
