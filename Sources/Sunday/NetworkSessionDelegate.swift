@@ -27,7 +27,7 @@ internal class NetworkSessionDelegate: NSObject {
   }
 
   internal func delegate<D: URLSessionDelegate>(for task: URLSessionTask, as type: D.Type) -> D? {
-    return (owner?.taskDelegates[task] as? D) ?? (delegate as? D)
+    return (owner?.getTaskDelegate(for: task) as? D) ?? (delegate as? D)
   }
 
 }
@@ -36,7 +36,7 @@ extension NetworkSessionDelegate: URLSessionDelegate {
 
   public func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
     delegate?.urlSession?(session, didBecomeInvalidWithError: error)
-    owner?.taskDelegates.values.forEach { delegate in delegate.urlSession?(session, didBecomeInvalidWithError: error) }
+    owner?.getTaskDelegates().forEach { delegate in delegate.urlSession?(session, didBecomeInvalidWithError: error) }
   }
 
   public func urlSession(
@@ -70,16 +70,16 @@ extension NetworkSessionDelegate: URLSessionDelegate {
     completionHandler(disposition, credential)
   }
 
-  #if !os(macOS)
+#if !os(macOS)
 
-    public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-      delegate?.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
-      owner?.taskDelegates.values.forEach { delegate in
-        delegate.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
-      }
+  public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+    delegate?.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
+    owner?.getTaskDelegates().forEach { delegate in
+      delegate.urlSessionDidFinishEvents?(forBackgroundURLSession: session)
     }
+  }
 
-  #endif
+#endif
 
 }
 
@@ -183,7 +183,7 @@ extension NetworkSessionDelegate: URLSessionTaskDelegate {
   ) {
     delegate(for: task, as: URLSessionTaskDelegate.self)?
       .urlSession?(session, task: task, didCompleteWithError: error)
-    owner?.taskDelegates.removeValue(forKey: task)
+    _ = owner?.removeTaskDelegate(for: task)
   }
 
 }

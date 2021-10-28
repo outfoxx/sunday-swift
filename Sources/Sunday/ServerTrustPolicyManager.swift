@@ -236,16 +236,7 @@ public enum ServerTrustPolicy {
   // MARK: - Private - Certificate Data
 
   private func certificateData(for trust: SecTrust) -> [Data] {
-
-    var certificates: [SecCertificate] = []
-
-    for index in 0 ..< SecTrustGetCertificateCount(trust) {
-      if let certificate = SecTrustGetCertificateAtIndex(trust, index) {
-        certificates.append(certificate)
-      }
-    }
-
-    return certificateData(for: certificates)
+    return certificateData(for: Self.copyChain(from: trust))
   }
 
   private func certificateData(for certificates: [SecCertificate]) -> [Data] {
@@ -255,32 +246,12 @@ public enum ServerTrustPolicy {
   // MARK: - Private - Public Key Extraction
 
   private static func publicKeys(for trust: SecTrust) -> [SecKey] {
-    var publicKeys: [SecKey] = []
 
-    for index in 0 ..< SecTrustGetCertificateCount(trust) {
-      if
-        let certificate = SecTrustGetCertificateAtIndex(trust, index),
-        let publicKey = publicKey(for: certificate)
-      {
-        publicKeys.append(publicKey)
-      }
-    }
-
-    return publicKeys
+    return copyChain(from: trust).compactMap { publicKey(for: $0) }
   }
 
   private static func publicKey(for certificate: SecCertificate) -> SecKey? {
-    var publicKey: SecKey?
-
-    let policy = SecPolicyCreateBasicX509()
-    var trust: SecTrust?
-    let trustCreationStatus = SecTrustCreateWithCertificates(certificate, policy, &trust)
-
-    if let trust = trust, trustCreationStatus == errSecSuccess {
-      publicKey = SecTrustCopyPublicKey(trust)
-    }
-
-    return publicKey
+    return SecCertificateCopyKey(certificate)
   }
 
   private static func data(for key: SecKey) -> Data? {
@@ -293,6 +264,29 @@ public enum ServerTrustPolicy {
     }
 
     return data as Data
+  }
+
+  private static func copyChain(from trust: SecTrust) -> [SecCertificate] {
+    if #available(macOS 12.0, iOS 15.0, tvOS 15.0, watchOS 8.0, *) {
+
+      guard let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate]  else {
+        return []
+      }
+
+      return chain
+    }
+    else {
+
+      var chain: [SecCertificate] = []
+
+      for index in 0 ..< SecTrustGetCertificateCount(trust) {
+        if let certificate = SecTrustGetCertificateAtIndex(trust, index) {
+          chain.append(certificate)
+        }
+      }
+
+      return chain
+    }
   }
 
 }

@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
-import Combine
 import Foundation
 
 
 public class NetworkSession {
 
+  public var isClosed: Bool { closed }
+
   internal let session: URLSession
   internal let delegate: NetworkSessionDelegate // swiftlint:disable:this weak_delegate
-  internal var taskDelegates: [URLSessionTask: URLSessionTaskDelegate] = [:]
-  internal let delegateQueue = OperationQueue()
   internal let serverTrustPolicyManager: ServerTrustPolicyManager?
-  internal var closed = false
+
+  private var taskDelegates: [URLSessionTask: URLSessionTaskDelegate] = [:]
+  private let taskDelegatesLockQueue = DispatchQueue(label: "NetworkSession.taskDelegates Lock")
+  private let taskDelegateOperaionQueue = OperationQueue()
+  private var closed = false
 
   public init(
     configuration: URLSessionConfiguration,
@@ -33,7 +36,7 @@ public class NetworkSession {
     delegate externalDelegate: URLSessionDelegate? = nil
   ) {
     delegate = NetworkSessionDelegate(delegate: externalDelegate)
-    session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: delegateQueue)
+    session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: taskDelegateOperaionQueue)
     self.serverTrustPolicyManager = serverTrustPolicyManager
     delegate.owner = self
   }
@@ -51,36 +54,72 @@ public class NetworkSession {
     )
   }
 
-  public typealias DataTaskPublisher = URLSession.DataTaskPublisher
-
-  public func dataTaskPublisher(for request: URLRequest) -> DataTaskPublisher {
-    return session.dataTaskPublisher(for: request)
+  internal func getTaskDelegates() -> [URLSessionTaskDelegate] {
+    taskDelegatesLockQueue.sync { Array(taskDelegates.values) }
   }
 
-  public typealias DataTaskValidatedPublisher = AnyPublisher<(response: HTTPURLResponse, data: Data?), Error>
-
-  public func dataTaskValidatedPublisher(request: URLRequest) -> DataTaskValidatedPublisher {
-    return dataTaskPublisher(for: request)
-      .tryMap { data, response in
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-          throw URLError(.badServerResponse)
-        }
-
-        if 400 ..< 600 ~= httpResponse.statusCode {
-          throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
-            response: httpResponse,
-            data: data
-          ))
-        }
-
-        return (httpResponse, data)
-      }
-      .eraseToAnyPublisher()
+  internal func getTaskDelegate(for task: URLSessionTask) -> URLSessionTaskDelegate? {
+    taskDelegatesLockQueue.sync { taskDelegates[task] }
   }
 
-  public func dataTaskStreamPublisher(for request: URLRequest) -> DataTaskStreamPublisher {
-    return DataTaskStreamPublisher(session: self, request: request)
+  internal func setTaskDelegate(_ delegate: URLSessionTaskDelegate, for task: URLSessionTask) {
+    taskDelegatesLockQueue.sync { taskDelegates[task] = delegate }
+  }
+
+  internal func removeTaskDelegate(for task: URLSessionTask) -> URLSessionTaskDelegate? {
+    taskDelegatesLockQueue.sync { taskDelegates.removeValue(forKey: task) }
+  }
+
+  public func data(for request: URLRequest) async throws -> (Data?, URLResponse) {
+
+    if closed {
+      throw URLError(.cancelled)
+    }
+
+    return try await withUnsafeThrowingContinuation { continuation in
+      let task = session.dataTask(with: request)
+      setTaskDelegate(DataDelegate(continuation: continuation), for: task)
+      task.resume()
+    }
+  }
+
+  public func validatedData(for request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
+
+    let (data, response) = try await data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw URLError(.badServerResponse)
+    }
+
+    if 400 ..< 600 ~= httpResponse.statusCode {
+      throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
+        response: httpResponse,
+        data: data
+      ))
+    }
+
+    return (data, httpResponse)
+  }
+
+  public enum DataEvent {
+    case connect(HTTPURLResponse)
+    case data(Data)
+  }
+
+  public typealias DataEventStream = AsyncThrowingStream<NetworkSession.DataEvent, Error>
+
+  public func dataEventStream(for request: URLRequest) throws -> DataEventStream {
+
+    if closed {
+      throw URLError(.cancelled)
+    }
+
+    return AsyncThrowingStream(DataEvent.self) {
+      let task = session.dataTask(with: request)
+      setTaskDelegate(DataStreamDelegate(continuation: $0), for: task)
+      task.resume()
+    }
+
   }
 
   public func close(cancelOutstandingTasks: Bool) {
@@ -91,6 +130,97 @@ public class NetworkSession {
       session.finishTasksAndInvalidate()
     }
     closed = true
+  }
+
+}
+
+private final class DataDelegate: NSObject, URLSessionDataDelegate {
+
+  let continuation: UnsafeContinuation<(Data?, URLResponse), Error>
+  var response: URLResponse?
+  var data: Data?
+
+  init(continuation: UnsafeContinuation<(Data?, URLResponse), Error>) {
+    self.continuation = continuation
+  }
+
+  public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    if let error = error {
+      continuation.resume(throwing: error)
+      return
+    }
+    guard let response = response else {
+      continuation.resume(throwing: URLError(.unknown))
+      return
+    }
+    continuation.resume(returning: (data, response))
+  }
+
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
+
+    self.response = response
+
+    completionHandler(.allow)
+  }
+
+  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    if self.data == nil {
+      self.data = data
+    }
+    else {
+      self.data!.append(data)
+    }
+  }
+
+}
+
+private final class DataStreamDelegate: NSObject, URLSessionDataDelegate {
+
+  let continuation: NetworkSession.DataEventStream.Continuation
+
+  init(continuation: NetworkSession.DataEventStream.Continuation) {
+    self.continuation = continuation
+  }
+
+  public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    continuation.finish(throwing: error)
+  }
+
+  public func urlSession(
+    _ session: URLSession,
+    dataTask: URLSessionDataTask,
+    didReceive response: URLResponse,
+    completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+  ) {
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      continuation.finish(throwing: SundayError.invalidHTTPResponse)
+      completionHandler(.cancel)
+      return
+    }
+
+    if 400 ..< 600 ~= httpResponse.statusCode {
+      let error = SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
+        response: httpResponse,
+        data: nil
+      ))
+      continuation.finish(throwing: error)
+      completionHandler(.cancel)
+      return
+    }
+
+    continuation.yield(.connect(httpResponse))
+
+    completionHandler(.allow)
+  }
+
+  public func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+    continuation.yield(.data(data))
   }
 
 }

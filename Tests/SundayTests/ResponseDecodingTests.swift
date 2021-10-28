@@ -40,7 +40,7 @@ class ResponseDecodingTests: ParameterizedTest {
     self.acceptType = acceptType
   }
 
-  func testAdaptiveResponseDecoding() throws {
+  func testAdaptiveResponseDecoding() async throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {
@@ -58,9 +58,6 @@ class ResponseDecodingTests: ParameterizedTest {
     }
     defer { server.stop() }
 
-    let completeX = expectation(description: "echo repsonse - complete")
-    let dataX = expectation(description: "echo repsonse - data")
-
     let sourceObject = TestObject(aaa: 1, bbb: 2.0, ccc: Date.millisecondDate(), ddd: "Hello", eee: ["World"])
 
     let baseURL = URI.Template(format: url.absoluteString)
@@ -68,8 +65,8 @@ class ResponseDecodingTests: ParameterizedTest {
     let requestFactory = NetworkRequestFactory(baseURL: baseURL)
     defer { requestFactory.close() }
 
-    let requestCancel =
-      requestFactory.result(
+    let returnedObject =
+      try await requestFactory.result(
         method: .post,
         pathTemplate: "echo",
         pathParameters: nil,
@@ -78,23 +75,9 @@ class ResponseDecodingTests: ParameterizedTest {
         contentTypes: [contentType],
         acceptTypes: [acceptType],
         headers: nil
-      )
-      .sink(
-        receiveCompletion: { completion in
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-          completeX.fulfill()
-        },
-        receiveValue: { (returnedObject: TestObject) in
-          XCTAssertEqual(sourceObject, returnedObject)
-          dataX.fulfill()
-        }
-      )
+      ) as TestObject
 
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    XCTAssertEqual(sourceObject, returnedObject)
   }
 
 }

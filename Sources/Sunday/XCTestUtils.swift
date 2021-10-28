@@ -14,11 +14,21 @@
  * limitations under the License.
  */
 
-import Foundation
+import XCTest
 
 
-public protocol NetworkRequestAdapter {
-
-  func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest
-
+public func XCTAssertThrowsError<T>(
+  _ expression: @autoclosure () async throws -> T,
+  _ message: @autoclosure () -> String = "",
+  _ file: String = #file,
+  _ line: Int = #line,
+  _ errorHandler: (Error) -> Void = { _ in }
+) async throws {
+  do {
+    _ = try await expression()
+    XCTFail("XCTAssertThrowsError failed: did not throw an error")
+  }
+  catch {
+    errorHandler(error)
+  }
 }

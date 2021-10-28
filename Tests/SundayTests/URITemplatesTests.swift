@@ -45,51 +45,40 @@ class URITemplatesTests: XCTestCase {
     XCTAssertEqual(template.parameters.isEmpty, true)
   }
 
-  func testSlashHandling() {
+  func testSlashHandling() async throws {
 
     let template = URI.Template("http://{env}.example.com/api/v{ver}/")
 
     XCTAssertEqual(template.format, "http://{env}.example.com/api/v{ver}/")
 
-    XCTAssertEqual(
-      try template.complete(relative: "/items", parameters: ["env": "stg", "ver": "1"]),
-      URL(string: "http://stg.example.com/api/v1/items")
-    )
+    let url1 = try template.complete(relative: "/items", parameters: ["env": "stg", "ver": "1"])
+    XCTAssertEqual(url1, URL(string: "http://stg.example.com/api/v1/items"))
 
-    XCTAssertEqual(
-      try template.complete(relative: "items", parameters: ["env": "stg", "ver": "1"]),
-      URL(string: "http://stg.example.com/api/v1/items")
-    )
+    let url2 = try template.complete(relative: "items", parameters: ["env": "stg", "ver": "1"])
+    XCTAssertEqual(url2, URL(string: "http://stg.example.com/api/v1/items"))
 
     let template1 = URI.Template("http://{env}.example.com/api/v{ver}")
-
     XCTAssertEqual(template1.format, "http://{env}.example.com/api/v{ver}")
 
-    XCTAssertEqual(
-      try template1.complete(relative: "/items", parameters: ["env": "stg", "ver": "1"]),
-      URL(string: "http://stg.example.com/api/v1/items")
-    )
+    let url3 = try template1.complete(relative: "/items", parameters: ["env": "stg", "ver": "1"])
+    XCTAssertEqual(url3, URL(string: "http://stg.example.com/api/v1/items"))
 
-    XCTAssertEqual(
-      try template1.complete(relative: "items", parameters: ["env": "stg", "ver": "1"]),
-      URL(string: "http://stg.example.com/api/v1/items")
-    )
+    let url4 = try template1.complete(relative: "items", parameters: ["env": "stg", "ver": "1"])
+    XCTAssertEqual(url4, URL(string: "http://stg.example.com/api/v1/items"))
   }
 
-  func testCompleteParametersOverrideTemplate() {
+  func testCompleteParametersOverrideTemplate() async throws {
 
     let template = URI.Template(format: "http://{env}.example.com/api/v{ver}/", parameters: ["ver": "1"])
 
     XCTAssertEqual(template.format, "http://{env}.example.com/api/v{ver}/")
     XCTAssertEqual(template.parameters.keys.first, "ver")
 
-    XCTAssertEqual(
-      try template.complete(relative: "/items", parameters: ["env": "stg", "ver": "2"]),
-      URL(string: "http://stg.example.com/api/v2/items")
-    )
+    let url = try template.complete(relative: "/items", parameters: ["env": "stg", "ver": "2"])
+    XCTAssertEqual(url, URL(string: "http://stg.example.com/api/v2/items"))
   }
 
-  func testCustomPathConvertibleAreSerializedCorrectly() {
+  func testCustomPathConvertibleAreSerializedCorrectly() async throws {
 
     struct SpecialParam: CustomPathConvertible {
 
@@ -103,13 +92,11 @@ class URITemplatesTests: XCTestCase {
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
-    XCTAssertEqual(
-      try template.complete(parameters: ["id": SpecialParam()]),
-      URL(string: "http://example.com/special-param")
-    )
+    let url = try template.complete(parameters: ["id": SpecialParam()])
+    XCTAssertEqual(url, URL(string: "http://example.com/special-param"))
   }
 
-  func testLosslessStringConvertibleAreSerializedCorrectly() {
+  func testLosslessStringConvertibleAreSerializedCorrectly() async throws {
 
     struct SpecialParam: LosslessStringConvertible {
 
@@ -133,25 +120,21 @@ class URITemplatesTests: XCTestCase {
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
-    XCTAssertEqual(
-      try template.complete(parameters: ["id": SpecialParam()]),
-      URL(string: "http://example.com/special-string")
-    )
+    let url = try template.complete(parameters: ["id": SpecialParam()])
+    XCTAssertEqual(url, URL(string: "http://example.com/special-string"))
   }
 
-  func testVariableValuesConvertibleAreSerializedCorrectly() {
+  func testVariableValuesConvertibleAreSerializedCorrectly() async throws {
 
     let template = URI.Template(format: "http://example.com/{id}")
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
-    XCTAssertEqual(
-      try template.complete(parameters: ["id": ["test": "1"]]).absoluteString.removingPercentEncoding,
-      "http://example.com/test,1"
-    )
+    let url = try template.complete(parameters: ["id": ["test": "1"]]).absoluteString.removingPercentEncoding
+    XCTAssertEqual(url, "http://example.com/test,1")
   }
 
-  func testFailsWithUnsupportedValue() {
+  func testFailsWithUnsupportedValue() async throws {
 
     class SpecialType {}
 
@@ -159,7 +142,7 @@ class URITemplatesTests: XCTestCase {
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
-    XCTAssertThrowsError(try template.complete(parameters: ["id": SpecialType()])) { error in
+    try await XCTAssertThrowsError(try template.complete(parameters: ["id": SpecialType()])) { error in
 
       guard case URI.Template.Error.unsupportedParameterType(name: let paramName, type: _) = error else {
         return XCTFail("unexpected error")
@@ -169,7 +152,7 @@ class URITemplatesTests: XCTestCase {
     }
   }
 
-  func testFailsWithMissingParameter() {
+  func testFailsWithMissingParameter() async throws {
 
     class SpecialType {}
 
@@ -177,7 +160,7 @@ class URITemplatesTests: XCTestCase {
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
-    XCTAssertThrowsError(try template.complete()) { error in
+    try await XCTAssertThrowsError(try template.complete()) { error in
 
       guard case URI.Template.Error.missingParameterValue(name: let paramName) = error else {
         return XCTFail("unexpected error")
@@ -187,7 +170,7 @@ class URITemplatesTests: XCTestCase {
     }
   }
 
-  func testMutiplePathVariable() {
+  func testMutiplePathVariable() async throws {
     let pathTemplate = URI.Template(
       format: "http://example.com/v{reallyLongVariable}/devices/{deviceId}/messages/{messageId}/payloads",
       parameters: [
@@ -197,7 +180,7 @@ class URITemplatesTests: XCTestCase {
       ]
     )
 
-    let encodedPath = try! pathTemplate.complete()
+    let encodedPath = try? pathTemplate.complete()
 
     XCTAssertEqual(encodedPath, URL(string: "http://example.com/v1/devices/123/messages/456/payloads"))
   }

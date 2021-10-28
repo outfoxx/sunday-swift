@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import Combine
 import Foundation
 
 
@@ -34,13 +33,11 @@ open class HostMatchingAdapter: NetworkRequestAdapter {
     self.adapter = adapter
   }
 
-  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest {
     guard hostnames.contains(urlRequest.url?.host ?? "") else {
-      return Just(urlRequest)
-        .setFailureType(to: Error.self)
-        .eraseToAnyPublisher()
+      return urlRequest
     }
-    return adapter.adapt(requestFactory: requestFactory, urlRequest: urlRequest)
+    return try await adapter.adapt(requestFactory: requestFactory, urlRequest: urlRequest)
   }
 
 }
@@ -61,13 +58,9 @@ open class HeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   // MARK: NetworkRequestAdapter
 
-  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest {
 
-    let authRequest = urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(token)"]])
-
-    return Just(authRequest)
-      .setFailureType(to: Error.self)
-      .eraseToAnyPublisher()
+    return urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(token)"]])
   }
 
 }
@@ -85,17 +78,15 @@ public struct TokenAuthorization {
 
 open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
-  public typealias RefreshResult = AnyPublisher<TokenAuthorization, Error>
-
   private let header: String
   private let tokenHeaderType: String
   private var authorization: TokenAuthorization?
-  private var refresh: (NetworkRequestFactory) throws -> RefreshResult
+  private var refresh: (NetworkRequestFactory) async throws -> TokenAuthorization
 
   public init(
     tokenHeaderType: String,
     header: String = HTTP.StdHeaders.authorization,
-    refresh: @escaping (NetworkRequestFactory) throws -> RefreshResult
+    refresh: @escaping (NetworkRequestFactory) async throws -> TokenAuthorization
   ) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
@@ -109,24 +100,18 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
 
   // MARK: NetworkRequestFactory
 
-  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> AdaptResult {
-    guard let authorization = authorization, authorization.expires > Date() else {
-      do {
-        return try refresh(requestFactory)
-          .map { authorization in
-            self.authorization = authorization
-            return self.update(urlRequest: urlRequest, accessToken: authorization.token)
-          }
-          .eraseToAnyPublisher()
-      }
-      catch {
-        return Fail(error: error).eraseToAnyPublisher()
-      }
+  private var shouldRefresh: Bool {
+    guard let authorization = authorization else {
+      return true
     }
+    return authorization.expires <= Date()
+  }
 
-    return Just(update(urlRequest: urlRequest, accessToken: authorization.token))
-      .setFailureType(to: Error.self)
-      .eraseToAnyPublisher()
+  public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest {
+    if shouldRefresh {
+      authorization = try await refresh(requestFactory)
+    }
+    return update(urlRequest: urlRequest, accessToken: authorization!.token)
   }
 
 }
