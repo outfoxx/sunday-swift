@@ -44,8 +44,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let messageX = expectation(description: "Event Received")
@@ -90,8 +89,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let messageX = expectation(description: "Event Received")
@@ -139,8 +137,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let messagedX = expectation(description: "Event Received")
@@ -194,9 +191,11 @@ class EventSourceTests: XCTestCase {
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
       EventSource {
+        if session.isClosed {
+          throw URLError(.cancelled)
+        }
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let openX = expectation(description: "Open Received")
@@ -231,10 +230,8 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
-
 
     let handlerId = eventSource.addEventListener(for: "test") { _, _, _ in }
     XCTAssertTrue(!eventSource.events().isEmpty)
@@ -282,8 +279,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let messageX = expectation(description: "Event Received")
@@ -334,8 +330,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let messageX = expectation(description: "Event Received")
@@ -392,8 +387,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     eventSource.onError = { _ in
@@ -452,8 +446,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     eventSource.onError = { _ in
@@ -496,8 +489,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let errorX = expectation(description: "error received")
@@ -548,8 +540,7 @@ class EventSourceTests: XCTestCase {
     let eventSource =
       EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return session.dataTaskStreamPublisher(for: request)
-          .eraseToAnyPublisher()
+        return try session.dataEventStream(for: request)
       }
 
     let errorX = expectation(description: "error received")

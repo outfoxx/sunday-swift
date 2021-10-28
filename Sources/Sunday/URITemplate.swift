@@ -26,8 +26,24 @@ public extension URI {
       case unsupportedParameterType(name: String, type: Any.Type)
     }
 
-    private static var implCache = [String: URITemplate]()
-    private static let lock = NSRecursiveLock()
+    private class Cache {
+
+      private var cache: [String: URITemplate] = [:]
+      private var lockQueue = DispatchQueue(label: "URI.Template.Cache Lock")
+
+      func get(uri: String) throws -> URITemplate {
+        try lockQueue.sync {
+          if let cached = cache[uri] {
+            return cached
+          }
+          let template = try URITemplate(string: uri)
+          cache[uri] = template
+          return template
+        }
+      }
+    }
+
+    private static let cache = Cache()
 
     public let format: String
     public let parameters: Parameters
@@ -63,7 +79,7 @@ public extension URI {
         full = "\(format)/\(relative)"
       }
 
-      let impl = try Self.impl(for: full)
+      let impl = try Self.cache.get(uri: full)
       let parameters = self.parameters.merging(parameters) { $1 }
       var variables = [String: VariableValue]()
 
@@ -91,20 +107,6 @@ public extension URI {
       }
 
       return url
-    }
-
-    private static func impl(for string: String) throws -> URITemplate {
-      lock.lock(); defer { lock.unlock() }
-
-      if let impl = Self.implCache[string] {
-        return impl
-      }
-
-      let impl = try URITemplate(string: string)
-
-      Self.implCache[string] = impl
-
-      return impl
     }
 
   }

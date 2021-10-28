@@ -16,7 +16,6 @@
 
 // swiftlint:disable type_body_length
 
-import Combine
 import Foundation
 
 
@@ -117,8 +116,8 @@ public class EventSource {
   ///
   public private(set) var retryTime = retryTimeDefault
 
-  private let requestorFactory: (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
-  private var dataCancel: AnyCancellable?
+  private let dataEventStreamFactory: (HTTP.Headers) async throws -> NetworkSession.DataEventStream
+  private var dataEventStreamTask: Task<Void, Swift.Error>?
   private var receivedString: String?
 
   private var onOpenCallback: (() -> Void)?
@@ -164,11 +163,11 @@ public class EventSource {
     queue: DispatchQueue = .global(qos: .background),
     eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
     eventTimeoutCheckInterval: DispatchTimeInterval = eventTimeoutCheckIntervalDefault,
-    requestorFactory: @escaping (HTTP.Headers) -> AnyPublisher<NetworkSession.DataTaskStreamEvent, Swift.Error>
+    dataEventStreamFactory: @escaping (HTTP.Headers) async throws -> NetworkSession.DataEventStream
   ) {
     self.queue = DispatchQueue(label: "io.outfoxx.sunday.EventSource", attributes: [], target: queue)
     readyStateValue = StateValue(.closed, queue: queue)
-    self.requestorFactory = requestorFactory
+    self.dataEventStreamFactory = dataEventStreamFactory
     self.eventTimeoutInterval = eventTimeoutInterval
     self.eventTimeoutCheckInterval = eventTimeoutCheckInterval
     receivedString = nil
@@ -294,21 +293,26 @@ public class EventSource {
 
     logger.debug("Connecting")
 
-    // Build default headers for passing to request builder
-
-    var headers = HTTP.Headers()
-    headers[HTTP.StdHeaders.accept] = [MediaType.eventStream.value]
-
-    // Add last-event-id if we are reconnecting
-    if let lastEventId = lastEventId {
-      headers[HTTP.StdHeaders.lastEventId] = [lastEventId]
-    }
-
     connectionAttemptTime = .now()
 
-    dataCancel =
-      requestorFactory(headers)
-        .tryMap { event -> Void in
+    dataEventStreamTask = Task {
+
+      // Build default headers for passing to request builder
+
+      var headers = HTTP.Headers()
+      headers[HTTP.StdHeaders.accept] = [MediaType.eventStream.value]
+
+      // Add last-event-id if we are reconnecting
+      if let lastEventId = self.lastEventId {
+        headers[HTTP.StdHeaders.lastEventId] = [lastEventId]
+      }
+
+      // Create a data stream and
+      do {
+
+        let dataStream = try await dataEventStreamFactory(headers)
+
+        for try await event in dataStream {
 
           switch event {
           case .connect(let response):
@@ -318,14 +322,15 @@ public class EventSource {
           }
 
         }
-        .sink(receiveCompletion: { end in
-          switch end {
-          case .finished:
-            self.receivedComplete()
-          case .failure(let error):
-            self.receivedError(error: error)
-          }
-        }, receiveValue: {})
+
+        self.receivedComplete()
+
+      }
+      catch {
+        self.receivedError(error: error)
+      }
+
+    }
   }
 
 
@@ -347,8 +352,8 @@ public class EventSource {
 
   private func internalClose() {
 
-    dataCancel?.cancel()
-    dataCancel = nil
+    dataEventStreamTask?.cancel()
+    dataEventStreamTask = nil
 
     cancelReconnect()
 

@@ -22,19 +22,24 @@ import XCTest
 
 class DataTaskStreamPublisherTests: XCTestCase {
 
-  func testSimple() {
+  func testSimple() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/regular") {
         GET { _, res in
           res.start(status: .ok, headers: [:])
-          res.send(body: Data(count: 1000), final: false)
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(body: Data(count: 1000), final: false)
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(body: Data(count: 1000), final: false)
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(body: Data(count: 1000), final: true)
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
+            res.send(body: Data(count: 1000), final: false)
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
+            res.send(body: Data(count: 1000), final: false)
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
+            res.send(body: Data(count: 1000), final: false)
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
+            res.send(body: Data(count: 1000), final: true)
+          }
         }
       }
     }
@@ -46,10 +51,6 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let getChunkedCompleteX = expectation(description: "GET - complete")
-    let getChunkedDataX = expectation(description: "GET - data")
-    getChunkedDataX.expectedFulfillmentCount = 5
 
     struct Params: Codable {
       let name: String
@@ -59,33 +60,24 @@ class DataTaskStreamPublisherTests: XCTestCase {
     var urlRequest = URLRequest(url: URL(string: "regular", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
-      .sink { completion in
-        defer { getChunkedCompleteX.fulfill() }
+    let dataStream = try session.dataEventStream(for: urlRequest)
 
-        if case .failure(let error) = completion {
-          XCTFail("Request failed: \(error)")
-        }
+    var eventCount = 0
+    for try await dataEvent in dataStream {
+      switch dataEvent {
+      case .connect(let response):
+        XCTAssertEqual(response.statusCode, 200)
 
-      } receiveValue: { event in
-        defer { getChunkedDataX.fulfill() }
-
-        switch event {
-        case .connect(let response):
-          XCTAssertEqual(response.statusCode, 200)
-
-        case .data(let data):
-          XCTAssertEqual(data.count, 1000)
-        }
+      case .data(let data):
+        XCTAssertEqual(data.count, 1000)
       }
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
+      eventCount += 1
     }
 
+    XCTAssertEqual(eventCount, 5)
   }
 
-  func testChunked() {
+  func testChunked() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
@@ -93,14 +85,21 @@ class DataTaskStreamPublisherTests: XCTestCase {
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.send(chunk: Data(count: 1000))
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(chunk: Data(count: 1000))
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(chunk: Data(count: 1000))
-          Thread.sleep(forTimeInterval: 0.1)
-          res.send(chunk: Data(count: 1000))
-          res.finish(trailers: [:])
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
+            res.send(chunk: Data(count: 1000))
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
+            res.send(chunk: Data(count: 1000))
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
+            res.send(chunk: Data(count: 1000))
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
+            res.send(chunk: Data(count: 1000))
+          }
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+            res.finish(trailers: [:])
+          }
         }
       }
     }
@@ -113,10 +112,6 @@ class DataTaskStreamPublisherTests: XCTestCase {
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
-    let getChunkedCompleteX = expectation(description: "GET (chunked) - complete")
-    let getChunkedDataX = expectation(description: "GET (chunked) - data")
-    getChunkedDataX.expectedFulfillmentCount = 5
-
     struct Params: Codable {
       let name: String
       let cost: Double
@@ -125,35 +120,24 @@ class DataTaskStreamPublisherTests: XCTestCase {
     var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { getChunkedCompleteX.fulfill() }
+    let dataStream = try session.dataEventStream(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { event in
-          defer { getChunkedDataX.fulfill() }
+    var eventCount = 0
+    for try await dataEvent in dataStream {
+      switch dataEvent {
+      case .connect(let response):
+        XCTAssertEqual(response.statusCode, 200)
 
-          switch event {
-          case .connect(let response):
-            XCTAssertEqual(response.statusCode, 200)
-
-          case .data(let data):
-            XCTAssertEqual(data.count, 1000)
-          }
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
+      case .data(let data):
+        XCTAssertEqual(data.count, 1000)
+      }
+      eventCount += 1
     }
 
+    XCTAssertEqual(eventCount, 5)
   }
 
-  func testCompletesWithErrorWhenHTTPErrorResponse() {
+  func testCompletesWithErrorWhenHTTPErrorResponse() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/regular") {
@@ -171,33 +155,23 @@ class DataTaskStreamPublisherTests: XCTestCase {
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
-    let completeX = expectation(description: "received error")
-
     let urlRequest = URLRequest(url: URL(string: "regular", relativeTo: serverURL)!)
 
-    let requestCancel = session.dataTaskStreamPublisher(for: urlRequest)
-      .sink { completion in
-        defer { completeX.fulfill() }
+    let dataStream = try session.dataEventStream(for: urlRequest)
 
-        guard case .failure(let error) = completion else {
-          return XCTFail("publisher completed, expected error")
-        }
-
-        guard
-          case SundayError.responseValidationFailed(reason: let reason) = error,
-          case ResponseValidationFailureReason.unacceptableStatusCode(response: _, data: _) = reason
-        else {
-          return XCTFail("published emitted unexpected error type")
-        }
-
-      } receiveValue: { _ in
+    do {
+      for try await _ in dataStream {
         XCTFail("publisher emitted value, expected error")
       }
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
     }
-
+    catch {
+      guard
+        case SundayError.responseValidationFailed(reason: let reason) = error,
+        case ResponseValidationFailureReason.unacceptableStatusCode(response: _, data: _) = reason
+      else {
+        return XCTFail("published emitted unexpected error type")
+      }
+    }
   }
 
 

@@ -81,16 +81,13 @@ class HTTPServerTests: XCTestCase {
     return (serverURL, server)
   }
 
-  func testPOST() throws {
+  func testPOST() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let postCompleteX = expectation(description: "POST - complete")
-    let postDataX = expectation(description: "POST - data")
 
     struct Params: Codable {
       let name: String
@@ -103,212 +100,83 @@ class HTTPServerTests: XCTestCase {
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     urlRequest.httpBody = try JSONEncoder.default.encode(Params(name: "ghi", cost: 19.20))
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { postCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { postDataX.fulfill() }
+    XCTAssertNotNil(data)
+    XCTAssertEqual(response.statusCode, 201)
 
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 201 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          do {
-            let item = try JSONDecoder.default.decode(Item.self, from: data)
-            XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
-          }
-          catch {
-            XCTFail("Decode/Compare failed: \(error)")
-          }
-
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    let item = try JSONDecoder.default.decode(Item.self, from: data ?? Data())
+    XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
   }
 
-  func testGETList() {
+  func testGETList() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let listCompleteX = expectation(description: "GET (list) - complete")
-    let listDataX = expectation(description: "GET (list) - data")
 
     var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { listCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { listDataX.fulfill() }
+    XCTAssertNotNil(data)
+    XCTAssertEqual(response.statusCode, 200)
 
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 200 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          do {
-            let items = try JSONDecoder.default.decode([Item].self, from: data)
-            XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
-            XCTAssertTrue(items.contains(Item(name: "def", cost: 6.40)))
-          }
-          catch {
-            XCTFail("Decode/Compare failed: \(error)")
-          }
-
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    let items = try JSONDecoder.default.decode([Item].self, from: data ?? Data())
+    XCTAssertTrue(items.contains(Item(name: "abc", cost: 12.80)))
+    XCTAssertTrue(items.contains(Item(name: "def", cost: 6.40)))
   }
 
-  func testGETItem() {
+  func testGETItem() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let itemCompleteX = expectation(description: "GET (item) - complete")
-    let itemDataX = expectation(description: "GET (item) - data")
 
     var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
     urlRequest.httpMethod = "GET"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { itemCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { itemDataX.fulfill() }
+    XCTAssertNotNil(data)
+    XCTAssertEqual(response.statusCode, 200)
 
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 200 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          do {
-            let item = try JSONDecoder.default.decode(Item.self, from: data)
-            XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
-          }
-          catch {
-            XCTFail("Decode/Compare failed: \(error)")
-          }
-
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    let item = try JSONDecoder.default.decode(Item.self, from: data ?? Data())
+    XCTAssertEqual(item, Item(name: "abc", cost: 12.80))
   }
 
-  func testDELETE() {
+  func testDELETE() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let deleteCompleteX = expectation(description: "DELETE - complete")
-    let deleteDataX = expectation(description: "DELETE - data")
 
     var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
     urlRequest.httpMethod = "DELETE"
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { deleteCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { deleteDataX.fulfill() }
-
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 204 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          XCTAssertEqual(data.count, 0)
-
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    XCTAssertNil(data)
+    XCTAssertEqual(response.statusCode, 204)
   }
 
-  func testPUTExpect() throws {
+  func testPUTExpect() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let putCompleteX = expectation(description: "PUT - complete")
-    let putDataX = expectation(description: "PUT - data")
 
     struct Params: Codable {
       let name: String
@@ -322,55 +190,22 @@ class HTTPServerTests: XCTestCase {
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
     urlRequest.httpBody = try JSONEncoder.default.encode(Params(name: "ghi", cost: 19.20))
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { putCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { putDataX.fulfill() }
+    XCTAssertNotNil(data)
+    XCTAssertEqual(response.statusCode, 201)
 
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 201 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          do {
-            let item = try JSONDecoder.default.decode(Item.self, from: data)
-            XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
-          }
-          catch {
-            XCTFail("Decode/Compare failed: \(error)")
-          }
-
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
+    let item = try JSONDecoder.default.decode(Item.self, from: data ?? Data())
+    XCTAssertEqual(item, Item(name: "ghi", cost: 19.20))
   }
 
-  func testChunked() {
+  func testChunked() async throws {
 
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = NetworkSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
-
-    let getChunkedCompleteX = expectation(description: "GET (chunked) - complete")
-    let getChunkedDataX = expectation(description: "GET (chunked) - data")
 
     struct Params: Codable {
       let name: String
@@ -380,37 +215,12 @@ class HTTPServerTests: XCTestCase {
     var urlRequest = URLRequest(url: URL(string: "chunked", relativeTo: serverURL)!)
     urlRequest.addValue(MediaType.json.value, forHTTPHeaderField: "accept")
 
-    let requestCancel = session.dataTaskValidatedPublisher(request: urlRequest)
-      .sink(
-        receiveCompletion: { completion in
-          defer { getChunkedCompleteX.fulfill() }
+    let (data, response) = try await session.validatedData(for: urlRequest)
 
-          if case .failure(let error) = completion {
-            XCTFail("Request failed: \(error)")
-          }
-        },
-        receiveValue: { response, data in
-          defer { getChunkedDataX.fulfill() }
+    XCTAssertNotNil(data)
+    XCTAssertEqual(response.statusCode, 200)
 
-          guard let data = data else {
-            XCTFail("No response data")
-            return
-          }
-
-          guard response.statusCode == 200 else {
-            let message = String(data: data, encoding: .utf8)!
-            XCTFail("Invalid response status code: \(response.statusCode) - \(message)")
-            return
-          }
-
-          XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
-        }
-      )
-
-    waitForExpectations { _ in
-      requestCancel.cancel()
-    }
-
+    XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
   }
 
 }

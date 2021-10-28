@@ -16,7 +16,6 @@
 
 //  swiftlint:disable function_parameter_count
 
-import Combine
 import Foundation
 
 
@@ -32,30 +31,30 @@ public protocol RequestFactory {
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) -> RequestPublisher
+  ) async throws -> URLRequest
 
   func response<B: Encodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) -> RequestResponsePublisher
+  ) async throws -> (Data?, HTTPURLResponse)
 
-  func response(request: URLRequest) -> RequestResponsePublisher
+  func response(request: URLRequest) async throws -> (Data?, HTTPURLResponse)
 
   func result<B: Encodable, D: Decodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) -> RequestResultPublisher<D>
+  ) async throws -> D
 
   func result<B: Encodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) -> RequestCompletePublisher
+  ) async throws
 
   func eventSource<B: Encodable>(
     method: HTTP.Method, pathTemplate: String,
@@ -69,7 +68,7 @@ public protocol RequestFactory {
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
     headers: Parameters?, eventTypes: [String: AnyTextMediaTypeDecodable]
-  ) -> RequestEventPublisher<D>
+  ) -> AsyncStream<D>
 
   func close(cancelOutstandingRequests: Bool)
 
