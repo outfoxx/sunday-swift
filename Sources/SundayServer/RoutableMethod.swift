@@ -218,6 +218,56 @@ public func GET<A1, A2, A3, A4, A5>(
 }
 
 
+public func POST(_ handler: @escaping (HTTPRequest, HTTPResponse) throws -> Void) -> Routable {
+  return METHOD(.post, handler)
+}
+
+public func POST<A1>(
+  _ a1: Param<A1>,
+  _ handler: @escaping (HTTPRequest, HTTPResponse, A1) throws -> Void
+) -> Routable {
+  return METHOD(.post, a1, handler)
+}
+
+public func POST<A1, A2>(
+  _ a1: Param<A1>,
+  _ a2: Param<A2>,
+  _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2) throws -> Void
+) -> Routable {
+  return METHOD(.post, a1, a2, handler)
+}
+
+public func POST<A1, A2, A3>(
+  _ a1: Param<A1>,
+  _ a2: Param<A2>,
+  _ a3: Param<A3>,
+  _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3) throws -> Void
+) -> Routable {
+  return METHOD(.post, a1, a2, a3, handler)
+}
+
+public func POST<A1, A2, A3, A4>(
+  _ a1: Param<A1>,
+  _ a2: Param<A2>,
+  _ a3: Param<A3>,
+  _ a4: Param<A4>,
+  _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4) throws -> Void
+) -> Routable {
+  return METHOD(.post, a1, a2, a3, a4, handler)
+}
+
+public func POST<A1, A2, A3, A4, A5>(
+  _ a1: Param<A1>,
+  _ a2: Param<A2>,
+  _ a3: Param<A3>,
+  _ a4: Param<A4>,
+  _ a5: Param<A5>,
+  _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4, A5) throws -> Void
+) -> Routable {
+  return METHOD(.post, a1, a2, a3, a4, a5, handler)
+}
+
+
 public func PUT(_ handler: @escaping (HTTPRequest, HTTPResponse) throws -> Void) -> Routable {
   return METHOD(.put, handler)
 }
@@ -268,45 +318,45 @@ public func PUT<A1, A2, A3, A4, A5>(
 }
 
 
-public func POST(_ handler: @escaping (HTTPRequest, HTTPResponse) throws -> Void) -> Routable {
-  return METHOD(.post, handler)
+public func PATCH(_ handler: @escaping (HTTPRequest, HTTPResponse) throws -> Void) -> Routable {
+  return METHOD(.patch, handler)
 }
 
-public func POST<A1>(
+public func PATCH<A1>(
   _ a1: Param<A1>,
   _ handler: @escaping (HTTPRequest, HTTPResponse, A1) throws -> Void
 ) -> Routable {
-  return METHOD(.post, a1, handler)
+  return METHOD(.patch, a1, handler)
 }
 
-public func POST<A1, A2>(
+public func PATCH<A1, A2>(
   _ a1: Param<A1>,
   _ a2: Param<A2>,
   _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2) throws -> Void
 ) -> Routable {
-  return METHOD(.post, a1, a2, handler)
+  return METHOD(.patch, a1, a2, handler)
 }
 
-public func POST<A1, A2, A3>(
+public func PATCH<A1, A2, A3>(
   _ a1: Param<A1>,
   _ a2: Param<A2>,
   _ a3: Param<A3>,
   _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3) throws -> Void
 ) -> Routable {
-  return METHOD(.post, a1, a2, a3, handler)
+  return METHOD(.patch, a1, a2, a3, handler)
 }
 
-public func POST<A1, A2, A3, A4>(
+public func PATCH<A1, A2, A3, A4>(
   _ a1: Param<A1>,
   _ a2: Param<A2>,
   _ a3: Param<A3>,
   _ a4: Param<A4>,
   _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4) throws -> Void
 ) -> Routable {
-  return METHOD(.post, a1, a2, a3, a4, handler)
+  return METHOD(.patch, a1, a2, a3, a4, handler)
 }
 
-public func POST<A1, A2, A3, A4, A5>(
+public func PATCH<A1, A2, A3, A4, A5>(
   _ a1: Param<A1>,
   _ a2: Param<A2>,
   _ a3: Param<A3>,
@@ -314,7 +364,7 @@ public func POST<A1, A2, A3, A4, A5>(
   _ a5: Param<A5>,
   _ handler: @escaping (HTTPRequest, HTTPResponse, A1, A2, A3, A4, A5) throws -> Void
 ) -> Routable {
-  return METHOD(.post, a1, a2, a3, a4, a5, handler)
+  return METHOD(.patch, a1, a2, a3, a4, a5, handler)
 }
 
 
