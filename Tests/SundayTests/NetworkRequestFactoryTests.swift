@@ -990,9 +990,14 @@ class NetworkRequestFactoryTests: XCTestCase {
         contentTypes: [.json],
         acceptTypes: [.json],
         headers: nil,
-        eventTypes: [
-          "test": .erase(TestEvent.self),
-        ]
+        decoder: { decoder, event, _, data, log in
+          switch event {
+          case "test": return try decoder.decode(TestEvent.self, from: data)
+          default:
+            log.error("Unsupported event type")
+            return nil
+          }
+        }
       ) as AsyncStream<TestEvent>
 
     for await event in eventStream {

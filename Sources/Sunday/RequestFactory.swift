@@ -17,6 +17,7 @@
 //  swiftlint:disable function_parameter_count
 
 import Foundation
+import OSLog
 
 
 public protocol RequestFactory {
@@ -67,7 +68,7 @@ public protocol RequestFactory {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-    headers: Parameters?, eventTypes: [String: AnyTextMediaTypeDecodable]
+    headers: Parameters?, decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?
   ) -> AsyncStream<D>
 
   func close(cancelOutstandingRequests: Bool)
