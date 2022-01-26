@@ -18,6 +18,7 @@
 
 import Foundation
 import PotentCodables
+import OSLog
 
 
 private let eventStreamLogger = logging.for(category: "Event Streams")
@@ -384,11 +385,11 @@ public class NetworkRequestFactory: RequestFactory {
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
-    eventTypes: [String: AnyTextMediaTypeDecodable]
+    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?
   ) -> AsyncStream<D> where B: Encodable {
 
     eventStream(
-      eventTypes: eventTypes,
+      decoder: decoder,
       from: { try await self.request(
         method: method,
         pathTemplate: pathTemplate,
@@ -403,7 +404,7 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func eventStream<D>(
-    eventTypes: [String: AnyTextMediaTypeDecodable],
+    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?,
     from requestFactory: @escaping () async throws -> URLRequest
   ) -> AsyncStream<D> {
 
@@ -417,18 +418,18 @@ public class NetworkRequestFactory: RequestFactory {
 
       continuation.onTermination = { @Sendable _ in  eventSource.close() }
 
-      eventSource.onMessage = { event, _, data in
+      eventSource.onMessage = { event, id, data in
 
-        guard let eventType = eventTypes[event ?? ""] else {
-          eventStreamLogger.info("Unknown event type, ignoring event: type=\(event)")
+        // Ingore empty data events
+
+        guard let data = data else {
           return
         }
 
         // Parse JSON and pass event on
 
         do {
-          guard let event = try eventType.decode(jsonDecoder, data ?? "") as? D else {
-            eventStreamLogger.error("Unable to decode event: no value returned")
+          guard let event = try decoder(jsonDecoder, event, id, data, eventStreamLogger) else {
             return
           }
 
