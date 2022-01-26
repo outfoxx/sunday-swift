@@ -22,22 +22,28 @@ import XCTest
 
 class DataTaskStreamPublisherTests: XCTestCase {
 
+  var server: RoutingHTTPServer!
+
+  override func tearDown() {
+    server?.stop()
+  }
+
   func testSimple() async throws {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/regular") {
         GET { _, res in
           res.start(status: .ok, headers: [:])
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 0)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 1)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 2)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 3)) {
             res.send(body: Data(count: 1000), final: true)
           }
         }
@@ -79,25 +85,25 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
   func testChunked() async throws {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 0)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 1)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 2)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 3)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 4)) {
             res.finish(trailers: [:])
           }
         }
@@ -126,9 +132,11 @@ class DataTaskStreamPublisherTests: XCTestCase {
     for try await dataEvent in dataStream {
       switch dataEvent {
       case .connect(let response):
+        print("## EVENT: connect")
         XCTAssertEqual(response.statusCode, 200)
 
       case .data(let data):
+        print("## EVENT: data")
         XCTAssertEqual(data.count, 1000)
       }
       eventCount += 1
@@ -139,7 +147,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
   func testCompletesWithErrorWhenHTTPErrorResponse() async throws {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/regular") {
         GET { _, res in
           res.send(status: .badRequest, text: "fix it")
