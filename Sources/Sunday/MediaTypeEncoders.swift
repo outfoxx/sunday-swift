@@ -42,7 +42,13 @@ public struct MediaTypeEncoders {
     }
 
     public func registerDefault() -> Builder {
-      return registerURL().registerData().registerJSON().registerCBOR().registerText().registerX509()
+      return self
+        .registerData()
+        .registerURL()
+        .registerJSON()
+        .registerCBOR()
+        .registerText()
+        .registerX509()
     }
 
     public func registerURL(
