@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import Regex
+import struct Regex.Regex
 import Sunday
 
 
