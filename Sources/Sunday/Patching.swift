@@ -242,7 +242,7 @@ extension KeyedEncodingContainer {
 
 // MARK: MediaType Extensions
 
-extension MediaType {
+public extension MediaType {
 
   static let jsonPatch = MediaType(type: .application, tree: .standard, subtype: "json-patch", suffix: .json)
   static let mergePatch = MediaType(type: .application, tree: .standard, subtype: "merge-patch", suffix: .json)
