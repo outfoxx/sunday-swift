@@ -101,6 +101,13 @@ public struct MediaType {
   )
   private static let paramRegex = Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
 
+  public init(valid: String) throws {
+    guard let valid = MediaType(valid) else {
+      throw Error.invalid
+    }
+    self = valid
+  }
+
   public init?(_ string: String) {
     guard let match = Self.fullRegex.firstMatch(in: string) else { return nil }
 
