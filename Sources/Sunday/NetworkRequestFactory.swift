@@ -277,7 +277,7 @@ public class NetworkRequestFactory: RequestFactory {
     }
   }
 
-  public func resultResponse<B : Encodable, D : Decodable>(
+  public func resultResponse<B: Encodable, D: Decodable>(
     method: HTTP.Method,
     pathTemplate: String,
     pathParameters: Parameters?,
@@ -320,7 +320,7 @@ public class NetworkRequestFactory: RequestFactory {
     contentTypes: [MediaType]?,
     acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) async throws -> ResultResponse<Void> where B : Encodable {
+  ) async throws -> ResultResponse<Void> where B: Encodable {
 
     do {
 
@@ -335,7 +335,7 @@ public class NetworkRequestFactory: RequestFactory {
         headers: headers
       )
 
-      let _ = try parse(dataResponse: dataResponse) as Empty
+      _ = try parse(dataResponse: dataResponse) as Empty
 
       return ResultResponse(result: (), response: dataResponse.1)
     }
