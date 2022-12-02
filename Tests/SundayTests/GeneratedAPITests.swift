@@ -24,7 +24,7 @@ class GeneratedAPITests: XCTestCase {
 
   class API {
 
-    struct TestResult : Codable, Equatable {
+    struct TestResult: Codable, Equatable {
       var message: String
       var count: Int
     }
