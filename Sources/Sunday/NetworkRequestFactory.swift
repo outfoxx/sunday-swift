@@ -277,6 +277,74 @@ public class NetworkRequestFactory: RequestFactory {
     }
   }
 
+  public func resultResponse<B : Encodable, D : Decodable>(
+    method: HTTP.Method,
+    pathTemplate: String,
+    pathParameters: Parameters?,
+    queryParameters: Parameters?,
+    body: B?,
+    contentTypes: [MediaType]?,
+    acceptTypes: [MediaType]?,
+    headers: Parameters?
+  ) async throws -> ResultResponse<D> {
+
+    do {
+
+      let dataResponse = try await response(
+        method: method,
+        pathTemplate: pathTemplate,
+        pathParameters: pathParameters,
+        queryParameters: queryParameters,
+        body: body,
+        contentTypes: contentTypes,
+        acceptTypes: acceptTypes,
+        headers: headers
+      )
+
+      let result = try parse(dataResponse: dataResponse) as D
+
+      return ResultResponse(result: result, response: dataResponse.1)
+    }
+    catch {
+      throw parse(error: error)
+    }
+
+  }
+
+  public func resultResponse<B>(
+    method: HTTP.Method,
+    pathTemplate: String,
+    pathParameters: Parameters?,
+    queryParameters: Parameters?,
+    body: B?,
+    contentTypes: [MediaType]?,
+    acceptTypes: [MediaType]?,
+    headers: Parameters?
+  ) async throws -> ResultResponse<Void> where B : Encodable {
+
+    do {
+
+      let dataResponse = try await response(
+        method: method,
+        pathTemplate: pathTemplate,
+        pathParameters: pathParameters,
+        queryParameters: queryParameters,
+        body: body,
+        contentTypes: contentTypes,
+        acceptTypes: acceptTypes,
+        headers: headers
+      )
+
+      let _ = try parse(dataResponse: dataResponse) as Empty
+
+      return ResultResponse(result: (), response: dataResponse.1)
+    }
+    catch {
+      throw parse(error: error)
+    }
+
+  }
+
   public func result<B: Encodable, D: Decodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil

@@ -43,6 +43,20 @@ public protocol RequestFactory {
 
   func response(request: URLRequest) async throws -> (Data?, HTTPURLResponse)
 
+  func resultResponse<B: Encodable, D: Decodable>(
+    method: HTTP.Method, pathTemplate: String,
+    pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+    contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+    headers: Parameters?
+  ) async throws -> ResultResponse<D>
+
+  func resultResponse<B: Encodable>(
+    method: HTTP.Method, pathTemplate: String,
+    pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
+    contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
+    headers: Parameters?
+  ) async throws -> ResultResponse<Void>
+
   func result<B: Encodable, D: Decodable>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
