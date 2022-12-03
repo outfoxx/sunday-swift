@@ -88,7 +88,7 @@ class NetworkRequestAdapterTests: XCTestCase {
     let request2 =
     try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
 
-    Thread.sleep(until: Date().advanced(by: 0.25))
+    try await Task.sleep(nanoseconds: UInt64(0.25 * 1_000_000_000))
 
     let request3 =
       try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))

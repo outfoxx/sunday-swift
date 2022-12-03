@@ -9,45 +9,67 @@ on:
 
 jobs:
 
-  check:
+  check-build-test:
     runs-on: macos-12
 
     steps:
 
-    - uses: actions/checkout@v1
+    - name: Install Tools
+      run: |
+        brew install xcbeautify
+        brew install sonar-scanner
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    
+    - name: Select Xcode
+      run: sudo xcode-select -s /Applications/Xcode_14.1.app/Contents/Developer
+
     - name: SwiftLint
-      run: ./.github/swiftlinter      
+      run: |
+        mkdir .build
+        swiftlint lint --reporter json > .build/swiftlint.json
+
+    - name: Build/Test
+      run: set -o pipefail && swift test --enable-code-coverage --sanitize undefined | xcbeautify
+
+    - name: Convert Coverage
+      run: xcrun llvm-cov show -instr-profile=.build/debug/codecov/default.profdata .build/debug/SundayPackageTests.xctest/Contents/MacOS/SundayPackageTests > .build/coverage.report
+
+    - name: Sonar Scanner
+      run: sonar-scanner -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
 
   build-test:
   
     runs-on: macos-12
 
-    needs: [check]
+    needs: [check-build-test]
 
     strategy:
       matrix:
         platform: [macos, ios, tvos]
-        xcode: ["14.1"]
 
     steps:
       
     - uses: actions/checkout@v3
     
     - name: Select Xcode
-      run: sudo xcode-select -s /Applications/Xcode_${{matrix.xcode}}.app/Contents/Developer
+      run: sudo xcode-select -s /Applications/Xcode_14.1.app/Contents/Developer
 
-    - name: Install xcbeautify
+    - name: Install Tools
       run: brew install xcbeautify
 
     - name: Build/Test
-      run: |
-        make build-test-${{ matrix.platform }}
+      run: make build-test-${{ matrix.platform }}
 
-    - name: Export Coverage
-      id: coverage-files
-      uses: sersoft-gmbh/swift-coverage-action@v3
-
-    - name: Upload Coverage
-      uses: codecov/codecov-action@v3
+    - name: Report Test Results
+      uses: kishikawakatsumi/xcresulttool@v1
+      if: always()
       with:
-        files: ${{join(fromJSON(steps.coverage-files.outputs.files), ',')}}
+          title: Test Results ${{ matrix.platform }}
+          path: ./TestResults/${{ matrix.platform }}.xcresult
