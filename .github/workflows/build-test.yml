@@ -4,12 +4,13 @@ on:
   push:
     branches: [ main ]
   pull_request:
+    types: [ opened, synchronize, reopened ]
     branches: [ main ]
 
 jobs:
 
   check:
-    runs-on: macos-11
+    runs-on: macos-12
 
     steps:
 
@@ -19,45 +20,34 @@ jobs:
 
   build-test:
   
-    runs-on: macos-11
+    runs-on: macos-12
 
     needs: [check]
 
     strategy:
       matrix:
         platform: [macos, ios, tvos]
-        xcode: ["13.2"]
+        xcode: ["14.1"]
 
     steps:
       
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     
     - name: Select Xcode
       run: sudo xcode-select -s /Applications/Xcode_${{matrix.xcode}}.app/Contents/Developer
+
+    - name: Install xcbeautify
+      run: brew install xcbeautify
 
     - name: Build/Test
       run: |
         make build-test-${{ matrix.platform }}
 
-    # - name: Export Coverage
-    #   uses: maxep/xcodebuild-lcov-action@0.1.0
-    #   if: ${{ matrix.platform == 'ios' && matrix.xcode == '13.2' }}
-    #   with:
-    #     derived-data-path: .derived-data
-    #     target: SundayTests.xctest
-    #     output-file: ./coverage/lcov.info
+    - name: Export Coverage
+      id: coverage-files
+      uses: sersoft-gmbh/swift-coverage-action@v3
 
-    # - name: Report Coverage
-    #   uses: romeovs/lcov-reporter-action@v0.2.21
-    #   if: ${{ matrix.platform == 'ios' && matrix.xcode == '13.2' }}
-    #   with:
-    #     github-token: ${{ secrets.GITHUB_TOKEN }}
-    #     lcov-file: ./coverage/lcov.info
-
-    - name: Updload Reports
-      uses: actions/upload-artifact@v2
-      if: always()
+    - name: Upload Coverage
+      uses: codecov/codecov-action@v3
       with:
-        name: reports
-        path: |
-          TestResults
+        files: ${{join(fromJSON(steps.coverage-files.outputs.files), ',')}}

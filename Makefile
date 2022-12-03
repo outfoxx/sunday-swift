@@ -12,7 +12,7 @@ make-test-results-dir:
 	mkdir -p TestResults
 
 define buildtest
-	xcodebuild -scheme $(project)-Package -derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' -enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES test
+	set -o pipefail && xcodebuild -scheme $(project)-Package -derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' -enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES test | xcbeautify
 endef
 
 build-test-macos:
