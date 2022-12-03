@@ -1008,7 +1008,7 @@ class NetworkRequestFactoryTests: XCTestCase {
     // Ensure closing factory is gracefully handled by spawned EventSource
     requestFactory.close()
 
-    Thread.sleep(forTimeInterval: 0.5)
+    try await Task.sleep(nanoseconds: UInt64(0.5 * 1_000_000_000))
   }
 
 }
