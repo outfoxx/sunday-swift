@@ -44,7 +44,7 @@ class URITests: XCTestCase {
 
   func testParseInitFailsWithBadURL() throws {
 
-    XCTAssertThrowsError(try URI(string: "http:\\example-host/api/v1/items?limit=10#block")) { error in
+    XCTAssertThrowsError(try URI(string: "http://example host/api/v1/items?limit=10#block")) { error in
       guard let error = error as? URI.Error else {
         return XCTFail("unexpected error")
       }
