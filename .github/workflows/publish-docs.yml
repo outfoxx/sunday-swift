@@ -1,0 +1,55 @@
+name: Publish Docs
+
+on:
+  push:
+    branches: [ "main" ]
+  release:
+    types: [ "published" ]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{github.ref_name}}
+  cancel-in-progress: true
+
+jobs:
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v2
+
+    - name: Install Swift on Linux
+      uses: sersoft-gmbh/swifty-linux-action@v2.1.1
+
+    - name: Build Docs
+      run: >-
+        swift package 
+        --allow-writing-to-directory .build/docs/${{ github.ref_name }}
+        generate-documentation
+        --target Sunday
+        --output-path .build/docs/${{ github.ref_name }}
+        --transform-for-static-hosting
+        --hosting-base-path sunday-swift/${{ github.ref_name }}
+
+    - name: Upload Docs to Pages
+      uses: actions/upload-pages-artifact@v1        
+      with:
+        path: .build/docs
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v1
