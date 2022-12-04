@@ -1,10 +1,9 @@
-[![CI](https://github.com/outfoxx/sunday-swift/actions/workflows/build-test.yml/badge.svg)](https://github.com/outfoxx/sunday-swift/actions/workflows/build-test.yml)
+Sunday 🙏 The framework of REST for Swift
+===
 
----
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/outfoxx/sunday-swift/CI)
+![Coverage](https://sonarcloud.io/api/project_badges/measure?project=outfoxx_sunday-swift&metric=coverage)
 
-# Sunday 🙏 The framework of REST for Swift
-
----
 
 Swift framework for generated REST clients.
 
