@@ -16,7 +16,7 @@
 
 import Foundation
 import Network
-import OSLogTrace
+import OSLog
 import Sunday
 
 
@@ -145,21 +145,21 @@ public class HTTPConnection {
 
   weak var server: HTTPServer?
   let id: String
-  let log: OSLog
+  let logger: Logger
   let dispatcher: HTTPServer.Dispatcher
   var requestParser = HTTPRequestParser()
 
-  public init(server: HTTPServer, id: String, log: OSLog, dispatcher: @escaping HTTPServer.Dispatcher) {
+  public init(server: HTTPServer, id: String, logger: Logger, dispatcher: @escaping HTTPServer.Dispatcher) {
     self.server = server
     self.id = id
-    self.log = log
+    self.logger = logger
     self.dispatcher = dispatcher
   }
 
   public func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
     guard let server = server, error == nil, isComplete == false else {
       if let error = error {
-        log.error("network connection error: \(error)")
+        logger.error("network connection error: \(error)")
       }
       return close()
     }
@@ -201,7 +201,7 @@ public class HTTPConnection {
       try dispatcher(request, response)
     }
     catch {
-      log.error("http processing error: \(error)")
+      logger.error("http processing error: \(error)")
 
     }
   }
@@ -229,11 +229,11 @@ public final class NetworkHTTPConnection: HTTPConnection {
     transport: NWConnection,
     server: HTTPServer,
     id: String,
-    log: OSLog,
+    logger: Logger,
     dispatcher: @escaping HTTPServer.Dispatcher
   ) {
     self.transport = transport
-    super.init(server: server, id: id, log: log, dispatcher: dispatcher)
+    super.init(server: server, id: id, logger: logger, dispatcher: dispatcher)
 
     self.transport.receive(
       minimumIncompleteLength: minHTTPReqeustLength,
@@ -249,7 +249,7 @@ public final class NetworkHTTPConnection: HTTPConnection {
   override public func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
     transport.send(content: data, completion: .contentProcessed { error in
       if let error = error {
-        self.log.error("send error while '\(context)': \(error)")
+        self.logger.error("send error while '\(context)': \(error)")
       }
       completion?(error)
     })

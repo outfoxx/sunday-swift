@@ -17,6 +17,7 @@
 import Foundation
 
 
+@available(iOS 14, tvOS 14, macOS 11, *)
 @available(watchOS, unavailable)
 public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
 

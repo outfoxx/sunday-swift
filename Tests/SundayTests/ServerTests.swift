@@ -223,6 +223,7 @@ class HTTPServerTests: XCTestCase {
     XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
   }
 
+  @available(iOS 14, tvOS 14, macOS 11, *)
   @available(watchOS, unavailable)
   func testStartWithLocator() async throws {
 

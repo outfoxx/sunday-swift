@@ -15,7 +15,12 @@
  */
 
 import Foundation
-import OSLogTrace
+import OSLog
 
+extension Logger {
 
-internal let logging = OSLogManager.for(subsystem: "SundayServer")
+  static func `for`(category: String) -> Logger {
+    return Logger(subsystem: "io.outfoxx.sunday-server", category: category)
+  }
+
+}

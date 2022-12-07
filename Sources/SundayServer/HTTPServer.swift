@@ -16,6 +16,7 @@
 
 import Foundation
 import Network
+import OSLog
 import Sunday
 
 
@@ -75,6 +76,7 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
 
   }
 
+  @available(iOS 14, tvOS 14, macOS 11, *)
   @available(watchOS, unavailable)
   public func start(timeout: TimeInterval = 30) -> URL? {
 
@@ -158,7 +160,7 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
       transport: connection,
       server: self,
       id: UUID().uuidString,
-      log: logging.for(category: "HTTP Connection"),
+      logger: Logger.for(category: "HTTP Connection"),
       dispatcher: dispatcher
     )
 
