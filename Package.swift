@@ -21,10 +21,10 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", from: "2.0.0"),
-    .package(url: "https://github.com/sharplet/Regex.git", from: "2.1.0"),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", from: "2.1.0"),
-    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0"),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "2.3.0")),
+    .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0")),
+    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0")
   ],
   targets: [
     .target(
