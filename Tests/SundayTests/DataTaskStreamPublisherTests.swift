@@ -34,16 +34,16 @@ class DataTaskStreamPublisherTests: XCTestCase {
       Path("/regular") {
         GET { _, res in
           res.start(status: .ok, headers: [:])
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 0)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 1)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 1)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 2)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 2)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 3)) {
             res.send(body: Data(count: 1000), final: false)
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 3)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 4)) {
             res.send(body: Data(count: 1000), final: true)
           }
         }
@@ -91,19 +91,19 @@ class DataTaskStreamPublisherTests: XCTestCase {
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 0)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 1)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 1)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 2)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 2)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 3)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 3)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 4)) {
             res.send(chunk: Data(count: 1000))
           }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(250 * 4)) {
+          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 5)) {
             res.finish(trailers: [:])
           }
         }
