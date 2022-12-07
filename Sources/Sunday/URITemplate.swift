@@ -28,16 +28,16 @@ public extension URI {
 
     private class Cache {
 
-      private var cache: [String: URITemplate] = [:]
+      private var storage: [String: URITemplate] = [:]
       private var lockQueue = DispatchQueue(label: "URI.Template.Cache Lock")
 
       func get(uri: String) throws -> URITemplate {
         try lockQueue.sync {
-          if let cached = cache[uri] {
+          if let cached = storage[uri] {
             return cached
           }
           let template = try URITemplate(string: uri)
-          cache[uri] = template
+          storage[uri] = template
           return template
         }
       }

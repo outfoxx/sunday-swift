@@ -19,14 +19,14 @@ import XCTest
 
 public func XCTAssertThrowsError<T>(
   _ expression: @autoclosure () async throws -> T,
-  _ message: @autoclosure () -> String = "",
-  _ file: String = #file,
-  _ line: Int = #line,
-  _ errorHandler: (Error) -> Void = { _ in }
+  _ message: @autoclosure () -> String = "did not throw an error",
+  _ file: StaticString = #file,
+  _ line: UInt = #line,
+  _ errorHandler: (Error) -> Void = { _ in /* do nothing */ }
 ) async throws {
   do {
     _ = try await expression()
-    XCTFail("XCTAssertThrowsError failed: did not throw an error")
+    XCTFail("XCTAssertThrowsError failed: \(message())", file: file, line: line)
   }
   catch {
     errorHandler(error)

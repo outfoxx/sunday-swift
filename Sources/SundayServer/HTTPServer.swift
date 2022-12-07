@@ -61,12 +61,7 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
     }
     listener.stateUpdateHandler = { [weak self] state in
       guard let self = self else { return }
-      switch state {
-      case .ready:
-        self.isReady = true
-      default:
-        self.isReady = false
-      }
+      self.isReady = state == .ready
     }
 
     if let serviceType = serviceType {

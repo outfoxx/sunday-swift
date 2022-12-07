@@ -234,10 +234,18 @@ extension MediaType: Codable {
 public extension MediaType {
 
   static func compatible(lhs: MediaType, rhs: MediaType) -> Bool {
-    if lhs.type != .any, rhs.type != .any, lhs.type != rhs.type { return false }
-    if lhs.tree != .any, rhs.tree != .any, lhs.tree != rhs.tree { return false }
-    if lhs.subtype != "*", rhs.subtype != "*", lhs.subtype != rhs.subtype { return false }
-    if lhs.suffix != rhs.suffix { return false }
+    if lhs.type != .any, rhs.type != .any, lhs.type != rhs.type {
+      return false
+    }
+    if lhs.tree != .any, rhs.tree != .any, lhs.tree != rhs.tree {
+      return false
+    }
+    if lhs.subtype != "*", rhs.subtype != "*", lhs.subtype != rhs.subtype {
+      return false
+    }
+    if lhs.suffix != rhs.suffix {
+      return false
+    }
     return Set(lhs.parameters.keys).intersection(rhs.parameters.keys)
       .allSatisfy { lhs.parameters[$0] == rhs.parameters[$0] }
   }

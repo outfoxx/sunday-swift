@@ -123,7 +123,9 @@ public extension HTTP {
 
     }
 
-    private init() {}
+    private init() {
+      // disallow creation
+    }
 
   }
 
