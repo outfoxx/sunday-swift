@@ -52,7 +52,7 @@ jobs:
 
     strategy:
       matrix:
-        platform: [macos, ios, tvos]
+        platform: [macos, ios, tvos, watchos]
 
     steps:
       

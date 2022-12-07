@@ -73,7 +73,7 @@ class HTTPServerTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       fatalError()
     }
@@ -221,6 +221,30 @@ class HTTPServerTests: XCTestCase {
     XCTAssertEqual(response.statusCode, 200)
 
     XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
+  }
+
+  @available(watchOS, unavailable)
+  func testStartWithLocator() async throws {
+
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/{type}") {
+        ContentNegotiation {
+
+          GET(.path("type")) { _, res, _ in
+            res.send(status: .ok, value: [Item(name: "abc", cost: 12.80), Item(name: "def", cost: 6.40)])
+          }
+
+        }
+      }
+    }
+
+    guard let serverURL = server.start(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      fatalError()
+    }
+    defer { server.stop() }
+
+    XCTAssertNotNil(serverURL)
   }
 
 }

@@ -75,6 +75,7 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
 
   }
 
+  @available(watchOS, unavailable)
   public func start(timeout: TimeInterval = 30) -> URL? {
 
     let starter = DispatchGroup()
@@ -112,7 +113,35 @@ open class NetworkHTTPServer: NSObject, HTTPServer {
         return locator?.located.first.flatMap { URL(string: "http://\($0.hostName):\($0.port)") } ??
           URL(string: "http://localhost:\(listener.port!)")!
 
-      case .timedOut: return nil
+      case .timedOut:
+        return nil
+      }
+
+    }
+
+  }
+
+  public func startLocal(timeout: TimeInterval = 30) -> URL? {
+
+    let starter = DispatchGroup()
+
+    starter.enter()
+    let obs = observe(\.isReady, options: [.initial, .new]) { _, change in
+      if change.newValue! {
+        starter.leave()
+      }
+    }
+
+    return withExtendedLifetime(obs) {
+
+      listener.start(queue: queue)
+
+      switch starter.wait(timeout: .now() + timeout) {
+      case .success:
+        return URL(string: "http://localhost:\(listener.port!)")!
+
+      case .timedOut:
+        return nil
       }
 
     }
