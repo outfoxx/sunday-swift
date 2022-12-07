@@ -9,7 +9,7 @@ permissions:
 
 concurrency:
   group: publish-docs-${{github.ref_name}}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
 
