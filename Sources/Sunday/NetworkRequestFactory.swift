@@ -21,7 +21,7 @@ import PotentCodables
 import OSLog
 
 
-private let eventStreamLogger = logging.for(category: "Event Streams")
+private let eventStreamLogger = Logger.for(category: "Event Streams")
 
 
 public class NetworkRequestFactory: RequestFactory {
@@ -193,10 +193,10 @@ public class NetworkRequestFactory: RequestFactory {
     }
 
     guard
-      let contentTypeName = response.value(forHttpHeaderField: HTTP.StdHeaders.contentType),
+      let contentTypeName = response.value(forHTTPHeaderField: HTTP.StdHeaders.contentType),
       let contentType = MediaType(contentTypeName)
     else {
-      let badType = response.value(forHttpHeaderField: HTTP.StdHeaders.contentType) ?? "none"
+      let badType = response.value(forHTTPHeaderField: HTTP.StdHeaders.contentType) ?? "none"
       throw SundayError.responseDecodingFailed(reason: .invalidContentType(badType))
     }
 
@@ -228,7 +228,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     // Check if response from error is "application/problem+json"
     guard
-      let contentTypeHeader = response.value(forHttpHeaderField: HTTP.StdHeaders.contentType),
+      let contentTypeHeader = response.value(forHTTPHeaderField: HTTP.StdHeaders.contentType),
       let contentType = MediaType(contentTypeHeader),
       contentType == .problem
     else {
@@ -453,7 +453,7 @@ public class NetworkRequestFactory: RequestFactory {
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
-    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?
+    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
   ) -> AsyncStream<D> where B: Encodable {
 
     eventStream(
@@ -472,7 +472,7 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func eventStream<D>(
-    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?,
+    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?,
     from requestFactory: @escaping () async throws -> URLRequest
   ) -> AsyncStream<D> {
 

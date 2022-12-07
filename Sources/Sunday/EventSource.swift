@@ -17,9 +17,11 @@
 // swiftlint:disable type_body_length
 
 import Foundation
+import OSLog
 
 
-private let logger = logging.for(category: "Event Source")
+private let logger = Logger.for(category: "EventSource")
+
 
 /// `Sunday`'s implementation of the
 /// [EventSource Web API](https://developer.mozilla.org/en-US/docs/Web/API/EventSource)
@@ -286,7 +288,7 @@ public class EventSource {
 
   private func internalConnect() {
 
-    guard readyStateValue.isNotClosed else {
+    guard readyStateValue.isNotClosed else {    
       logger.debug("Skipping connect due to close")
       return
     }
@@ -435,7 +437,7 @@ public class EventSource {
   private func receivedHeaders(_ response: HTTPURLResponse) throws {
 
     guard readyStateValue.ifNotClosed(updateTo: .open) else {
-      logger.error("invalid state for receiving headers: state=\(readyStateValue.current)")
+      logger.error("invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
 
       fireErrorEvent(error: .invalidState)
 
@@ -462,7 +464,7 @@ public class EventSource {
   private func receivedData(_ data: Data) throws {
 
     guard readyState == .open else {
-      logger.error("invalid state for receiving data: state=\(readyState)")
+      logger.error("invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
 
       fireErrorEvent(error: .invalidState)
 
@@ -522,7 +524,7 @@ public class EventSource {
       lastConnectTime: lastConnectTime
     )
 
-    logger.debug("Scheduling Reconnect delay=\(retryDelay)")
+    logger.debug("Scheduling Reconnect delay=\(retryDelay.totalSeconds, format: .fixed(precision: 3))")
 
     retryAttempt += 1
 

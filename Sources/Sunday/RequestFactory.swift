@@ -82,7 +82,7 @@ public protocol RequestFactory {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters?, queryParameters: Parameters?, body: B?,
     contentTypes: [MediaType]?, acceptTypes: [MediaType]?,
-    headers: Parameters?, decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, OSLog) throws -> D?
+    headers: Parameters?, decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
   ) -> AsyncStream<D>
 
   func close(cancelOutstandingRequests: Bool)
