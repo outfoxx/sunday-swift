@@ -51,7 +51,7 @@ public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDele
 
   private var resolving: [NetService] = []
 
-  public init(instance: String?, type: String, domain: String = "", signal: @escaping Signal = {}) {
+  public init(instance: String?, type: String, domain: String = "", signal: @escaping Signal = { /* do nothing */ }) {
     self.instance = instance
     self.signal = signal
 

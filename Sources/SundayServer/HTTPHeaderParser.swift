@@ -75,7 +75,15 @@ public struct HTTPRequestParser {
 
     func finish() throws -> ParsedRequest? {
       precondition(line != nil, "HTTP must have a request line")
-      defer { state = .line; line = nil; headers = nil; body = nil; entity = nil }
+      defer {
+        state = .line
+        line = nil
+        headers = nil
+        body = nil
+        entity = nil
+
+      }
+
       return ParsedRequest(line: line!, headers: headers ?? [], body: entity)
     }
 

@@ -611,7 +611,7 @@ public class EventSource {
     // Save event id, if it does not contain null
     if let eventId = info.id {
       // Check for NULL as it is not allowed
-      if eventId.contains("\0") == false {
+      if !eventId.contains("\0") {
 
         lastEventId = eventId
       }

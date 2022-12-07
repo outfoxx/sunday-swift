@@ -157,7 +157,7 @@ public class HTTPConnection {
   }
 
   public func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
-    guard let server = server, error == nil, isComplete == false else {
+    guard let server = server, error == nil, !isComplete else {
       if let error = error {
         logger.error("network connection error: \(error)")
       }

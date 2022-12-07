@@ -20,10 +20,10 @@ import Network
 
 open class RoutingHTTPServer: NetworkHTTPServer {
 
-  private var _routable: Routable!
+  private var routableStorage: Routable!
 
   open var routable: Routable {
-    return _routable
+    return routableStorage
   }
 
   public init(
@@ -63,7 +63,7 @@ open class RoutingHTTPServer: NetworkHTTPServer {
     @RoutableBuilder routableBuilder: () -> Routable
   ) throws {
     try self.init(port: port, localOnly: localOnly, serviceName: serviceName, serviceType: serviceType)
-    _routable = routableBuilder()
+    routableStorage = routableBuilder()
   }
 
 }
