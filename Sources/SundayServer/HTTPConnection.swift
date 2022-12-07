@@ -206,7 +206,7 @@ public class HTTPConnection {
     }
   }
 
-  open func send(data: Data, context: String, completion: @escaping (Error?) -> Void = { _ in }) {
+  open func send(data: Data, context: String, completion: @escaping (Error?) -> Void = { _ in /* do nothing */ }) {
     fatalError("Not Implemented")
   }
 
