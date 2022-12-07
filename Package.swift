@@ -1,4 +1,4 @@
-// swift-tools-version:5.6
+// swift-tools-version:5.4
 
 import PackageDescription
 
@@ -23,8 +23,7 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "2.3.0")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0")
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0"))
   ],
   targets: [
     .target(
@@ -50,3 +49,10 @@ let package = Package(
     ),
   ]
 )
+
+#if swift(>=5.6)
+  // Add the documentation compiler plugin if possible
+  package.dependencies.append(
+    .package(url: "https://github.com/apple/swift-docc-plugin", from: "1.0.0")
+  )
+#endif
