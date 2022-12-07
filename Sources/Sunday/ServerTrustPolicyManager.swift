@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//  swiftlint:disable function_body_length
-
 import Foundation
 
 
