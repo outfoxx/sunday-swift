@@ -30,8 +30,6 @@ class EventParser {
 
   private var unprocessedData: Data?
 
-  public init() {}
-
   func process(data: Data, dispatcher: (EventInfo) throws -> Void) rethrows {
 
     let eventStrings: [String]

@@ -28,6 +28,8 @@ import PotentCodables
  */
 open class Problem: Error, Codable, CustomStringConvertible {
 
+  static let requiredValueMissingDescription = "Required Value Missing"
+
   public let type: URL
 
   public let title: String
@@ -138,7 +140,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
       throw DecodingError.dataCorruptedError(
         forKey: CodingKeys.type,
         in: container,
-        debugDescription: "Required Value Missing"
+        debugDescription: Self.requiredValueMissingDescription
       )
     }
 
@@ -146,7 +148,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
       throw DecodingError.dataCorruptedError(
         forKey: CodingKeys.title,
         in: container,
-        debugDescription: "Required Value Missing"
+        debugDescription: Self.requiredValueMissingDescription
       )
     }
 
@@ -154,7 +156,7 @@ open class Problem: Error, Codable, CustomStringConvertible {
       throw DecodingError.dataCorruptedError(
         forKey: CodingKeys.status,
         in: container,
-        debugDescription: "Required Value Missing"
+        debugDescription: Self.requiredValueMissingDescription
       )
     }
 
