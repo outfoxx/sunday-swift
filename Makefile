@@ -24,6 +24,9 @@ build-test-ios:
 build-test-tvos:
 	$(call buildtest,tvOS,platform=tvOS Simulator$(comma)name=Apple TV)
 
+build-test-watchos:
+	$(call buildtest,watchOS,platform=watchOS Simulator$(comma)name=Apple Watch Series 7 (45mm))
+
 build-test-all: build-test-macos build-test-ios build-test-tvos
 
 format:	

@@ -226,7 +226,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -257,7 +257,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -291,7 +291,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -327,7 +327,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -363,7 +363,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -399,7 +399,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -434,7 +434,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -466,7 +466,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -535,7 +535,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -590,7 +590,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -640,7 +640,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -690,7 +690,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -740,7 +740,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -785,7 +785,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -835,7 +835,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -901,7 +901,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }
@@ -969,7 +969,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
       XCTFail("could not start local server")
       return
     }

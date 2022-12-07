@@ -17,7 +17,7 @@
 import Foundation
 
 
-
+@available(watchOS, unavailable)
 public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
 
   public static func locate(
