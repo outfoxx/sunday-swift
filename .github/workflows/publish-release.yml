@@ -1,0 +1,35 @@
+name: Publish Release
+
+on:
+  push:
+    tags: [ "[0-9]+.[0-9]+.[0-9]+**" ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release-${{github.ref_name}}
+  cancel-in-progress: false
+
+jobs:
+
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Check Version Format in Tag
+      id: version
+      uses: nowsprinting/check-version-format-action@v3
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        name: 🚀 v${{ github.ref_name }}
+        tag_name: ${{ github.ref_name }}
+        generate_release_notes: true
+        prerelease: ${{ steps.version.outputs.is_stable != 'true' }}
+        draft: false
