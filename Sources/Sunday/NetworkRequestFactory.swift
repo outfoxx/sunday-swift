@@ -504,7 +504,7 @@ public class NetworkRequestFactory: RequestFactory {
           continuation.yield(event)
         }
         catch {
-          eventStreamLogger.error("Unable to decode event: \(error)")
+          eventStreamLogger.error("Unable to decode event: \(error.localizedDescription, privacy: .public)")
           return
         }
 

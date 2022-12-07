@@ -472,7 +472,7 @@ public class EventSource {
       return
     }
 
-    logger.debug("Received Data count=\(data.count)")
+    logger.debug("Received Data: count=\(data.count)")
 
     eventParser.process(data: data, dispatcher: dispatchParsedEvent)
   }
@@ -483,7 +483,7 @@ public class EventSource {
       return
     }
 
-    logger.debug("Received Rrror \(error)")
+    logger.debug("Received Error: \(error.localizedDescription, privacy: .public)")
 
     fireErrorEvent(error: error)
 
@@ -591,13 +591,13 @@ public class EventSource {
     if let retry = info.retry {
 
       if let retryTime = Int(retry.trimmingCharacters(in: .whitespaces), radix: 10) {
-        logger.debug("update retry timeout: retryTime=\(retryTime)")
+        logger.debug("update retry timeout: retryTime=\(retryTime)ms")
 
         self.retryTime = .milliseconds(retryTime)
 
       }
       else {
-        logger.debug("ignoring invalid retry timeout message: retry=\(retry)")
+        logger.debug("ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
       }
 
     }
@@ -622,7 +622,9 @@ public class EventSource {
 
     if let onMessageCallback = onMessageCallback {
 
-      logger.debug("dispatch onMessage: event=\(info.event ?? ""), id=\(info.id ?? "")")
+      logger.debug(
+        "dispatch onMessage: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+      )
 
       queue.async {
         onMessageCallback(info.event, info.id, info.data)
@@ -636,7 +638,9 @@ public class EventSource {
 
         for eventHandler in eventHandlers {
 
-          logger.debug("dispatch listener: event=\(info.event ?? ""), id=\(info.id ?? "")")
+          logger.debug(
+            "dispatch listener: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+          )
 
           eventHandler.value(event, info.id, info.data)
         }
