@@ -1000,10 +1000,10 @@ class NetworkRequestFactoryTests: XCTestCase {
         }
       ) as AsyncStream<TestEvent>
 
-    for await event in eventStream {
-      XCTAssertEqual(event.some, "test data")
-      break
-    }
+    var eventStreamIter = eventStream.makeAsyncIterator()
+    let event = await eventStreamIter.next()
+    XCTAssertNotNil(event, "no event returned")
+    XCTAssertEqual(event!.some, "test data")
 
     // Ensure closing factory is gracefully handled by spawned EventSource
     requestFactory.close()

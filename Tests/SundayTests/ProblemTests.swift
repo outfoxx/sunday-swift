@@ -197,4 +197,58 @@ class ProblemTests: XCTestCase {
     XCTAssertEqual(customProblem.extra, decodedProblem.extra)
   }
 
+  func testDecodingFailsWhenProblemMissingType() throws {
+
+    let problemJSON =
+      """
+      {
+        "title": "Bad Request",
+        "status": 400
+      }
+      """
+
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
+        return XCTFail("Wrong Error")
+      }
+      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
+    }
+  }
+
+  func testDecodingFailsWhenProblemMissingTitle() throws {
+
+    let problemJSON =
+      """
+      {
+        "type": "http://example.com/docs/bad-request",
+        "status": 400
+      }
+      """
+
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
+        return XCTFail("Wrong Error")
+      }
+      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
+    }
+  }
+
+  func testDecodingFailsWhenProblemMissingStatus() throws {
+
+    let problemJSON =
+      """
+      {
+        "type": "http://example.com/docs/bad-request",
+        "title": "Bad Request"
+      }
+      """
+
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
+        return XCTFail("Wrong Error")
+      }
+      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
+    }
+  }
+
 }
