@@ -3,6 +3,8 @@ Sunday 🙏 The framework of REST for Swift
 
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/outfoxx/sunday-swift/CI)
 ![Coverage](https://sonarcloud.io/api/project_badges/measure?project=outfoxx_sunday-swift&metric=coverage)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Foutfoxx%2Fsunday-swift%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/outfoxx/sunday-swift)
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Foutfoxx%2Fsunday-swift%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/outfoxx/sunday-swift)
 
 
 Swift framework for generated REST clients.
