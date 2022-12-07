@@ -24,6 +24,10 @@ public protocol StringInitializable {
 }
 
 
+let bodyParameterName = "@body"
+let bodyDecoderPropertyName = "@body-decoder"
+
+
 public struct Param<T> {
 
   public typealias Converter = (Route, HTTPRequest, HTTPResponse) throws -> T?
@@ -90,8 +94,8 @@ public struct Param<T> {
   }
 
   public static func body<T>(_ type: T.Type) -> Param<T> where T: Decodable {
-    return Param<T>(name: "@body") { _, req, res in
-      guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
+    return Param<T>(name: bodyParameterName) { _, req, res in
+      guard let decoder = res.properties[bodyDecoderPropertyName] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(type, from: body)
     }
@@ -105,8 +109,8 @@ public struct Param<T> {
     ref: T.Type,
     using refType: CustomRef<TKP, VKP, TI>.Type
   ) -> Param<T> {
-    return Param<T>(name: "@body") { _, req, res in
-      guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
+    return Param<T>(name: bodyParameterName) { _, req, res in
+      guard let decoder = res.properties[bodyDecoderPropertyName] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(refType, from: body).as(T.self)
     }
@@ -120,8 +124,8 @@ public struct Param<T> {
     embeddedRef: T.Type,
     using refType: CustomEmbeddedRef<TKP, TI>.Type
   ) -> Param<T> {
-    return Param<T>(name: "@body") { _, req, res in
-      guard let decoder = res.properties["@body-decoder"] as? MediaTypeDecoder else { return nil }
+    return Param<T>(name: bodyParameterName) { _, req, res in
+      guard let decoder = res.properties[bodyDecoderPropertyName] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(refType, from: body).as(T.self)
     }

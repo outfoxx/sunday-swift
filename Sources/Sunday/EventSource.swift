@@ -288,7 +288,7 @@ public class EventSource {
 
   private func internalConnect() {
 
-    guard readyStateValue.isNotClosed else {    
+    guard readyStateValue.isNotClosed else {
       logger.debug("Skipping connect due to close")
       return
     }

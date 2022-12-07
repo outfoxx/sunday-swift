@@ -109,7 +109,7 @@ public struct RequestDecoding: Routable {
 
         }
 
-        response.properties["@body-decoder"] = try self.decoders.find(for: contentType)
+        response.properties[bodyDecoderPropertyName] = try self.decoders.find(for: contentType)
       }
 
       try routed.handler(route, request, response)
