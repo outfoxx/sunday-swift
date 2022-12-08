@@ -159,7 +159,7 @@ public class HTTPConnection {
   public func handleReceive(content: Data?, isComplete: Bool, error: Error?) {
     guard let server = server, error == nil, !isComplete else {
       if let error = error {
-        logger.error("network connection error: \(error)")
+        logger.error("network connection error: \(error.localizedDescription, privacy: .public)")
       }
       return close()
     }
@@ -201,7 +201,7 @@ public class HTTPConnection {
       try dispatcher(request, response)
     }
     catch {
-      logger.error("http processing error: \(error)")
+      logger.error("http processing error: \(error.localizedDescription, privacy: .public)")
 
     }
   }
@@ -249,7 +249,9 @@ public final class NetworkHTTPConnection: HTTPConnection {
   override public func send(data: Data, context: String, completion: ((Error?) -> Void)? = nil) {
     transport.send(content: data, completion: .contentProcessed { error in
       if let error = error {
-        self.logger.error("send error while '\(context)': \(error)")
+        self.logger.error(
+          "send error while '\(context, privacy: .public)': \(error.localizedDescription, privacy: .public)"
+        )
       }
       completion?(error)
     })
