@@ -78,9 +78,21 @@ class URITemplatesTests: XCTestCase {
     XCTAssertEqual(url, URL(string: "http://stg.example.com/api/v2/items"))
   }
 
-  func testCustomPathConvertibleAreSerializedCorrectly() async throws {
+  func testCustomPathEncodersOverrideDefaultSerialization() async throws {
 
-    struct SpecialParam: CustomPathConvertible {
+    let encoders: PathEncoders = .default.add(converter: { (_: UUID) in "custom-uuid" })
+
+    let template = URI.Template(format: "http://example.com/{id}")
+
+    XCTAssertEqual(template.format, "http://example.com/{id}")
+
+    let url = try template.complete(parameters: ["id": UUID()], encoders: encoders)
+    XCTAssertEqual(url, URL(string: "http://example.com/custom-uuid"))
+  }
+
+  func testCustomPathEncodableAreSerializedCorrectly() async throws {
+
+    struct SpecialParam: PathEncodable {
 
       var pathDescription: String {
         "special-param"

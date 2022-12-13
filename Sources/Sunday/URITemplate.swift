@@ -63,7 +63,11 @@ public extension URI {
     ///   - relative: Template for the relative portion of the complete URL
     ///   - parameters: Parameters for the format; these take precedence
     ///     when encountering duplicates
-    public func complete(relative: String = "", parameters: Parameters = [:]) throws -> URL {
+    public func complete(
+      relative: String = "",
+      parameters: Parameters = [:],
+      encoders: PathEncoders = .default
+    ) throws -> URL {
 
       let full: String
       if relative == "" {
@@ -86,16 +90,25 @@ public extension URI {
       for variableName in impl.variableNames {
 
         switch parameters[variableName] {
-        case let value as CustomPathConvertible:
-          variables[variableName] = value.pathDescription
         case let value as VariableValue:
           variables[variableName] = value
-        case let value as LosslessStringConvertible:
-          variables[variableName] = value.description
+        case .some(.some(let value)):
+          guard let converted = encoders.firstSupported(value: value) else {
+            if let pathValue = value as? PathEncodable {
+              variables[variableName] = pathValue.pathDescription
+              continue
+            }
+            else if let losslessValue = value as? LosslessStringConvertible {
+              variables[variableName] = losslessValue.description
+              continue
+            }
+            throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
+          }
+          variables[variableName] = converted
         case nil:
           throw Error.missingParameterValue(name: variableName)
-        case let value:
-          throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
+        default:
+          throw Error.unsupportedParameterType(name: variableName, type: type(of: parameters[variableName]))
         }
 
       }

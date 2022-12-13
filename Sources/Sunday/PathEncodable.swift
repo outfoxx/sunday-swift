@@ -17,19 +17,6 @@
 import Foundation
 
 
-protocol CustomPathConvertible {
+protocol PathEncodable {
   var pathDescription: String { get }
-}
-
-
-/**
- * Standard PathParameterConvertible types
- */
-
-extension UUID: CustomPathConvertible {
-
-  var pathDescription: String {
-    return uuidString
-  }
-
 }
