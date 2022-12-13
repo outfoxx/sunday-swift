@@ -33,6 +33,7 @@ public class NetworkRequestFactory: RequestFactory {
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
   public let mediaTypeDecoders: MediaTypeDecoders
+  public let pathEncoders: PathEncoders
   private var problemTypes: [String: Problem.Type] = [:]
 
   public init(
@@ -42,7 +43,8 @@ public class NetworkRequestFactory: RequestFactory {
     adapter: NetworkRequestAdapter? = nil,
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
-    mediaTypeDecoders: MediaTypeDecoders = .default
+    mediaTypeDecoders: MediaTypeDecoders = .default,
+    pathEncoders: PathEncoders = .default
   ) {
     self.baseURL = baseURL
     self.session = session
@@ -51,6 +53,7 @@ public class NetworkRequestFactory: RequestFactory {
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
+    self.pathEncoders = pathEncoders
   }
 
   public convenience init(
@@ -88,7 +91,7 @@ public class NetworkRequestFactory: RequestFactory {
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) async throws -> URLRequest {
 
-    var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:])
+    var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:], encoders: pathEncoders)
 
     // Encode & add query parameters to url
     if let queryParameters = queryParameters, !queryParameters.isEmpty {

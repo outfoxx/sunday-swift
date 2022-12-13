@@ -37,11 +37,12 @@ public enum ResponseValidationFailureReason {
   case unacceptableStatusCode(response: HTTPURLResponse, data: Data?)
 }
 
-public enum SundayError: Swift.Error {
+public enum SundayError: Error {
   case requestEncodingFailed(reason: RequestEncodingFailureReason)
   case responseDecodingFailed(reason: ResponseDecodingFailureReason)
   case responseValidationFailed(reason: ResponseValidationFailureReason)
   case unexpectedEmptyResponse
   case invalidURL(URLComponents? = nil)
   case invalidHTTPResponse
+  case pathParameterEncodingFailed(parameter: String, reason: Error?)
 }
