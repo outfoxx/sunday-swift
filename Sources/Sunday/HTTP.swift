@@ -15,6 +15,7 @@
  */
 
 import Foundation
+import OrderedCollections
 
 
 public struct HTTP {
