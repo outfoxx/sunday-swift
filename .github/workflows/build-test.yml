@@ -16,8 +16,10 @@ jobs:
 
     - name: Install Tools
       run: |
-        brew install xcbeautify
-        brew install sonar-scanner
+        brew tap a7ex/homebrew-formulae
+        brew install xcbeautify sonar-scanner findsimulator 
+      env:
+        HOMEBREW_NO_INSTALL_CLEANUP: 1
 
     - uses: actions/checkout@v3
       with:
@@ -55,14 +57,18 @@ jobs:
         platform: [macos, ios, tvos, watchos]
 
     steps:
+
+    - name: Install Tools
+      run: |
+        brew tap a7ex/homebrew-formulae
+        brew install xcbeautify findsimulator
+      env:
+        HOMEBREW_NO_INSTALL_CLEANUP: 1
       
     - uses: actions/checkout@v3
     
     - name: Select Xcode
       run: sudo xcode-select -s /Applications/Xcode_14.1.app/Contents/Developer
-
-    - name: Install Tools
-      run: brew install xcbeautify
 
     - name: Build/Test
       run: make build-test-${{ matrix.platform }}
