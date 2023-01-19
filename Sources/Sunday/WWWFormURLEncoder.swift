@@ -110,7 +110,7 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
 
-    guard let parameters = try encoder.encodeTree(value).unwrappedValues as? [String: Any] else {
+    guard let parameters = try encoder.encodeTree(value).compactUnwrapped as? [String: Any] else {
       throw Error.encodedValueNotDictionary
     }
 

@@ -24,7 +24,7 @@ enum HeaderParameters {
     case invalidEncodedValue(header: String, invalidValue: String)
   }
 
-  static func encode(headers: [String: Any?]) throws -> HTTP.HeaderList {
+  static func encode(headers: Parameters) throws -> HTTP.HeaderList {
 
     let groupedList: [(String, [String])] =
       try headers.compactMap { headerName, headerParameter in
