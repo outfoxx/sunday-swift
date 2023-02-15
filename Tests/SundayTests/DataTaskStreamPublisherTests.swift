@@ -85,25 +85,22 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
   func testChunked() async throws {
 
+    let chunkGates = (0 ..< 5).map { _ in DispatchSemaphore(value: 0) }
+
     server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
         GET { _, res in
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 0)) {
-            res.send(chunk: Data(count: 1000))
-          }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 2)) {
-            res.send(chunk: Data(count: 1000))
-          }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 4)) {
-            res.send(chunk: Data(count: 1000))
-          }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 6)) {
-            res.send(chunk: Data(count: 1000))
-          }
-          res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500 * 8)) {
+          res.send(chunk: Data(count: 1000))
+          res.server.queue.async {
+            for idx in 0 ..< 3 {
+              chunkGates[idx].wait()
+              res.send(chunk: Data(count: 1000))
+            }
+
+            chunkGates[3].wait()
             res.finish(trailers: [:])
           }
         }
@@ -139,6 +136,7 @@ class DataTaskStreamPublisherTests: XCTestCase {
         print("## EVENT: data")
         XCTAssertEqual(data.count, 1000)
       }
+      chunkGates[eventCount].signal()
       eventCount += 1
     }
 
