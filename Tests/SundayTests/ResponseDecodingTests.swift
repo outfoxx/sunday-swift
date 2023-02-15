@@ -20,27 +20,25 @@ import PotentCodables
 import XCTest
 
 
-class ResponseDecodingTests: ParameterizedTest {
+class ResponseDecodingTests: XCTestCase {
 
-  override class var parameterSets: [Any] {
-    return [
-      (MediaType.json, MediaType.json),
-      (MediaType.json, MediaType.cbor),
-      (MediaType.cbor, MediaType.json),
-      (MediaType.cbor, MediaType.cbor),
-    ]
+  func testAdaptiveResponseDecodingJSONtoJSON() async throws {
+    try await testAdaptiveResponseDecoding(contentType: .json, acceptType: .json)
   }
 
-  private var contentType = MediaType.cbor
-  private var acceptType = MediaType.cbor
-
-  override func setUp(with parameters: Any) {
-    let (contentType, acceptType) = parameters as! (MediaType, MediaType)
-    self.contentType = contentType
-    self.acceptType = acceptType
+  func testAdaptiveResponseDecodingJSONtoCBOR() async throws {
+    try await testAdaptiveResponseDecoding(contentType: .json, acceptType: .cbor)
   }
 
-  func testAdaptiveResponseDecoding() async throws {
+  func testAdaptiveResponseDecodingCBORtoJSON() async throws {
+    try await testAdaptiveResponseDecoding(contentType: .cbor, acceptType: .json)
+  }
+
+  func testAdaptiveResponseDecodingCBORtoCBOR() async throws {
+    try await testAdaptiveResponseDecoding(contentType: .cbor, acceptType: .cbor)
+  }
+
+  func testAdaptiveResponseDecoding(contentType: MediaType, acceptType: MediaType) async throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       ContentNegotiation {

@@ -110,9 +110,11 @@ public struct WWWFormURLEncoder: MediaTypeEncoder {
 
   public func encode<T>(_ value: T) throws -> Data where T: Encodable {
 
-    guard let parameters = try encoder.encodeTree(value).compactUnwrapped as? [String: Any] else {
+    guard let allParameters = try encoder.encodeTree(value).unwrapped as? [String: Any] else {
       throw Error.encodedValueNotDictionary
     }
+
+    let parameters = allParameters.compactMapValues { $0 }
 
     guard let data = encodeQueryString(parameters: parameters).data(using: .utf8) else {
       throw Error.stringEncodingFailed
