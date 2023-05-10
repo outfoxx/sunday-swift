@@ -102,6 +102,10 @@ public extension URI {
               variables[variableName] = losslessValue.description
               continue
             }
+            else if let rawRepValue = value as? any RawRepresentable {
+              variables[variableName] = String(describing: rawRepValue.rawValue)
+              continue
+            }
             throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
           }
           variables[variableName] = converted
