@@ -66,6 +66,12 @@ public struct URI: Equatable, Hashable {
 
 }
 
+extension URI: CustomStringConvertible {
+
+  public var description: String { string ?? "<invalid>" }
+
+}
+
 extension URI: Codable {
 
   public init(from decoder: Decoder) throws {
