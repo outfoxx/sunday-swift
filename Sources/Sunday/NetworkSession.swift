@@ -115,8 +115,13 @@ public class NetworkSession {
     }
 
     return AsyncThrowingStream(DataEvent.self) {
+
       let task = session.dataTask(with: request)
+
       setTaskDelegate(DataStreamDelegate(continuation: $0), for: task)
+
+      $0.onTermination = { _ in task.cancel() }
+
       task.resume()
     }
 
