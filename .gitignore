@@ -3,6 +3,5 @@
 /Packages
 /*.xcodeproj
 /.swiftpm
-/Package.resolved
 /TestResults
 .derived-data
