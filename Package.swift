@@ -21,7 +21,7 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.1.0")),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.1.1")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
     .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0"))
   ],
