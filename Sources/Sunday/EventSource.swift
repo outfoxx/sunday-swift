@@ -44,6 +44,7 @@ public class EventSource {
   public enum Error: Swift.Error {
     case invalidState
     case eventTimeout
+    case requestStreamEmpty
   }
 
   /// Possible states of the `EventSource`
@@ -118,7 +119,7 @@ public class EventSource {
   ///
   public private(set) var retryTime = retryTimeDefault
 
-  private let dataEventStreamFactory: (HTTP.Headers) async throws -> NetworkSession.DataEventStream
+  private let dataEventStreamFactory: (HTTP.Headers) async throws -> NetworkSession.DataEventStream?
   private var dataEventStreamTask: Task<Void, Swift.Error>?
   private var receivedString: String?
 
@@ -165,14 +166,14 @@ public class EventSource {
     queue: DispatchQueue = .global(qos: .background),
     eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
     eventTimeoutCheckInterval: DispatchTimeInterval = eventTimeoutCheckIntervalDefault,
-    dataEventStreamFactory: @escaping (HTTP.Headers) async throws -> NetworkSession.DataEventStream
+    dataEventStreamFactory: @escaping (HTTP.Headers) async throws -> NetworkSession.DataEventStream?
   ) {
     self.queue = DispatchQueue(label: "io.outfoxx.sunday.EventSource", attributes: [], target: queue)
-    readyStateValue = StateValue(.closed, queue: queue)
+    self.readyStateValue = StateValue(.closed, queue: queue)
     self.dataEventStreamFactory = dataEventStreamFactory
     self.eventTimeoutInterval = eventTimeoutInterval
     self.eventTimeoutCheckInterval = eventTimeoutCheckInterval
-    receivedString = nil
+    self.receivedString = nil
   }
 
   deinit {
@@ -261,7 +262,7 @@ public class EventSource {
   /// List of unique event types that handlers are
   /// registered for.
   ///
-  public func events() -> [String] {
+  public func registeredListenerTypes() -> [String] {
     queue.sync {
       return Array(eventListeners.keys)
     }
@@ -289,7 +290,9 @@ public class EventSource {
   private func internalConnect() {
 
     guard readyStateValue.isNotClosed else {
+      #if EVENT_SOURCE_EXTRA_LOGGING
       logger.debug("Skipping connect due to close")
+      #endif
       return
     }
 
@@ -312,7 +315,12 @@ public class EventSource {
       // Create a data stream and
       do {
 
-        let dataStream = try await dataEventStreamFactory(headers)
+        guard let dataStream = try await dataEventStreamFactory(headers) else {
+          logger.debug("Stream factory empty")
+          fireErrorEvent(error: Error.requestStreamEmpty)
+          close()
+          return
+        }
 
         for try await event in dataStream {
 
@@ -413,7 +421,9 @@ public class EventSource {
       return
     }
 
+    #if EVENT_SOURCE_EXTRA_LOGGING
     logger.debug("Checking Event Timeout")
+    #endif
 
     let eventTimeoutDeadline = lastEventReceivedTime + eventTimeoutInterval
 
@@ -424,7 +434,7 @@ public class EventSource {
 
     logger.debug("Event Timeout Deadline Expired")
 
-    fireErrorEvent(error: .eventTimeout)
+    fireErrorEvent(error: Error.eventTimeout)
 
     scheduleReconnect()
   }
@@ -437,9 +447,9 @@ public class EventSource {
   private func receivedHeaders(_ response: HTTPURLResponse) throws {
 
     guard readyStateValue.ifNotClosed(updateTo: .open) else {
-      logger.error("invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
+      logger.error("Invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
 
-      fireErrorEvent(error: .invalidState)
+      fireErrorEvent(error: Error.invalidState)
 
       scheduleReconnect()
       return
@@ -464,9 +474,9 @@ public class EventSource {
   private func receivedData(_ data: Data) throws {
 
     guard readyState == .open else {
-      logger.error("invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
+      logger.error("Invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
 
-      fireErrorEvent(error: .invalidState)
+      fireErrorEvent(error: Error.invalidState)
 
       scheduleReconnect()
       return
@@ -480,6 +490,13 @@ public class EventSource {
   private func receivedError(error: Swift.Error) {
 
     if readyStateValue.isClosed {
+      return
+    }
+
+    // Quietly close dure to Task or URLTask cancellation
+    if isCancellationError(error: error) {
+      fireErrorEvent(error: error)
+      close()
       return
     }
 
@@ -503,6 +520,13 @@ public class EventSource {
     scheduleReconnect()
   }
 
+  private func isCancellationError(error: Swift.Error) -> Bool {
+    switch error {
+    case let urlError as URLError where urlError.code == .cancelled: return true
+    case is CancellationError: return true
+    default: return false
+    }
+  }
 
 
   // MARK: Reconnection
@@ -591,13 +615,13 @@ public class EventSource {
     if let retry = info.retry {
 
       if let retryTime = Int(retry.trimmingCharacters(in: .whitespaces), radix: 10) {
-        logger.debug("update retry timeout: retryTime=\(retryTime)ms")
+        logger.debug("Update retry timeout: retryTime=\(retryTime)ms")
 
         self.retryTime = .milliseconds(retryTime)
 
       }
       else {
-        logger.debug("ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
+        logger.debug("Ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
       }
 
     }
@@ -616,14 +640,14 @@ public class EventSource {
         lastEventId = eventId
       }
       else {
-        logger.debug("event id contains null, unable to use for last-event-id")
+        logger.debug("Event id contains null, unable to use for last-event-id")
       }
     }
 
     if let onMessageCallback = onMessageCallback {
 
       logger.debug(
-        "dispatch onMessage: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+        "Dispatch onMessage: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
       )
 
       queue.async {
@@ -639,7 +663,7 @@ public class EventSource {
         for eventHandler in eventHandlers {
 
           logger.debug(
-            "dispatch listener: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+            "Dispatch listener: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
           )
 
           eventHandler.value(event, info.id, info.data)
@@ -647,10 +671,6 @@ public class EventSource {
       }
     }
 
-  }
-
-  func fireErrorEvent(error: Error) {
-    fireErrorEvent(error: error as Swift.Error)
   }
 
   func fireErrorEvent(error: Swift.Error) {
