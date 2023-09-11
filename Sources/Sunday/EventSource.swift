@@ -290,7 +290,9 @@ public class EventSource {
   private func internalConnect() {
 
     guard readyStateValue.isNotClosed else {
+      #if EVENT_SOURCE_EXTRA_LOGGING
       logger.debug("Skipping connect due to close")
+      #endif
       return
     }
 
@@ -419,7 +421,9 @@ public class EventSource {
       return
     }
 
+    #if EVENT_SOURCE_EXTRA_LOGGING
     logger.debug("Checking Event Timeout")
+    #endif
 
     let eventTimeoutDeadline = lastEventReceivedTime + eventTimeoutInterval
 
@@ -443,7 +447,7 @@ public class EventSource {
   private func receivedHeaders(_ response: HTTPURLResponse) throws {
 
     guard readyStateValue.ifNotClosed(updateTo: .open) else {
-      logger.error("invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
+      logger.error("Invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
 
       fireErrorEvent(error: Error.invalidState)
 
@@ -470,7 +474,7 @@ public class EventSource {
   private func receivedData(_ data: Data) throws {
 
     guard readyState == .open else {
-      logger.error("invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
+      logger.error("Invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
 
       fireErrorEvent(error: Error.invalidState)
 
@@ -611,13 +615,13 @@ public class EventSource {
     if let retry = info.retry {
 
       if let retryTime = Int(retry.trimmingCharacters(in: .whitespaces), radix: 10) {
-        logger.debug("update retry timeout: retryTime=\(retryTime)ms")
+        logger.debug("Update retry timeout: retryTime=\(retryTime)ms")
 
         self.retryTime = .milliseconds(retryTime)
 
       }
       else {
-        logger.debug("ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
+        logger.debug("Ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
       }
 
     }
@@ -636,14 +640,14 @@ public class EventSource {
         lastEventId = eventId
       }
       else {
-        logger.debug("event id contains null, unable to use for last-event-id")
+        logger.debug("Event id contains null, unable to use for last-event-id")
       }
     }
 
     if let onMessageCallback = onMessageCallback {
 
       logger.debug(
-        "dispatch onMessage: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+        "Dispatch onMessage: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
       )
 
       queue.async {
@@ -659,7 +663,7 @@ public class EventSource {
         for eventHandler in eventHandlers {
 
           logger.debug(
-            "dispatch listener: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
+            "Dispatch listener: event=\(info.event ?? "", privacy: .public), id=\(info.id ?? "", privacy: .public)"
           )
 
           eventHandler.value(event, info.id, info.data)
