@@ -93,19 +93,19 @@ public struct Param<T> {
     return body(Data.self)
   }
 
-  public static func body<T>(_ type: T.Type) -> Param<T> where T: Decodable {
-    return Param<T>(name: bodyParameterName) { _, req, res in
+  public static func body<B>(_ type: B.Type) -> Param<B> where B: Decodable {
+    return Param<B>(name: bodyParameterName) { _, req, res in
       guard let decoder = res.properties[bodyDecoderPropertyName] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
       return try decoder.decode(type, from: body)
     }
   }
 
-  public static func body<T>(ref: T.Type) -> Param<T> {
+  public static func body(ref: T.Type) -> Param<T> {
     return body(ref: ref, using: Ref.self)
   }
 
-  public static func body<T, TKP: TypeKeyProvider, VKP: ValueKeyProvider, TI: TypeIndex>(
+  public static func body<TKP: TypeKeyProvider, VKP: ValueKeyProvider, TI: TypeIndex>(
     ref: T.Type,
     using refType: CustomRef<TKP, VKP, TI>.Type
   ) -> Param<T> {
@@ -116,11 +116,11 @@ public struct Param<T> {
     }
   }
 
-  public static func body<T>(embebbedRef: T.Type) -> Param<T> {
+  public static func body(embebbedRef: T.Type) -> Param<T> {
     return body(embeddedRef: embebbedRef, using: EmbeddedRef.self)
   }
 
-  public static func body<T, TKP: TypeKeyProvider, TI: TypeIndex>(
+  public static func body<TKP: TypeKeyProvider, TI: TypeIndex>(
     embeddedRef: T.Type,
     using refType: CustomEmbeddedRef<TKP, TI>.Type
   ) -> Param<T> {

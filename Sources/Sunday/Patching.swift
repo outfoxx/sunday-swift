@@ -166,7 +166,7 @@ public enum PatchOp<Value: Codable>: AnyPatchOp, Codable {
 
 extension UpdateOp {
 
-  public static func merge<Value: Codable>(_ value: Value) -> UpdateOp<Value> { .set(value) }
+  public static func merge<NewValue: Codable>(_ value: NewValue) -> UpdateOp<NewValue> { .set(value) }
 
 }
 
@@ -187,7 +187,7 @@ extension UpdateOp: CustomStringConvertible {
 
 extension PatchOp {
 
-  public static func merge<Value: Codable>(_ value: Value) -> PatchOp<Value> { .set(value) }
+  public static func merge<NewValue: Codable>(_ value: NewValue) -> PatchOp<NewValue> { .set(value) }
 
 }
 
