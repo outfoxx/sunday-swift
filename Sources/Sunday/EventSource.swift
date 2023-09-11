@@ -44,6 +44,7 @@ public class EventSource {
   public enum Error: Swift.Error {
     case invalidState
     case eventTimeout
+    case requestStreamEmpty
   }
 
   /// Possible states of the `EventSource`
@@ -118,7 +119,7 @@ public class EventSource {
   ///
   public private(set) var retryTime = retryTimeDefault
 
-  private let dataEventStreamFactory: (HTTP.Headers) async throws -> NetworkSession.DataEventStream
+  private let dataEventStreamFactory: (HTTP.Headers) async throws -> NetworkSession.DataEventStream?
   private var dataEventStreamTask: Task<Void, Swift.Error>?
   private var receivedString: String?
 
@@ -165,14 +166,14 @@ public class EventSource {
     queue: DispatchQueue = .global(qos: .background),
     eventTimeoutInterval: DispatchTimeInterval? = eventTimeoutIntervalDefault,
     eventTimeoutCheckInterval: DispatchTimeInterval = eventTimeoutCheckIntervalDefault,
-    dataEventStreamFactory: @escaping (HTTP.Headers) async throws -> NetworkSession.DataEventStream
+    dataEventStreamFactory: @escaping (HTTP.Headers) async throws -> NetworkSession.DataEventStream?
   ) {
     self.queue = DispatchQueue(label: "io.outfoxx.sunday.EventSource", attributes: [], target: queue)
-    readyStateValue = StateValue(.closed, queue: queue)
+    self.readyStateValue = StateValue(.closed, queue: queue)
     self.dataEventStreamFactory = dataEventStreamFactory
     self.eventTimeoutInterval = eventTimeoutInterval
     self.eventTimeoutCheckInterval = eventTimeoutCheckInterval
-    receivedString = nil
+    self.receivedString = nil
   }
 
   deinit {
@@ -261,7 +262,7 @@ public class EventSource {
   /// List of unique event types that handlers are
   /// registered for.
   ///
-  public func events() -> [String] {
+  public func registeredListenerTypes() -> [String] {
     queue.sync {
       return Array(eventListeners.keys)
     }
@@ -312,7 +313,12 @@ public class EventSource {
       // Create a data stream and
       do {
 
-        let dataStream = try await dataEventStreamFactory(headers)
+        guard let dataStream = try await dataEventStreamFactory(headers) else {
+          logger.debug("Stream factory empty")
+          fireErrorEvent(error: Error.requestStreamEmpty)
+          close()
+          return
+        }
 
         for try await event in dataStream {
 
@@ -424,7 +430,7 @@ public class EventSource {
 
     logger.debug("Event Timeout Deadline Expired")
 
-    fireErrorEvent(error: .eventTimeout)
+    fireErrorEvent(error: Error.eventTimeout)
 
     scheduleReconnect()
   }
@@ -439,7 +445,7 @@ public class EventSource {
     guard readyStateValue.ifNotClosed(updateTo: .open) else {
       logger.error("invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
 
-      fireErrorEvent(error: .invalidState)
+      fireErrorEvent(error: Error.invalidState)
 
       scheduleReconnect()
       return
@@ -466,7 +472,7 @@ public class EventSource {
     guard readyState == .open else {
       logger.error("invalid state for receiving data: state=\(self.readyState.rawValue, privacy: .public)")
 
-      fireErrorEvent(error: .invalidState)
+      fireErrorEvent(error: Error.invalidState)
 
       scheduleReconnect()
       return
@@ -480,6 +486,13 @@ public class EventSource {
   private func receivedError(error: Swift.Error) {
 
     if readyStateValue.isClosed {
+      return
+    }
+
+    // Quietly close dure to Task or URLTask cancellation
+    if isCancellationError(error: error) {
+      fireErrorEvent(error: error)
+      close()
       return
     }
 
@@ -503,6 +516,13 @@ public class EventSource {
     scheduleReconnect()
   }
 
+  private func isCancellationError(error: Swift.Error) -> Bool {
+    switch error {
+    case let urlError as URLError where urlError.code == .cancelled: return true
+    case is CancellationError: return true
+    default: return false
+    }
+  }
 
 
   // MARK: Reconnection
@@ -647,10 +667,6 @@ public class EventSource {
       }
     }
 
-  }
-
-  func fireErrorEvent(error: Error) {
-    fireErrorEvent(error: error as Swift.Error)
   }
 
   func fireErrorEvent(error: Swift.Error) {

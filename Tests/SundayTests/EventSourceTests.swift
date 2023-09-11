@@ -234,10 +234,10 @@ class EventSourceTests: XCTestCase {
       }
 
     let handlerId = eventSource.addEventListener(for: "test") { _, _, _ in }
-    XCTAssertTrue(!eventSource.events().isEmpty)
+    XCTAssertTrue(!eventSource.registeredListenerTypes().isEmpty)
 
     eventSource.removeEventListener(handlerId: handlerId, for: "test")
-    XCTAssertTrue(eventSource.events().isEmpty)
+    XCTAssertTrue(eventSource.registeredListenerTypes().isEmpty)
   }
 
   func testValidRetryTimeoutUpdate() throws {
@@ -548,6 +548,57 @@ class EventSourceTests: XCTestCase {
     eventSource.onError = { _ in
       eventSource.close()
       errorX.fulfill()
+    }
+
+    eventSource.connect()
+
+    waitForExpectations()
+  }
+
+  func testCloseWhenRequestFactoryReturnsNil() throws {
+
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/simple") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+            HTTP.StdHeaders.transferEncoding: ["chunked"],
+          ])
+          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "data: some test data\n\n".data(using: .utf8) ?? Data())
+          res.finish(trailers: [:])
+        }
+      }
+    }
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
+    var requestsReturned = 0
+    let eventSource =
+    EventSource {
+      if requestsReturned > 1 {
+        return nil
+      }
+      defer { requestsReturned += 1 }
+      let request = URLRequest(url: url).adding(httpHeaders: $0)
+      return try session.dataEventStream(for: request)
+    }
+
+    let closeErrorX = expectation(description: "EventSource Close Error")
+
+    eventSource.onError = { error in
+      guard let error = error as? EventSource.Error, case .requestStreamEmpty = error else {
+        return
+      }
+      closeErrorX.fulfill()
     }
 
     eventSource.connect()

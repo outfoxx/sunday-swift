@@ -433,22 +433,25 @@ public class NetworkRequestFactory: RequestFactory {
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) -> EventSource where B: Encodable {
 
-    eventSource(from: { try await self.request(
-      method: method,
-      pathTemplate: pathTemplate,
-      pathParameters: pathParameters,
-      queryParameters: queryParameters,
-      body: body,
-      contentTypes: contentTypes,
-      acceptTypes: acceptTypes,
-      headers: headers
-    )})
+    eventSource(from: {
+      if self.session.isClosed { return nil }
+      return try await self.request(
+        method: method,
+        pathTemplate: pathTemplate,
+        pathParameters: pathParameters,
+        queryParameters: queryParameters,
+        body: body,
+        contentTypes: contentTypes,
+        acceptTypes: acceptTypes,
+        headers: headers
+      )
+    })
   }
 
-  public func eventSource(from requestFactory: @escaping () async throws -> URLRequest) -> EventSource {
+  public func eventSource(from requestFactory: @escaping () async throws -> URLRequest?) -> EventSource {
 
     return EventSource(queue: requestQueue) { headers in
-      let request = try await requestFactory()
+      guard let request = try await requestFactory() else { return nil }
       return try self.eventSession.dataEventStream(for: request.adding(httpHeaders: headers))
     }
   }
@@ -461,22 +464,25 @@ public class NetworkRequestFactory: RequestFactory {
 
     eventStream(
       decoder: decoder,
-      from: { try await self.request(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )}
+      from: {
+        if self.session.isClosed { return nil }
+        return try await self.request(
+          method: method,
+          pathTemplate: pathTemplate,
+          pathParameters: pathParameters,
+          queryParameters: queryParameters,
+          body: body,
+          contentTypes: contentTypes,
+          acceptTypes: acceptTypes,
+          headers: headers
+        )
+      }
     )
   }
 
   public func eventStream<D>(
     decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?,
-    from requestFactory: @escaping () async throws -> URLRequest
+    from requestFactory: @escaping () async throws -> URLRequest?
   ) -> AsyncStream<D> {
 
     guard let jsonDecoder = try? mediaTypeDecoders.find(for: .json) as? TextMediaTypeDecoder else {
