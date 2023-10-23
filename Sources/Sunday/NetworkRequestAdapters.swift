@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import AsyncObjects
 import Foundation
 
 
@@ -82,6 +83,7 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   private let tokenHeaderType: String
   private var authorization: TokenAuthorization?
   private var refresh: (NetworkRequestFactory) async throws -> TokenAuthorization
+  private let lock = AsyncSemaphore(value: 1)
 
   public init(
     tokenHeaderType: String,
@@ -108,9 +110,13 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   }
 
   public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest {
+    try await lock.wait()
+    defer { lock.signal() }
+
     if shouldRefresh {
       authorization = try await refresh(requestFactory)
     }
+
     return update(urlRequest: urlRequest, accessToken: authorization!.token)
   }
 
