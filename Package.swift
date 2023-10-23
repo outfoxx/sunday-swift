@@ -23,7 +23,8 @@ let package = Package(
   dependencies: [
     .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.2.0")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0"))
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0")),
+    .package(url: "https://github.com/SwiftyLab/AsyncObjects.git", .upToNextMinor(from: "2.1.0"))
   ],
   targets: [
     .target(
@@ -31,7 +32,8 @@ let package = Package(
       dependencies: [
         "Regex",
         "PotentCodables",
-        "URITemplate"
+        "URITemplate",
+        "AsyncObjects"
       ]
     ),
     .target(

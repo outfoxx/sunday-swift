@@ -2,6 +2,15 @@
   "object": {
     "pins": [
       {
+        "package": "AsyncObjects",
+        "repositoryURL": "https://github.com/SwiftyLab/AsyncObjects.git",
+        "state": {
+          "branch": null,
+          "revision": "93aacfba87d738ac94fb50c2a6768c43ec9d42eb",
+          "version": "2.1.0"
+        }
+      },
+      {
         "package": "BigInt",
         "repositoryURL": "https://github.com/attaswift/BigInt.git",
         "state": {
