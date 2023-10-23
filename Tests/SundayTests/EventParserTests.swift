@@ -241,4 +241,23 @@ class EventParserTests: XCTestCase {
     XCTAssertEqual(event.data, "")
   }
 
+  func testDispatchesOnlyCommentLines() {
+    let eventBuffer = ": ping\n\n".data(using: .utf8)!
+
+    let parser = EventParser()
+
+    var events: [EventInfo] = []
+    parser.process(data: eventBuffer) { events.append($0) }
+
+    XCTAssertEqual(events.count, 1)
+    guard let event = events.first else {
+      return
+    }
+
+    XCTAssertEqual(event.retry, nil)
+    XCTAssertEqual(event.id, nil)
+    XCTAssertEqual(event.event, nil)
+    XCTAssertEqual(event.data, nil)
+  }
+
 }

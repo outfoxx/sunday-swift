@@ -132,7 +132,7 @@ public class EventSource {
   private var queue: DispatchQueue
 
   private var lastEventId: String?
-  private var lastEventReceivedTime: DispatchTime = .distantFuture
+  internal private(set) var lastEventReceivedTime: DispatchTime = .distantFuture
 
   private var connectionOrigin: URL?
   private var connectionAttemptTime: DispatchTime?
