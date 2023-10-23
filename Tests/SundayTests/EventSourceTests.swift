@@ -606,14 +606,62 @@ class EventSourceTests: XCTestCase {
     waitForExpectations()
   }
 
-  func testPrintRetryDelay() {
+  func testCheckRetryDelays() {
 
-    for attempt in 0 ..< 100 {
-      print(EventSource.calculateRetryDelay(retryAttempt: attempt,
-                                            retryTime: EventSource.retryTimeDefault,
-                                            lastConnectTime: .milliseconds(100)))
+    var delays: [DispatchTimeInterval] = []
+
+    for attempt in 0 ..< 30 {
+      delays.append(EventSource.calculateRetryDelay(retryAttempt: attempt,
+                                                    retryTime: EventSource.retryTimeDefault,
+                                                    lastConnectTime: .milliseconds(0)))
     }
 
+    XCTAssertEqual(delays[0], .milliseconds(0))
+    XCTAssertEqual(delays[1], .milliseconds(100))
+    XCTAssertGreaterThan(delays[29].totalSeconds, 60)
+  }
+
+  func testPingsResetLastEventReceivedTime() throws {
+
+    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/simple") {
+        GET { _, res in
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+            HTTP.StdHeaders.transferEncoding: ["chunked"],
+          ])
+          res.server.queue.asyncAfter(deadline: .now().advanced(by: .seconds(1))) {
+            res.send(chunk: ": ping\n\n".data(using: .utf8) ?? Data())
+            res.finish(trailers: [:])
+          }
+        }
+      }
+    }
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let session = NetworkSession(configuration: .default)
+    defer { session.close(cancelOutstandingTasks: true) }
+
+    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
+    let eventSource =
+      EventSource {
+        let request = URLRequest(url: url).adding(httpHeaders: $0)
+        return try session.dataEventStream(for: request)
+      }
+
+    eventSource.connect()
+
+    Thread.sleep(forTimeInterval: 0.5)
+
+    XCTAssertEqual(eventSource.lastEventReceivedTime, .distantFuture)
+
+    Thread.sleep(forTimeInterval: 1.5)
+
+    XCTAssertLessThan(DispatchTime.now().distance(to: eventSource.lastEventReceivedTime).totalSeconds, 0.5)
   }
 
 }
