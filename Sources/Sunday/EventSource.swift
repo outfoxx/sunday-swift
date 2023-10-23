@@ -71,7 +71,7 @@ public class EventSource {
   ///
   /// - SeeAlso: `EventSource.retryTime`
   ///
-  public static var retryTimeDefault = DispatchTimeInterval.milliseconds(500)
+  public static var retryTimeDefault = DispatchTimeInterval.milliseconds(100)
 
   /// Global default time interval for event timeout.
   ///
@@ -94,10 +94,11 @@ public class EventSource {
   /// alter the global default. Each `EventSource` can override
   ///  this setting in its initializer.
   ///
-  public static var eventTimeoutCheckIntervalDefault = DispatchTimeInterval.seconds(2)
+  public static var eventTimeoutCheckIntervalDefault = DispatchTimeInterval.seconds(100)
 
   // Maximum multiplier for the backoff algorithm
-  private static let maxRetryTimeMultiplier = 30
+  private static let maxRetryTimeMultiplier = 12
+  private static let retryExponent = 2.6
 
 
   /// Current state of the `EventSource`.
@@ -572,21 +573,17 @@ public class EventSource {
     reconnectTimeoutTask = nil
   }
 
-  private static func calculateRetryDelay(
+  static func calculateRetryDelay(
     retryAttempt: Int,
     retryTime: DispatchTimeInterval,
     lastConnectTime: DispatchTimeInterval
   ) -> DispatchTimeInterval {
 
-    let retryAttempt = Double(retryAttempt)
+    let retryMultiplier = Double(min(retryAttempt, Self.maxRetryTimeMultiplier))
     let retryTime = Double(retryTime.totalMilliseconds)
 
     // calculate total delay
-    let backOffDelay = pow(retryAttempt, 2.0) * retryTime
-    var retryDelay = min(
-      retryTime + backOffDelay,
-      retryTime * Double(Self.maxRetryTimeMultiplier)
-    )
+    var retryDelay = pow(retryMultiplier, retryExponent) * retryTime
 
     // Adjust delay by amount of time last connect
     // cycle took, except on the first attempt

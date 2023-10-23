@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import Sunday
+@testable import Sunday
 import SundayServer
 import XCTest
 
@@ -344,7 +344,7 @@ class EventSourceTests: XCTestCase {
 
     waitForExpectations()
 
-    XCTAssertEqual(eventSource.retryTime, .milliseconds(500))
+    XCTAssertEqual(eventSource.retryTime, .milliseconds(100))
   }
 
   func testReconnectsWithLastEventId() throws {
@@ -604,6 +604,16 @@ class EventSourceTests: XCTestCase {
     eventSource.connect()
 
     waitForExpectations()
+  }
+
+  func testPrintRetryDelay() {
+
+    for attempt in 0 ..< 100 {
+      print(EventSource.calculateRetryDelay(retryAttempt: attempt,
+                                            retryTime: EventSource.retryTimeDefault,
+                                            lastConnectTime: .milliseconds(100)))
+    }
+
   }
 
 }
