@@ -494,7 +494,7 @@ public class EventSource {
       return
     }
 
-    // Quietly close dure to Task or URLTask cancellation
+    // Quietly close due to Task or URLTask cancellation
     if isCancellationError(error: error) {
       fireErrorEvent(error: error)
       close()

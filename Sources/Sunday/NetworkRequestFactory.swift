@@ -26,6 +26,8 @@ private let eventStreamLogger = Logger.for(category: "Event Streams")
 
 public class NetworkRequestFactory: RequestFactory {
 
+  public static let eventRequestTimeoutInterval: TimeInterval = 15 * 60 // 15 minutes
+
   public let baseURL: URI.Template
   public let session: NetworkSession
   public let eventSession: NetworkSession
@@ -34,6 +36,7 @@ public class NetworkRequestFactory: RequestFactory {
   public let mediaTypeEncoders: MediaTypeEncoders
   public let mediaTypeDecoders: MediaTypeDecoders
   public let pathEncoders: PathEncoders
+  public let eventRequestTimeoutInterval: TimeInterval
   private var problemTypes: [String: Problem.Type] = [:]
 
   public init(
@@ -44,6 +47,7 @@ public class NetworkRequestFactory: RequestFactory {
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default,
+    eventRequestTimeoutInterval: TimeInterval = NetworkRequestFactory.eventRequestTimeoutInterval,
     pathEncoders: PathEncoders = .default
   ) {
     self.baseURL = baseURL
@@ -54,6 +58,7 @@ public class NetworkRequestFactory: RequestFactory {
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
     self.pathEncoders = pathEncoders
+    self.eventRequestTimeoutInterval = eventRequestTimeoutInterval
   }
 
   public convenience init(
@@ -452,7 +457,11 @@ public class NetworkRequestFactory: RequestFactory {
 
     return EventSource(queue: requestQueue) { headers in
       guard let request = try await requestFactory() else { return nil }
-      return try self.eventSession.dataEventStream(for: request.adding(httpHeaders: headers))
+      let updatedRequest =
+        request
+          .adding(httpHeaders: headers)
+          .with(timeoutInterval: self.eventRequestTimeoutInterval)
+      return try self.eventSession.dataEventStream(for: updatedRequest)
     }
   }
 
