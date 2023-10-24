@@ -24,6 +24,7 @@ define buildtest
 		xcodebuild -scheme $(project)-Package \
 		-derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' \
 		-enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES \
+		-clonedSourcePackagesDirPath ${HOME}/.xcode-pkgs \
 		test | xcbeautify
 endef
 
