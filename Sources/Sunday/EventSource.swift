@@ -94,7 +94,7 @@ public class EventSource {
   /// alter the global default. Each `EventSource` can override
   ///  this setting in its initializer.
   ///
-  public static var eventTimeoutCheckIntervalDefault = DispatchTimeInterval.seconds(100)
+  public static var eventTimeoutCheckIntervalDefault = DispatchTimeInterval.seconds(2)
 
   // Maximum multiplier for the backoff algorithm
   private static let maxRetryTimeMultiplier = 12
