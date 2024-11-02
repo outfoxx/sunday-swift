@@ -69,9 +69,9 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "data: some test data\n\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "event: test\n")
+          res.send(chunk: "id: 123\n")
+          res.send(chunk: "data: some test data\n\n")
           res.finish(trailers: [:])
         }
       }
@@ -116,11 +116,15 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
-          res.finish(trailers: [:])
+          func sendEvent() {
+            res.send(chunk: "event: test\n")
+            res.send(chunk: "id: 123\n")
+            res.send(chunk: "data: {\"some\":\r")
+            res.send(chunk: "data: \"test data\"}\n")
+            res.send(chunk: "\n")
+            res.server.queue.asyncAfter(deadline: .now() + 1.0) { sendEvent() }
+          }
+          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
         }
       }
     }
@@ -168,7 +172,7 @@ class EventSourceTests: XCTestCase {
 
               let headers = [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]]
 
-              res.send(status: .ok, headers: headers, body: "event: test\ndata: event\n\n".data(using: .utf8) ?? Data())
+              res.send(status: .ok, headers: headers, body: Data("event: test\ndata: event\n\n".utf8))
             }
             else {
 
@@ -252,17 +256,20 @@ class EventSourceTests: XCTestCase {
           ])
 
           // Send retry time update
-
-          res.send(chunk: "retry: 123456789\n\n".data(using: .utf8)!)
+          func sendRetryTimeUpdate() {
+            res.send(chunk: "retry: 123456789\n\n")
+            res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
+          }
 
           // Send real message to complete test
+          func sendEvent() {
+            res.send(chunk: "event: test\n")
+            res.send(chunk: "id: 123\n")
+            res.send(chunk: "data: {\"some\":\r")
+            res.send(chunk: "data: \"test data\"}\n\n")
+          }
 
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
-
-          res.finish(trailers: [:])
+          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendRetryTimeUpdate() }
         }
       }
     }
@@ -307,13 +314,17 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
 
-          res.send(chunk: "retry: abc\n".data(using: .utf8)!)
-          res.send(chunk: "event: test\n".data(using: .utf8)!)
-          res.send(chunk: "id: 123\n".data(using: .utf8)!)
-          res.send(chunk: "data: {\"some\":\r".data(using: .utf8)!)
-          res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8)!)
+          func sendEvent() {
+            res.send(chunk: "retry: abc\n")
+            res.send(chunk: "event: test\n")
+            res.send(chunk: "id: 123\n")
+            res.send(chunk: "data: {\"some\":\r")
+            res.send(chunk: "data: \"test data\"}\n\n")
 
-          res.finish(trailers: [:])
+            res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
+          }
+
+          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
         }
       }
     }
@@ -334,6 +345,7 @@ class EventSourceTests: XCTestCase {
       }
 
     let messageX = expectation(description: "Event Received")
+    messageX.assertForOverFulfill = false
 
     eventSource.onMessage = { _, _, _ in
       eventSource.close()
@@ -358,10 +370,19 @@ class EventSourceTests: XCTestCase {
 
             let invocations = res.properties["invocations"] as! Int
             if invocations == 0 {
+             res.start(status: .ok, headers: [
+                HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+                HTTP.StdHeaders.transferEncoding: ["chunked"],
+              ])
 
-              let headers = [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]]
+              res.server.queue.asyncAfter(deadline: .now() + 0.5) {
 
-              res.send(status: .ok, headers: headers, body: "id: 123\ndata: tester\n\n".data(using: .utf8) ?? Data())
+                res.send(chunk: "id: 123\ndata: tester\n\n")
+
+                res.server.queue.asyncAfter(deadline: .now() + 0.5) {
+                  res.finish(trailers: [:])
+                }
+              }
             }
             else {
               XCTAssertEqual(req.header(for: "last-event-id"), "123")
@@ -415,12 +436,17 @@ class EventSourceTests: XCTestCase {
                 HTTP.StdHeaders.transferEncoding: ["chunked"],
               ])
 
-              res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+              res.server.queue.asyncAfter(deadline: .now() + 0.5) {
+                res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
 
-              // Send event ID with NULL character
-              res.send(chunk: "id: a\0c\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+                res.server.queue.asyncAfter(deadline: .now() + 0.5) {
+                  // Send event ID with NULL character
+                  res.send(chunk: "id: a\0c\nevent: test\ndata: Hello!\n\n")
 
-              res.finish(trailers: [:])
+                  res.finish(trailers: [:])
+                }
+              }
+
             }
             else {
               XCTAssertEqual(req.header(for: "last-event-id"), "123")
@@ -470,7 +496,7 @@ class EventSourceTests: XCTestCase {
               HTTP.StdHeaders.transferEncoding: ["chunked"],
             ])
 
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
 
           }
         }
@@ -521,7 +547,7 @@ class EventSourceTests: XCTestCase {
               HTTP.StdHeaders.transferEncoding: ["chunked"],
             ])
 
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n".data(using: .utf8)!)
+            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
 
             req.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
               session.close(cancelOutstandingTasks: true)
@@ -564,9 +590,9 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
-          res.send(chunk: "data: some test data\n\n".data(using: .utf8) ?? Data())
+          res.send(chunk: "event: test\n")
+          res.send(chunk: "id: 123\n")
+          res.send(chunk: "data: some test data\n\n")
           res.finish(trailers: [:])
         }
       }
@@ -631,7 +657,7 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
           res.server.queue.asyncAfter(deadline: .now().advanced(by: .seconds(1))) {
-            res.send(chunk: ": ping\n\n".data(using: .utf8) ?? Data())
+            res.send(chunk: ": ping\n\n")
             res.finish(trailers: [:])
           }
         }
