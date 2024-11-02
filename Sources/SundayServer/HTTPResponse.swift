@@ -90,7 +90,7 @@ public protocol HTTPResponse: AnyObject {
   /// - Precondition: state == .sendingBody
   /// - Postcondition: state == .sendingChunks
   /// - Parameters:
-  ///   - data: Data of chunk
+  ///   - chunk: Data of chunk
   ///
   func send(chunk: Data)
 
@@ -133,7 +133,7 @@ public protocol HTTPResponse: AnyObject {
 }
 
 
-extension HTTPResponse {
+public extension HTTPResponse {
 
   func header(forName name: String) -> String? {
     return headers(forName: name).first
@@ -238,4 +238,20 @@ extension HTTPResponse {
     send(status: .init(code: statusCode), headers: headers, value: value)
   }
 
+  /// Sends a chunk of response data, as the UTF8 encoded string.
+  ///
+  /// - Precondition: state == .sendingBody
+  /// - Postcondition: state == .sendingChunks
+  /// - Parameters:
+  ///   - chunk: String of chunk
+  ///   - as: Encoding for string
+  ///
+  func send(chunk: String) {
+    return send(chunk: Data(chunk.utf8))
+  }
+
+}
+
+public enum EncodingError: String, Error {
+  case unableToEncodeString
 }

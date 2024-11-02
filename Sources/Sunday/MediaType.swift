@@ -56,15 +56,33 @@ public struct MediaType {
     case any = "*"
   }
 
-  public enum Suffix: String, CaseIterable, Equatable, Hashable, Codable {
-    case xml
-    case json
-    case ber
-    case der
-    case fastinfoset
-    case wbxml
-    case zip
-    case cbor
+  public struct Suffix: RawRepresentable, Equatable, Hashable, Codable, ExpressibleByStringLiteral {
+    public var rawValue: String
+
+    public init(rawValue: String) {
+      self.rawValue = rawValue
+    }
+
+    public init(_ value: String) {
+      self.rawValue = value
+    }
+
+    public init(stringLiteral value: StringLiteralType) {
+      self.rawValue = value
+    }
+
+    var value: String { rawValue }
+
+    public static func suffix(_ suffix: String) -> Suffix { Suffix(rawValue: suffix) }
+
+    public static let xml = suffix("xml")
+    public static let json = suffix("json")
+    public static let ber = suffix("ber")
+    public static let der = suffix("der")
+    public static let fastinfoset = suffix("fastinfoset")
+    public static let wbxml = suffix("wbxml")
+    public static let zip = suffix("zip")
+    public static let cbor = suffix("cbor")
   }
 
   public let type: `Type`
@@ -128,8 +146,8 @@ public struct MediaType {
     }
     self.subtype = subtype
 
-    if let suffixVal = match.captures[3]?.lowercased(), let suffix = Suffix(rawValue: suffixVal) {
-      self.suffix = suffix
+    if let suffixVal = match.captures[3]?.lowercased() {
+      self.suffix = .init(suffixVal)
     }
     else {
       suffix = nil
@@ -182,7 +200,7 @@ public struct MediaType {
   public var value: String {
     let type = self.type.rawValue
     let tree = self.tree.rawValue
-    let suffix = self.suffix != nil ? "+\(self.suffix!.rawValue)" : ""
+    let suffix = self.suffix.map { "+\($0.value)" } ?? ""
     let parameters = self.parameters.keys.sorted().map { key in ";\(key)=\(self.parameters[key]!)" }.joined()
     return "\(type)/\(tree)\(subtype)\(suffix)\(parameters)"
   }
@@ -190,6 +208,7 @@ public struct MediaType {
   public static let plain = MediaType(type: .text, subtype: "plain")
   public static let html = MediaType(type: .text, subtype: "html")
   public static let json = MediaType(type: .application, subtype: "json")
+  public static let yaml = MediaType(type: .application, subtype: "json")
   public static let cbor = MediaType(type: .application, subtype: "cbor")
   public static let eventStream = MediaType(type: .text, subtype: "event-stream")
   public static let octetStream = MediaType(type: .application, subtype: "octet-stream")

@@ -297,6 +297,7 @@ class MediaTypeTests: XCTestCase {
     XCTAssertEqual(MediaType("application/text+wbxml")?.suffix, .wbxml)
     XCTAssertEqual(MediaType("application/text+zip")?.suffix, .zip)
     XCTAssertEqual(MediaType("application/text+cbor")?.suffix, .cbor)
+    XCTAssertEqual(MediaType("application/text+aformat")?.suffix, .suffix("aformat"))
   }
 
   func testValue() {
@@ -341,6 +342,10 @@ class MediaTypeTests: XCTestCase {
     default:
       XCTFail("Sanity check failed")
     }
+  }
 
+  func testSuffix() {
+    XCTAssertEqual(MediaType(type: .application, tree: .standard, suffix: .cbor).suffix, .cbor)
+    XCTAssertEqual(MediaType(type: .application, tree: .standard, suffix: "something").suffix, "something")
   }
 }
