@@ -227,6 +227,7 @@ public struct MediaType {
   public static let jsonStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .json)
   public static let yamlStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .yaml)
   public static let xmlStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .xml)
+  public static let cborStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .cbor)
 
 }
 
