@@ -77,6 +77,7 @@ public struct MediaType {
 
     public static let xml = suffix("xml")
     public static let json = suffix("json")
+    public static let yaml = suffix("yaml")
     public static let ber = suffix("ber")
     public static let der = suffix("der")
     public static let fastinfoset = suffix("fastinfoset")
@@ -208,7 +209,7 @@ public struct MediaType {
   public static let plain = MediaType(type: .text, subtype: "plain")
   public static let html = MediaType(type: .text, subtype: "html")
   public static let json = MediaType(type: .application, subtype: "json")
-  public static let yaml = MediaType(type: .application, subtype: "json")
+  public static let yaml = MediaType(type: .application, subtype: "yaml")
   public static let cbor = MediaType(type: .application, subtype: "cbor")
   public static let eventStream = MediaType(type: .text, subtype: "event-stream")
   public static let octetStream = MediaType(type: .application, subtype: "octet-stream")
@@ -224,6 +225,7 @@ public struct MediaType {
   public static let x509UserCert = MediaType(type: .application, tree: .obsolete, subtype: "x509-user-cert")
 
   public static let jsonStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .json)
+  public static let yamlStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .yaml)
   public static let xmlStructured = MediaType(type: .any, tree: .any, subtype: "*", suffix: .xml)
 
 }
