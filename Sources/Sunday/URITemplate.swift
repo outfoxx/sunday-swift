@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import URITemplate
+import ScreamURITemplate
 
 public extension URI {
 

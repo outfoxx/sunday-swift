@@ -2,15 +2,6 @@
   "object": {
     "pins": [
       {
-        "package": "AsyncObjects",
-        "repositoryURL": "https://github.com/SwiftyLab/AsyncObjects.git",
-        "state": {
-          "branch": null,
-          "revision": "93aacfba87d738ac94fb50c2a6768c43ec9d42eb",
-          "version": "2.1.0"
-        }
-      },
-      {
         "package": "BigInt",
         "repositoryURL": "https://github.com/attaswift/BigInt.git",
         "state": {
@@ -33,8 +24,8 @@
         "repositoryURL": "https://github.com/outfoxx/PotentCodables.git",
         "state": {
           "branch": null,
-          "revision": "583f1b04b89e36742255d05ef1d2e5961485811d",
-          "version": "3.2.0"
+          "revision": "660e33e84e00b9bf07bd41dd99ff800600e435e7",
+          "version": "3.5.0"
         }
       },
       {
@@ -44,6 +35,15 @@
           "branch": null,
           "revision": "76c2b73d4281d77fc3118391877efd1bf972f515",
           "version": "2.1.1"
+        }
+      },
+      {
+        "package": "Semaphore",
+        "repositoryURL": "https://github.com/groue/Semaphore.git",
+        "state": {
+          "branch": null,
+          "revision": "2543679282aa6f6c8ecf2138acd613ed20790bc2",
+          "version": "0.1.0"
         }
       },
       {
@@ -74,12 +74,12 @@
         }
       },
       {
-        "package": "URITemplate",
+        "package": "ScreamURITemplate",
         "repositoryURL": "https://github.com/SwiftScream/URITemplate.git",
         "state": {
           "branch": null,
-          "revision": "c36e52f4c10fe3cb86f4ba723bb2e69308ab5bbe",
-          "version": "2.1.0"
+          "revision": "3a6acca43ac7aa3f58474e6c8f686809b3660d6a",
+          "version": "4.0.0"
         }
       }
     ]

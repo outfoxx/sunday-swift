@@ -21,10 +21,10 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.2.0")),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.5.0")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/SwiftyLab/AsyncObjects.git", .upToNextMinor(from: "2.1.0"))
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "4.0.0")),
+    .package(url: "https://github.com/groue/Semaphore.git", .upToNextMinor(from: "0.1.0"))
   ],
   targets: [
     .target(
@@ -32,8 +32,8 @@ let package = Package(
       dependencies: [
         "Regex",
         "PotentCodables",
-        "URITemplate",
-        "AsyncObjects"
+        .product(name: "ScreamURITemplate", package: "uritemplate"),
+        .product(name: "Semaphore", package: "semaphore")
       ]
     ),
     .target(
