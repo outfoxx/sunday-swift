@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import URITemplate
+import ScreamURITemplate
 
 public extension URI {
 
@@ -89,32 +89,53 @@ public extension URI {
 
       for variableName in impl.variableNames {
 
-        switch parameters[variableName] {
+        let value = switch parameters[variableName] {
         case let value as VariableValue:
-          variables[variableName] = value
+          value
         case .some(.some(let value)):
-          guard let converted = encoders.firstSupported(value: value) else {
-            if let pathValue = value as? PathEncodable {
-              variables[variableName] = pathValue.pathDescription
-              continue
-            }
-            else if let losslessValue = value as? LosslessStringConvertible {
-              variables[variableName] = losslessValue.description
-              continue
-            }
-            else if let rawRepValue = value as? any RawRepresentable {
-              variables[variableName] = String(describing: rawRepValue.rawValue)
-              continue
-            }
-            throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
-          }
-          variables[variableName] = converted
+          value
         case nil:
           throw Error.missingParameterValue(name: variableName)
         default:
           throw Error.unsupportedParameterType(name: variableName, type: type(of: parameters[variableName]))
         }
 
+        guard let converted = encoders.firstSupported(value: value) else {
+          if let dictValue = value as? [String: StringVariableValue] {
+            variables[variableName] = dictValue
+            continue
+          }
+          else if let arrayValue = value as? [StringVariableValue] {
+            variables[variableName] = arrayValue
+            continue
+          }
+          else if let kvPairsValue = value as? KeyValuePairs<String, StringVariableValue> {
+            variables[variableName] = kvPairsValue
+            continue
+          }
+          else if let stringValue = value as? StringVariableValue {
+            variables[variableName] = stringValue
+            continue
+          }
+          else if let varValue = value as? VariableValue {
+            variables[variableName] = varValue
+            continue
+          }
+          else if let pathValue = value as? PathEncodable {
+            variables[variableName] = pathValue.pathDescription
+            continue
+          }
+          else if let losslessValue = value as? LosslessStringConvertible {
+            variables[variableName] = losslessValue.description
+            continue
+          }
+          else if let rawRepValue = value as? any RawRepresentable {
+            variables[variableName] = String(describing: rawRepValue.rawValue)
+            continue
+          }
+          throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
+        }
+        variables[variableName] = converted
       }
 
       let processedUrl = try impl.process(variables: variables)

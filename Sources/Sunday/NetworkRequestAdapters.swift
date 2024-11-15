@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-import AsyncObjects
 import Foundation
+import Semaphore
 
 
 /// Composing request adapter that applies another request adapter
@@ -110,7 +110,7 @@ open class RefreshingHeaderTokenAuthorizingAdapter: NetworkRequestAdapter {
   }
 
   public func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) async throws -> URLRequest {
-    try await lock.wait()
+    await lock.wait()
     defer { lock.signal() }
 
     if shouldRefresh {
