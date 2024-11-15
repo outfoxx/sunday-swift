@@ -15,7 +15,7 @@
  */
 
 @testable import Sunday
-import URITemplate
+import ScreamURITemplate
 import XCTest
 
 
