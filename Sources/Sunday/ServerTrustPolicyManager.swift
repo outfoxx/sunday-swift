@@ -15,10 +15,11 @@
  */
 
 import Foundation
+@preconcurrency import Security
 
 
 /// Responsible for managing the mapping of `ServerTrustPolicy` objects to a given host.
-open class ServerTrustPolicyManager {
+public final class ServerTrustPolicyManager: Sendable {
   /// The dictionary of policies mapped to a particular host.
   public let policies: [String: ServerTrustPolicy]
 
@@ -44,7 +45,7 @@ open class ServerTrustPolicyManager {
   /// - parameter host: The host to use when searching for a matching policy.
   ///
   /// - returns: The server trust policy for the given host if found.
-  open func serverTrustPolicy(forHost host: String) -> ServerTrustPolicy? {
+  public func serverTrustPolicy(forHost host: String) -> ServerTrustPolicy? {
     return policies[host]
   }
 }
@@ -91,13 +92,13 @@ open class ServerTrustPolicyManager {
 /// - disableEvaluation:        Disables all evaluation which in turn will always consider any server trust as valid.
 ///
 /// - customEvaluation:         Uses the associated closure to evaluate the validity of the server trust.
-public enum ServerTrustPolicy {
+public enum ServerTrustPolicy: Sendable {
   case performDefaultEvaluation(validateHost: Bool)
   case performRevokedEvaluation(validateHost: Bool, revocationFlags: CFOptionFlags)
   case pinCertificates(certificates: [SecCertificate], validateCertificateChain: Bool, validateHost: Bool)
   case pinPublicKeys(publicKeys: [SecKey], validateCertificateChain: Bool, validateHost: Bool)
   case disableEvaluation
-  case customEvaluation((_ serverTrust: SecTrust, _ host: String) -> Bool)
+  case customEvaluation(@Sendable (_ serverTrust: SecTrust, _ host: String) -> Bool)
 
   // MARK: - Bundle Location
 
@@ -115,10 +116,8 @@ public enum ServerTrustPolicy {
     }.joined())
 
     for path in paths {
-      if
-        let certificateData = try? Data(contentsOf: URL(fileURLWithPath: path)) as CFData,
-        let certificate = SecCertificateCreateWithData(nil, certificateData)
-      {
+      if let certificateData = try? Data(contentsOf: URL(fileURLWithPath: path)) as CFData,
+         let certificate = SecCertificateCreateWithData(nil, certificateData) {
         certificates.append(certificate)
       }
     }

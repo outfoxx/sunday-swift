@@ -15,12 +15,31 @@
  */
 
 import Foundation
+import Synchronization
+
+
+private struct URLSessionConfigurationDefaults: Sendable {
+  var restTimeoutIntervalForRequest = TimeInterval(15)
+  var restTimeoutIntervalForResource = TimeInterval(60)
+  var eventsTimeoutIntervalForRequest = TimeInterval(180)
+  var eventsTimeoutIntervalForResource = TimeInterval(600)
+}
+
+
+private let urlSessionConfigurationDefaults = Mutex(URLSessionConfigurationDefaults())
 
 
 public extension URLSessionConfiguration {
 
-  static var restTimeoutIntervalForRequestDefault = TimeInterval(15)
-  static var restTimeoutIntervalForResourceDefault = TimeInterval(60)
+  static var restTimeoutIntervalForRequestDefault: TimeInterval {
+    get { urlSessionConfigurationDefaults.withLock { $0.restTimeoutIntervalForRequest } }
+    set { urlSessionConfigurationDefaults.withLock { $0.restTimeoutIntervalForRequest = newValue } }
+  }
+
+  static var restTimeoutIntervalForResourceDefault: TimeInterval {
+    get { urlSessionConfigurationDefaults.withLock { $0.restTimeoutIntervalForResource } }
+    set { urlSessionConfigurationDefaults.withLock { $0.restTimeoutIntervalForResource = newValue } }
+  }
 
   static func rest(
     from config: URLSessionConfiguration = .default,
@@ -45,8 +64,15 @@ public extension URLSessionConfiguration {
   }
 
 
-  static var eventsTimeoutIntervalForRequestDefault = TimeInterval(180)
-  static var eventsTimeoutIntervalForResourceDefault = TimeInterval(600)
+  static var eventsTimeoutIntervalForRequestDefault: TimeInterval {
+    get { urlSessionConfigurationDefaults.withLock { $0.eventsTimeoutIntervalForRequest } }
+    set { urlSessionConfigurationDefaults.withLock { $0.eventsTimeoutIntervalForRequest = newValue } }
+  }
+
+  static var eventsTimeoutIntervalForResourceDefault: TimeInterval {
+    get { urlSessionConfigurationDefaults.withLock { $0.eventsTimeoutIntervalForResource } }
+    set { urlSessionConfigurationDefaults.withLock { $0.eventsTimeoutIntervalForResource = newValue } }
+  }
 
   static func events(
     from config: URLSessionConfiguration = .ephemeral,

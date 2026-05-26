@@ -25,16 +25,16 @@ public enum RoutingError: Swift.Error {
   case missingRequiredParameter(name: String)
 }
 
-public struct Route {
+public struct Route: Sendable {
   let matched: String
   let unmatched: String
   let parameters: [String: String]
 }
 
-public typealias RouteHandler = (Route, HTTPRequest, HTTPResponse) throws -> Void
+public typealias RouteHandler = @Sendable (Route, HTTPRequest, HTTPResponse) throws -> Void
 public typealias RouteResult = (route: Route, handler: RouteHandler)
 
-public protocol Routable {
+public protocol Routable: Sendable {
 
   func route(_ route: Route, request: HTTPRequest) throws -> RouteResult?
 

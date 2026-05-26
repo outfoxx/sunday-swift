@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import struct Regex.Regex
+@preconcurrency import struct Regex.Regex
 import Sunday
 
 
@@ -52,7 +52,7 @@ public struct Path: Routable {
     )
   }
 
-  private static let variableMatcher = Regex(#"\{([_a-zA-Z][_a-zA-Z0-9]*)\}?"#)
+  nonisolated(unsafe) private static let variableMatcher = Regex(#"\{([_a-zA-Z][_a-zA-Z0-9]*)\}?"#)
 
   private static func pathVariableNames(for template: String) -> [String] {
     return variableMatcher.allMatches(in: template).map { $0.captures[0] ?? "" }

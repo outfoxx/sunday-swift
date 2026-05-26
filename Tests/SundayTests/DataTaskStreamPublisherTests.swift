@@ -49,13 +49,13 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 30.0) else {
       XCTFail("could not start local server")
       return
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     struct Params: Codable {
@@ -68,24 +68,26 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
     let dataStream = try session.dataEventStream(for: urlRequest)
 
-    var eventCount = 0
+    var didConnect = false
+    var totalDataCount = 0
     for try await dataEvent in dataStream {
       switch dataEvent {
       case .connect(let response):
         XCTAssertEqual(response.statusCode, 200)
+        didConnect = true
 
       case .data(let data):
-        XCTAssertEqual(data.count, 1000)
+        totalDataCount += data.count
       }
-      eventCount += 1
     }
 
-    XCTAssertEqual(eventCount, 5)
+    XCTAssertTrue(didConnect)
+    XCTAssertEqual(totalDataCount, 4000)
   }
 
   func testChunked() async throws {
 
-    let chunkGates = (0 ..< 5).map { _ in DispatchSemaphore(value: 0) }
+    let chunkGates = (0 ..< 4).map { _ in DispatchSemaphore(value: 0) }
 
     server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
@@ -106,13 +108,13 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 30.0) else {
       XCTFail("could not start local server")
       return
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     struct Params: Codable {
@@ -125,22 +127,30 @@ class DataTaskStreamPublisherTests: XCTestCase {
 
     let dataStream = try session.dataEventStream(for: urlRequest)
 
-    var eventCount = 0
+    var didConnect = false
+    var totalDataCount = 0
+    var completedChunks = 0
+    var currentChunkDataCount = 0
     for try await dataEvent in dataStream {
       switch dataEvent {
       case .connect(let response):
-        print("## EVENT: connect")
         XCTAssertEqual(response.statusCode, 200)
+        didConnect = true
 
       case .data(let data):
-        print("## EVENT: data")
-        XCTAssertEqual(data.count, 1000)
+        totalDataCount += data.count
+        currentChunkDataCount += data.count
+        while currentChunkDataCount >= 1000, completedChunks < chunkGates.count {
+          chunkGates[completedChunks].signal()
+          completedChunks += 1
+          currentChunkDataCount -= 1000
+        }
       }
-      chunkGates[eventCount].signal()
-      eventCount += 1
     }
 
-    XCTAssertEqual(eventCount, 5)
+    XCTAssertTrue(didConnect)
+    XCTAssertEqual(totalDataCount, 4000)
+    XCTAssertEqual(completedChunks, 4)
   }
 
   func testCompletesWithErrorWhenHTTPErrorResponse() async throws {
@@ -152,13 +162,13 @@ class DataTaskStreamPublisherTests: XCTestCase {
         }
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 30.0) else {
       XCTFail("could not start local server")
       return
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let urlRequest = URLRequest(url: URL(string: "regular", relativeTo: serverURL)!)

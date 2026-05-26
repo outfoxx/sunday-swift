@@ -36,10 +36,10 @@ class HTTPServerTests: XCTestCase {
           res.start(status: .ok, headers: [
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          res.send(chunk: "12345".data(using: .utf8)!)
-          res.send(chunk: "67890".data(using: .utf8)!)
-          res.send(chunk: "12345".data(using: .utf8)!)
-          res.send(chunk: "67890".data(using: .utf8)!)
+          res.send(chunk: Data("12345".utf8))
+          res.send(chunk: Data("67890".utf8))
+          res.send(chunk: Data("12345".utf8))
+          res.send(chunk: Data("67890".utf8))
           res.finish(trailers: [:])
         }
       }
@@ -86,7 +86,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     struct Params: Codable {
@@ -114,7 +114,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     var urlRequest = URLRequest(url: URL(string: "something", relativeTo: serverURL)!)
@@ -136,7 +136,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
@@ -157,7 +157,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     var urlRequest = URLRequest(url: URL(string: "something/123", relativeTo: serverURL)!)
@@ -175,7 +175,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     struct Params: Codable {
@@ -204,7 +204,7 @@ class HTTPServerTests: XCTestCase {
     let (serverURL, server) = Self.buildAndStartServer()
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     struct Params: Codable {
@@ -220,7 +220,20 @@ class HTTPServerTests: XCTestCase {
     XCTAssertNotNil(data)
     XCTAssertEqual(response.statusCode, 200)
 
-    XCTAssertEqual(data, "12345678901234567890".data(using: .utf8))
+    XCTAssertEqual(data, Data("12345678901234567890".utf8))
+  }
+
+  func testStartLocalAfterStopReturnsBeforeTimeout() throws {
+
+    let server = try RoutingHTTPServer(port: .any, localOnly: true)
+    server.stop()
+
+    let start = Date()
+    let serverURL = server.startLocal(timeout: 5.0)
+    let elapsed = Date().timeIntervalSince(start)
+
+    XCTAssertNil(serverURL)
+    XCTAssertLessThan(elapsed, 2.0)
   }
 
   @available(iOS 14, tvOS 14, macOS 11, *)

@@ -15,13 +15,14 @@
  */
 
 import Foundation
+import Synchronization
 
 
-public class TrackInvocations: Routable {
+public final class TrackInvocations: Routable {
 
   let name: String
   let routable: Routable
-  var count: Int = 0
+  let count = Mutex(0)
 
   public init(name: String, @RoutableBuilder routableBuilder: () -> Routable) {
     self.name = name
@@ -33,8 +34,11 @@ public class TrackInvocations: Routable {
       return nil
     }
     let handler: RouteHandler = { route, request, response in
-      defer { self.count += 1 }
-      response.properties[self.name] = self.count
+      let count = self.count.withLock { count in
+        defer { count += 1 }
+        return count
+      }
+      response.properties[self.name] = count
       try routed.handler(route, request, response)
     }
     return (routed.route, handler)

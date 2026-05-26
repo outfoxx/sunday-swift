@@ -24,7 +24,7 @@ public struct RequestDecoding: Routable {
 
   /// Scheme use to decode request bodies
   ///
-  public enum Scheme {
+  public enum Scheme: Sendable {
 
     /// Decodes a body value using a negotiated media type.
     ///

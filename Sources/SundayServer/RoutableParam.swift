@@ -15,11 +15,11 @@
  */
 
 import Foundation
-import PotentCodables
+@preconcurrency import PotentCodables
 import Sunday
 
 
-public protocol StringInitializable {
+public protocol StringInitializable: Sendable {
   init?(_ source: String)
 }
 
@@ -28,15 +28,15 @@ let bodyParameterName = "@body"
 let bodyDecoderPropertyName = "@body-decoder"
 
 
-public struct Param<T> {
+public struct Param<T>: Sendable {
 
-  public typealias Converter = (Route, HTTPRequest, HTTPResponse) throws -> T?
+  public typealias Converter = @Sendable (Route, HTTPRequest, HTTPResponse) throws -> T?
 
   public let name: String
   public let converter: Converter
 
-  public static func prop(_ name: String) -> Param<Any> {
-    return Param<Any>(name: name) { _, _, res in
+  public static func prop(_ name: String) -> Param<any Sendable> {
+    return Param<any Sendable>(name: name) { _, _, res in
       guard let value = res.properties[name] else { return nil }
       return value
     }
@@ -93,7 +93,7 @@ public struct Param<T> {
     return body(Data.self)
   }
 
-  public static func body<B>(_ type: B.Type) -> Param<B> where B: Decodable {
+  public static func body<B>(_ type: B.Type) -> Param<B> where B: Decodable & Sendable {
     return Param<B>(name: bodyParameterName) { _, req, res in
       guard let decoder = res.properties[bodyDecoderPropertyName] as? MediaTypeDecoder else { return nil }
       guard let body = req.body else { return nil }
@@ -105,7 +105,7 @@ public struct Param<T> {
     return body(ref: ref, using: Ref.self)
   }
 
-  public static func body<TKP: TypeKeyProvider, VKP: ValueKeyProvider, TI: TypeIndex>(
+  public static func body<TKP: TypeKeyProvider & Sendable, VKP: ValueKeyProvider & Sendable, TI: TypeIndex & Sendable>(
     ref: T.Type,
     using refType: CustomRef<TKP, VKP, TI>.Type
   ) -> Param<T> {
@@ -120,7 +120,7 @@ public struct Param<T> {
     return body(embeddedRef: embebbedRef, using: EmbeddedRef.self)
   }
 
-  public static func body<TKP: TypeKeyProvider, TI: TypeIndex>(
+  public static func body<TKP: TypeKeyProvider & Sendable, TI: TypeIndex & Sendable>(
     embeddedRef: T.Type,
     using refType: CustomEmbeddedRef<TKP, TI>.Type
   ) -> Param<T> {

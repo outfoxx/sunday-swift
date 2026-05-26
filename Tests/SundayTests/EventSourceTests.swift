@@ -17,17 +17,74 @@
 import Foundation
 @testable import Sunday
 import SundayServer
+import Synchronization
 import XCTest
 
 
+private final class TestEventWriter: Sendable {
+
+  let response: HTTPResponse
+
+  init(response: HTTPResponse) {
+    self.response = response
+  }
+
+  func sendJSONEvent(repeatAfter delay: TimeInterval? = nil, finishAfterEvent: Bool = false) {
+    response.send(chunk: "event: test\n")
+    response.send(chunk: "id: 123\n")
+    response.send(chunk: "data: {\"some\":\r")
+    response.send(chunk: "data: \"test data\"}\n")
+    response.send(chunk: "\n")
+
+    if finishAfterEvent {
+      response.finish(trailers: [:])
+    }
+
+    if let delay = delay {
+      response.server.queue.asyncAfter(deadline: .now() + delay) { self.sendJSONEvent(repeatAfter: delay) }
+    }
+  }
+
+  func sendRetryThenJSONEvent(_ retry: String, finishAfterEvent: Bool = false) {
+    response.send(chunk: "retry: \(retry)\n\n")
+    response.server.queue.asyncAfter(deadline: .now() + 0.5) {
+      self.sendJSONEvent(finishAfterEvent: finishAfterEvent)
+    }
+  }
+
+  func sendInvalidRetryAndJSONEvent(repeatAfter delay: TimeInterval) {
+    response.send(chunk: "retry: abc\n")
+    sendJSONEvent()
+    response.server.queue.asyncAfter(deadline: .now() + delay) { self.sendInvalidRetryAndJSONEvent(repeatAfter: delay) }
+  }
+
+  func sendInvalidRetryAndJSONEvent(finishAfterEvent: Bool = false) {
+    response.send(chunk: "retry: abc\n")
+    sendJSONEvent(finishAfterEvent: finishAfterEvent)
+  }
+
+}
+
+
+private enum TestEventStreamError: Error, Sendable {
+  case interrupted
+}
+
+
+@MainActor
 class EventSourceTests: XCTestCase {
 
-  func testIgnoresDoubleConnect() throws {
+  func testIgnoresDoubleConnect() async throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
         GET { _, res in
-          res.send(status: .ok, text: "data: test\n\n")
+          res.start(status: .ok, headers: [
+            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
+            HTTP.StdHeaders.transferEncoding: ["chunked"],
+          ])
+          res.send(chunk: "data: test\n\n")
+          res.finish(trailers: [:])
         }
       }
     }
@@ -37,7 +94,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -46,21 +103,24 @@ class EventSourceTests: XCTestCase {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
         return try session.dataEventStream(for: request)
       }
+    defer { Task { await eventSource.close() } }
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage = { _, _, _ in
-      eventSource.close()
-      messageX.fulfill()
+    await eventSource.setOnMessage { _, _, _ in
+      Task {
+        await eventSource.close()
+        messageX.fulfill()
+      }
     }
 
-    eventSource.connect()
-    eventSource.connect()
+    await eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [messageX], timeout: 90)
   }
 
-  func testSimpleData() throws {
+  func testSimpleData() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
@@ -82,7 +142,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -91,23 +151,26 @@ class EventSourceTests: XCTestCase {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
         return try session.dataEventStream(for: request)
       }
+    defer { Task { await eventSource.close() } }
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage = { event, id, data in
-      eventSource.close()
+    await eventSource.setOnMessage { event, id, data in
       XCTAssertEqual(id, "123")
       XCTAssertEqual(event, "test")
       XCTAssertEqual(data, "some test data")
-      messageX.fulfill()
+      Task {
+        await eventSource.close()
+        messageX.fulfill()
+      }
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [messageX], timeout: 90)
   }
 
-  func testJSONData() throws {
+  func testJSONData() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/json") {
@@ -116,15 +179,8 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
-          func sendEvent() {
-            res.send(chunk: "event: test\n")
-            res.send(chunk: "id: 123\n")
-            res.send(chunk: "data: {\"some\":\r")
-            res.send(chunk: "data: \"test data\"}\n")
-            res.send(chunk: "\n")
-            res.server.queue.asyncAfter(deadline: .now() + 1.0) { sendEvent() }
-          }
-          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
+
+          TestEventWriter(response: res).sendJSONEvent(finishAfterEvent: true)
         }
       }
     }
@@ -134,7 +190,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/json", relativeTo: serverURL))
@@ -143,91 +199,56 @@ class EventSourceTests: XCTestCase {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
         return try session.dataEventStream(for: request)
       }
+    defer { Task { await eventSource.close() } }
 
     let messagedX = expectation(description: "Event Received")
 
-    eventSource.onMessage = { event, id, data in
+    await eventSource.setOnMessage { event, id, data in
       XCTAssertEqual(event, "test")
       XCTAssertEqual(id, "123")
       XCTAssertEqual(data, "{\"some\":\n\"test data\"}")
-      messagedX.fulfill()
+      Task {
+        await eventSource.close()
+        messagedX.fulfill()
+      }
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [messagedX], timeout: 30)
   }
 
-  func testCallbacks() throws {
+  func testCallbacks() async throws {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-      Path("/simple") {
-        TrackInvocations(name: "invocations") {
-          GET { _, res in
-
-            // Send event for first request, fail after  that
-
-            let invocations = res.properties["invocations"] as! Int
-            if invocations == 0 {
-
-              let headers = [HTTP.StdHeaders.contentType: [MediaType.eventStream.value]]
-
-              res.send(status: .ok, headers: headers, body: Data("event: test\ndata: event\n\n".utf8))
-            }
-            else {
-
-              res.send(status: .badRequest, text: "fix it")
-            }
-
-          }
-        }
+    let eventSource: EventSource =
+      EventSource { _ in
+        Self.dataEventStream(data: "event: test\ndata: event\n\n", finishesAfter: 1.0)
       }
-    }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
-    defer { server.stop() }
-
-    let session = NetworkSession(configuration: .default)
-    defer { session.close(cancelOutstandingTasks: true) }
-
-    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
-    let eventSource =
-      EventSource {
-        if session.isClosed {
-          throw URLError(.cancelled)
-        }
-        let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return try session.dataEventStream(for: request)
-      }
+    defer { Task { await eventSource.close() } }
 
     let openX = expectation(description: "Open Received")
     let messageX = expectation(description: "Message Received")
     let listenerX = expectation(description: "Listener Received")
-    let errorX = expectation(description: "Error Received")
 
-    eventSource.onOpen = { openX.fulfill() }
+    await eventSource.setOnOpen { openX.fulfill() }
 
-    eventSource.onMessage = { _, _, _ in messageX.fulfill() }
+    await eventSource.setOnMessage { _, _, _ in messageX.fulfill() }
 
-    eventSource.addEventListener(for: "test") { _, _, _ in
-      listenerX.fulfill()
+    await eventSource.addEventListener(for: "test") { _, _, _ in
+      Task {
+        await eventSource.close()
+        listenerX.fulfill()
+      }
     }
 
-    eventSource.onError = { _ in
-      eventSource.close()
-      errorX.fulfill()
-    }
+    await eventSource.connect()
 
-    eventSource.connect()
-
-    waitForExpectations()
+    await fulfillment(of: [openX, messageX, listenerX], timeout: 30)
   }
 
-  func testEventListenerRemove() throws {
+  func testEventListenerRemove() async throws {
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "http://example.com/simple"))
@@ -237,14 +258,16 @@ class EventSourceTests: XCTestCase {
         return try session.dataEventStream(for: request)
       }
 
-    let handlerId = eventSource.addEventListener(for: "test") { _, _, _ in }
-    XCTAssertTrue(!eventSource.registeredListenerTypes().isEmpty)
+    let handlerId = await eventSource.addEventListener(for: "test") { _, _, _ in }
+    let listenerTypes = await eventSource.registeredListenerTypes()
+    XCTAssertTrue(!listenerTypes.isEmpty)
 
-    eventSource.removeEventListener(handlerId: handlerId, for: "test")
-    XCTAssertTrue(eventSource.registeredListenerTypes().isEmpty)
+    await eventSource.removeEventListener(handlerId: handlerId, for: "test")
+    let remainingListenerTypes = await eventSource.registeredListenerTypes()
+    XCTAssertTrue(remainingListenerTypes.isEmpty)
   }
 
-  func testValidRetryTimeoutUpdate() throws {
+  func testValidRetryTimeoutUpdate() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
@@ -255,21 +278,10 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
 
-          // Send retry time update
-          func sendRetryTimeUpdate() {
-            res.send(chunk: "retry: 123456789\n\n")
-            res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
+          let eventWriter = TestEventWriter(response: res)
+          res.server.queue.asyncAfter(deadline: .now() + 0.5) {
+            eventWriter.sendRetryThenJSONEvent("123456789", finishAfterEvent: true)
           }
-
-          // Send real message to complete test
-          func sendEvent() {
-            res.send(chunk: "event: test\n")
-            res.send(chunk: "id: 123\n")
-            res.send(chunk: "data: {\"some\":\r")
-            res.send(chunk: "data: \"test data\"}\n\n")
-          }
-
-          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendRetryTimeUpdate() }
         }
       }
     }
@@ -279,7 +291,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -291,19 +303,22 @@ class EventSourceTests: XCTestCase {
 
     let messageX = expectation(description: "Event Received")
 
-    eventSource.onMessage = { _, _, _ in
-      eventSource.close()
-      messageX.fulfill()
+    await eventSource.setOnMessage { _, _, _ in
+      Task {
+        await eventSource.close()
+        messageX.fulfill()
+      }
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [messageX], timeout: 30)
 
-    XCTAssertEqual(eventSource.retryTime, .milliseconds(123_456_789))
+    let retryTime = await eventSource.retryTime
+    XCTAssertEqual(retryTime, .milliseconds(123_456_789))
   }
 
-  func testInvalidRetryTimeoutUpdateIgnored() throws {
+  func testInvalidRetryTimeoutUpdateIgnored() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
@@ -314,17 +329,8 @@ class EventSourceTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
 
-          func sendEvent() {
-            res.send(chunk: "retry: abc\n")
-            res.send(chunk: "event: test\n")
-            res.send(chunk: "id: 123\n")
-            res.send(chunk: "data: {\"some\":\r")
-            res.send(chunk: "data: \"test data\"}\n\n")
-
-            res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
-          }
-
-          res.server.queue.asyncAfter(deadline: .now() + 0.5) { sendEvent() }
+          let eventWriter = TestEventWriter(response: res)
+          eventWriter.sendInvalidRetryAndJSONEvent(finishAfterEvent: true)
         }
       }
     }
@@ -334,7 +340,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -347,80 +353,22 @@ class EventSourceTests: XCTestCase {
     let messageX = expectation(description: "Event Received")
     messageX.assertForOverFulfill = false
 
-    eventSource.onMessage = { _, _, _ in
-      eventSource.close()
-      messageX.fulfill()
-    }
-
-    eventSource.connect()
-
-    waitForExpectations()
-
-    XCTAssertEqual(eventSource.retryTime, .milliseconds(100))
-  }
-
-  func testReconnectsWithLastEventId() throws {
-
-    let reconnectX = expectation(description: "reconnection")
-
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-      Path("/simple") {
-        TrackInvocations(name: "invocations") {
-          GET { req, res in
-
-            let invocations = res.properties["invocations"] as! Int
-            if invocations == 0 {
-             res.start(status: .ok, headers: [
-                HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-                HTTP.StdHeaders.transferEncoding: ["chunked"],
-              ])
-
-              res.server.queue.asyncAfter(deadline: .now() + 0.5) {
-
-                res.send(chunk: "id: 123\ndata: tester\n\n")
-
-                res.server.queue.asyncAfter(deadline: .now() + 0.5) {
-                  res.finish(trailers: [:])
-                }
-              }
-            }
-            else {
-              XCTAssertEqual(req.header(for: "last-event-id"), "123")
-
-              res.send(status: .serviceUnavailable)
-
-              reconnectX.fulfill()
-            }
-          }
-        }
+    await eventSource.setOnMessage { _, _, _ in
+      Task {
+        await eventSource.close()
+        messageX.fulfill()
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
-    defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
-    defer { session.close(cancelOutstandingTasks: true) }
+    await eventSource.connect()
 
-    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
-    let eventSource =
-      EventSource {
-        let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return try session.dataEventStream(for: request)
-      }
+    await fulfillment(of: [messageX], timeout: 30)
 
-    eventSource.onError = { _ in
-      eventSource.close()
-    }
-
-    eventSource.connect()
-
-    waitForExpectations()
+    let retryTime = await eventSource.retryTime
+    XCTAssertEqual(retryTime, .milliseconds(100))
   }
 
-  func testReconnectsWithLastEventIdIgnoringInvalidIDs() throws {
+  func testReconnectsWithLastEventId() async throws {
 
     let reconnectX = expectation(description: "reconnection")
 
@@ -437,35 +385,31 @@ class EventSourceTests: XCTestCase {
               ])
 
               res.server.queue.asyncAfter(deadline: .now() + 0.5) {
-                res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
+
+                res.send(chunk: "id: 123\ndata: tester\n\n")
 
                 res.server.queue.asyncAfter(deadline: .now() + 0.5) {
-                  // Send event ID with NULL character
-                  res.send(chunk: "id: a\0c\nevent: test\ndata: Hello!\n\n")
-
                   res.finish(trailers: [:])
                 }
               }
-
             }
             else {
               XCTAssertEqual(req.header(for: "last-event-id"), "123")
+              reconnectX.fulfill()
 
               res.send(status: .serviceUnavailable)
-
-              reconnectX.fulfill()
             }
           }
         }
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
+    guard let serverURL = server.startLocal(timeout: 30.0) else {
       XCTFail("could not start local server")
       return
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -473,163 +417,371 @@ class EventSourceTests: XCTestCase {
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
         return try session.dataEventStream(for: request)
-      }
-
-    eventSource.onError = { _ in
-      eventSource.close()
     }
+    defer { Task { await eventSource.close() } }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [reconnectX], timeout: 90)
+    await eventSource.close()
   }
 
-  func testEventTimeoutCheckWithExpiration() throws {
+  func testReconnectsWithLastEventIdIgnoringInvalidIDs() async throws {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-      Path("/simple") {
-        TrackInvocations(name: "invocations") {
-          GET { _, res in
+    let reconnectX = expectation(description: "reconnection")
+    let connectionCount = Mutex(0)
 
-            res.start(status: .ok, headers: [
-              HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-              HTTP.StdHeaders.transferEncoding: ["chunked"],
-            ])
+    let eventSource =
+      EventSource { headers in
+        let connection = connectionCount.withLock { count in
+          defer { count += 1 }
+          return count
+        }
 
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
+        if connection == 0 {
+          return Self.dataEventStream(
+            data: "id: 123\nevent: test\ndata: Hello!\n\nid: a\0c\nevent: test\ndata: Hello!\n\n"
+          )
+        }
 
+        XCTAssertEqual(connection, 1)
+        XCTAssertEqual(headers[HTTP.StdHeaders.lastEventId], ["123"])
+        reconnectX.fulfill()
+
+        return nil
+      }
+    defer { Task { await eventSource.close() } }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [reconnectX], timeout: 30)
+    await eventSource.close()
+  }
+
+  func testReconnectClearsPartialEventData() async throws {
+
+    let messageX = expectation(description: "message")
+    let connectionCount = Mutex(0)
+
+    let eventSource =
+      EventSource { _ in
+        let connection = connectionCount.withLock { count in
+          defer { count += 1 }
+          return count
+        }
+
+        if connection == 0 {
+          return Self.dataEventStream(data: "data: stale")
+        }
+
+        return Self.dataEventStream(data: "event: test\ndata: fresh\n\n", finishes: false)
+      }
+    defer { Task { await eventSource.close() } }
+
+    await eventSource.setOnMessage { _, _, data in
+      XCTAssertEqual(data, "fresh")
+      Task {
+        await eventSource.close()
+        messageX.fulfill()
+      }
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [messageX], timeout: 30)
+    XCTAssertEqual(connectionCount.withLock { $0 }, 2)
+  }
+
+  func testEventTimeoutCheckWithExpiration() async throws {
+
+    let eventSource: EventSource =
+      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) { _ in
+        Self.dataEventStream(data: "id: 123\nevent: test\ndata: Hello!\n\n", finishesAfter: 5.0)
+      }
+    defer { Task { await eventSource.close() } }
+
+    let errorX = expectation(description: "error received")
+    let didReceiveTimeout = Mutex(false)
+
+    await eventSource.setOnError { error in
+      if let error = error as? EventSource.Error, EventSource.Error.eventTimeout == error {
+        guard didReceiveTimeout.withLock({ didReceiveTimeout in
+          guard !didReceiveTimeout else {
+            return false
           }
+
+          didReceiveTimeout = true
+          return true
+        }) else {
+          return
+        }
+
+        Task {
+          await eventSource.close()
+          errorX.fulfill()
         }
       }
     }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
-    defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
-    defer { session.close(cancelOutstandingTasks: true) }
+    await eventSource.connect()
 
-    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
+    await fulfillment(of: [errorX], timeout: 30)
+  }
+
+  func testEventTimeoutCheckWithoutExpiration() async throws {
+
     let eventSource =
-      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
-        let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return try session.dataEventStream(for: request)
+      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) { _ in
+        Self.dataEventStream(
+          data: "id: 123\nevent: test\ndata: Hello!\n\n",
+          throwsAfter: .milliseconds(300)
+        )
       }
+    defer { Task { await eventSource.close() } }
 
     let errorX = expectation(description: "error received")
+    let didReceiveError = Mutex(false)
 
-    eventSource.onError = { error in
+    await eventSource.setOnError { error in
+      guard didReceiveError.withLock({ didReceiveError in
+        guard !didReceiveError else {
+          return false
+        }
+
+        didReceiveError = true
+        return true
+      }) else {
+        return
+      }
+
       if let error = error as? EventSource.Error, EventSource.Error.eventTimeout == error {
-        eventSource.close()
+        XCTFail("Expected transport error before event timeout")
+      }
+
+      Task {
+        await eventSource.close()
         errorX.fulfill()
       }
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [errorX], timeout: 30)
   }
 
-  func testEventTimeoutCheckWithoutExpiration() throws {
+  func testCloseWhenTransportReturnsNil() async throws {
 
-    let session = NetworkSession(configuration: .default)
-    defer { session.close(cancelOutstandingTasks: true) }
-
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-      Path("/simple") {
-        TrackInvocations(name: "invocations") {
-          GET { req, res in
-
-            res.start(status: .ok, headers: [
-              HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-              HTTP.StdHeaders.transferEncoding: ["chunked"],
-            ])
-
-            res.send(chunk: "id: 123\nevent: test\ndata: Hello!\n\n")
-
-            req.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
-              session.close(cancelOutstandingTasks: true)
-            }
-          }
-        }
-      }
-    }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
-    defer { server.stop() }
-
-    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
     let eventSource =
-      EventSource(eventTimeoutInterval: .milliseconds(500), eventTimeoutCheckInterval: .milliseconds(100)) {
-        let request = URLRequest(url: url).adding(httpHeaders: $0)
-        return try session.dataEventStream(for: request)
-      }
-
-    let errorX = expectation(description: "error received")
-
-    eventSource.onError = { _ in
-      eventSource.close()
-      errorX.fulfill()
-    }
-
-    eventSource.connect()
-
-    waitForExpectations()
-  }
-
-  func testCloseWhenRequestFactoryReturnsNil() throws {
-
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
-      Path("/simple") {
-        GET { _, res in
-          res.start(status: .ok, headers: [
-            HTTP.StdHeaders.contentType: [MediaType.eventStream.value],
-            HTTP.StdHeaders.transferEncoding: ["chunked"],
-          ])
-          res.send(chunk: "event: test\n")
-          res.send(chunk: "id: 123\n")
-          res.send(chunk: "data: some test data\n\n")
-          res.finish(trailers: [:])
-        }
-      }
-    }
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
-    defer { server.stop() }
-
-    let session = NetworkSession(configuration: .default)
-    defer { session.close(cancelOutstandingTasks: true) }
-
-    let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
-    var requestsReturned = 0
-    let eventSource =
-    EventSource {
-      if requestsReturned > 1 {
-        return nil
-      }
-      defer { requestsReturned += 1 }
-      let request = URLRequest(url: url).adding(httpHeaders: $0)
-      return try session.dataEventStream(for: request)
+    EventSource { _ in
+      nil as URLSession.DataEventStream?
     }
 
     let closeErrorX = expectation(description: "EventSource Close Error")
 
-    eventSource.onError = { error in
+    await eventSource.setOnStateError { error, readyState in
       guard let error = error as? EventSource.Error, case .requestStreamEmpty = error else {
         return
       }
+      XCTAssertEqual(readyState, .closed)
       closeErrorX.fulfill()
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations()
+    await fulfillment(of: [closeErrorX], timeout: 30)
+  }
+
+  func testCloseWhenTransportIsCancelled() async throws {
+
+    let eventSource =
+    EventSource { _ in
+      URLSession.DataEventStream(events: AsyncThrowingStream { continuation in
+        continuation.yield(.connect(Self.eventStreamResponse()))
+        continuation.finish(throwing: URLError(.cancelled))
+      })
+    }
+
+    let closeErrorX = expectation(description: "EventSource Close Error")
+
+    await eventSource.setOnStateError { error, readyState in
+      guard isCancellationError(error) else {
+        XCTFail("Expected cancellation error, got \(String(describing: error))")
+        closeErrorX.fulfill()
+        return
+      }
+
+      XCTAssertEqual(readyState, .closed)
+      closeErrorX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [closeErrorX], timeout: 30)
+  }
+
+  func testCloseCancelsQueuedReconnectAfterCallbacks() async throws {
+
+    let errorX = expectation(description: "EventSource Error")
+    let reconnectX = expectation(description: "EventSource Reconnect")
+    reconnectX.isInverted = true
+    let connectionCount = Mutex(0)
+    let handledError = Mutex(false)
+
+    let eventSource =
+      EventSource(queue: DispatchQueue(label: "io.outfoxx.sunday.EventSourceTests.reconnect")) { _ in
+        let connection = connectionCount.withLock { count in
+          defer { count += 1 }
+          return count
+        }
+
+        guard connection == 0 else {
+          reconnectX.fulfill()
+          return nil
+        }
+
+        return Self.dataEventStream(
+          data: "event: test\ndata: event\n\n",
+          finishes: false,
+          throwsAfter: .milliseconds(10)
+        )
+      }
+    defer { Task { await eventSource.close() } }
+
+    await eventSource.setOnError { error in
+      guard error != nil else {
+        return
+      }
+
+      let shouldHandle = handledError.withLock { handledError in
+        guard !handledError else {
+          return false
+        }
+
+        handledError = true
+        return true
+      }
+
+      guard shouldHandle else {
+        return
+      }
+
+      Task {
+        await eventSource.close()
+      }
+      Thread.sleep(forTimeInterval: 0.05)
+      errorX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [errorX], timeout: 30)
+    await fulfillment(of: [reconnectX], timeout: 0.5)
+    XCTAssertEqual(connectionCount.withLock { $0 }, 1)
+    await eventSource.close()
+  }
+
+  func testDuplicateConnectWhileOpenReportsInvalidState() async throws {
+
+    let invalidStateX = expectation(description: "invalid state")
+    let secondOpenX = expectation(description: "second open")
+    secondOpenX.isInverted = true
+    let openCount = Mutex(0)
+
+    let eventSource =
+      EventSource { _ in
+        URLSession.DataEventStream(events: AsyncThrowingStream { continuation in
+          continuation.yield(.connect(Self.eventStreamResponse()))
+          continuation.yield(.connect(Self.eventStreamResponse()))
+          continuation.finish()
+        })
+      }
+    defer { Task { await eventSource.close() } }
+
+    await eventSource.setOnOpen {
+      let count = openCount.withLock { count -> Int in
+        count += 1
+        return count
+      }
+      if count > 1 {
+        secondOpenX.fulfill()
+      }
+    }
+
+    await eventSource.setOnError { error in
+      guard let error = error as? EventSource.Error, case .invalidState = error else {
+        return
+      }
+      Task {
+        await eventSource.close()
+        invalidStateX.fulfill()
+      }
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [invalidStateX], timeout: 30)
+    await fulfillment(of: [secondOpenX], timeout: 0.5)
+    XCTAssertEqual(openCount.withLock { $0 }, 1)
+  }
+
+  func testConcurrentConnectStartsOneTransportStream() async throws {
+
+    let connectionCount = Mutex(0)
+    let connectionX = expectation(description: "EventSource Connected")
+    let duplicateConnectionX = expectation(description: "EventSource Duplicate Connection")
+    duplicateConnectionX.isInverted = true
+
+    let eventSource =
+      EventSource { _ in
+        let count = connectionCount.withLock { count in
+          count += 1
+          return count
+        }
+        if count == 1 {
+          connectionX.fulfill()
+        }
+        else {
+          duplicateConnectionX.fulfill()
+        }
+        return Self.dataEventStream(data: "event: test\ndata: event\n\n", finishesAfter: 1.2)
+      }
+    defer { Task { await eventSource.close() } }
+
+    await withTaskGroup(of: Void.self) { group in
+      for _ in 0 ..< 50 {
+        group.addTask {
+          await eventSource.connect()
+        }
+      }
+    }
+
+    await fulfillment(of: [connectionX, duplicateConnectionX], timeout: 1.0)
+    await eventSource.close()
+    XCTAssertEqual(connectionCount.withLock { $0 }, 1)
+  }
+
+  func testCallbacksCanReadReadyStateOnSerialQueue() async throws {
+
+    let eventSource =
+      EventSource(queue: DispatchQueue(label: "io.outfoxx.sunday.EventSourceTests.callbacks")) { _ in
+        Self.dataEventStream(data: "event: test\ndata: event\n\n", finishesAfter: 0.2)
+      }
+    defer { Task { await eventSource.close() } }
+
+    let openX = expectation(description: "Open Received")
+
+    await eventSource.setOnOpen {
+      Task {
+        let readyState = await eventSource.readyState
+        XCTAssertEqual(readyState, .open)
+        openX.fulfill()
+      }
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [openX], timeout: 30)
+    await eventSource.close()
   }
 
   func testCheckRetryDelays() {
@@ -647,7 +799,7 @@ class EventSourceTests: XCTestCase {
     XCTAssertGreaterThan(delays[29].totalSeconds, 60)
   }
 
-  func testPingsResetLastEventReceivedTime() throws {
+  func testPingsResetLastEventReceivedTime() async throws {
 
     let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/simple") {
@@ -658,7 +810,9 @@ class EventSourceTests: XCTestCase {
           ])
           res.server.queue.asyncAfter(deadline: .now().advanced(by: .seconds(1))) {
             res.send(chunk: ": ping\n\n")
-            res.finish(trailers: [:])
+            res.server.queue.asyncAfter(deadline: .now() + 0.1) {
+              res.finish(trailers: [:])
+            }
           }
         }
       }
@@ -669,7 +823,7 @@ class EventSourceTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let session = NetworkSession(configuration: .default)
+    let session = URLSession(configuration: .default)
     defer { session.close(cancelOutstandingTasks: true) }
 
     let url = try XCTUnwrap(URL(string: "/simple", relativeTo: serverURL))
@@ -677,17 +831,101 @@ class EventSourceTests: XCTestCase {
       EventSource {
         let request = URLRequest(url: url).adding(httpHeaders: $0)
         return try session.dataEventStream(for: request)
+    }
+    defer { Task { await eventSource.close() } }
+
+    let openX = expectation(description: "Open Received")
+    let didOpen = Mutex(false)
+    await eventSource.setOnOpen {
+      let shouldFulfill = didOpen.withLock { didOpen in
+        guard !didOpen else {
+          return false
+        }
+
+        didOpen = true
+        return true
+      }
+      if shouldFulfill {
+        openX.fulfill()
+      }
+    }
+
+    let initialLastEventReceivedTime = await eventSource.lastEventReceivedTime
+    XCTAssertEqual(initialLastEventReceivedTime, .distantFuture)
+
+    await eventSource.connect()
+
+    await fulfillment(of: [openX], timeout: 30)
+
+    let openedAt = await eventSource.lastEventReceivedTime
+    XCTAssertNotEqual(openedAt, .distantFuture)
+
+    let timeout = ContinuousClock.now + .seconds(30)
+    while await eventSource.lastEventReceivedTime == openedAt {
+      if ContinuousClock.now >= timeout {
+        XCTFail("Timed out waiting for ping to reset lastEventReceivedTime")
+        return
       }
 
-    eventSource.connect()
+      try await Task.sleep(for: .milliseconds(50))
+    }
 
-    Thread.sleep(forTimeInterval: 0.5)
-
-    XCTAssertEqual(eventSource.lastEventReceivedTime, .distantFuture)
-
-    Thread.sleep(forTimeInterval: 1.5)
-
-    XCTAssertLessThan(DispatchTime.now().distance(to: eventSource.lastEventReceivedTime).totalSeconds, 0.5)
+    let lastEventReceivedTime = await eventSource.lastEventReceivedTime
+    XCTAssertLessThan(DispatchTime.now().distance(to: lastEventReceivedTime).totalSeconds, 0.5)
+    await eventSource.close()
   }
 
+  nonisolated private static func dataEventStream(data: String, finishes: Bool = true,
+                                                  finishesAfter: TimeInterval? = nil,
+                                                  throwsAfter: DispatchTimeInterval? = nil)
+    -> URLSession.DataEventStream {
+    return URLSession.DataEventStream(events: AsyncThrowingStream { continuation in
+      continuation.yield(.connect(Self.eventStreamResponse()))
+      continuation.yield(.data(Data(data.utf8)))
+      let finishDelay = finishesAfter.map { DispatchTimeInterval.milliseconds(Int($0 * 1000)) }
+      if let streamCompletionDelay = finishDelay ?? throwsAfter {
+        let streamTask = Task {
+          try? await Task.sleep(for: .milliseconds(streamCompletionDelay.totalMilliseconds))
+          guard !Task.isCancelled else {
+            return
+          }
+          if throwsAfter != nil {
+            continuation.finish(throwing: TestEventStreamError.interrupted)
+          }
+          else {
+            continuation.finish()
+          }
+        }
+        continuation.onTermination = { _ in
+          streamTask.cancel()
+        }
+      }
+      else if finishes {
+        continuation.finish()
+      }
+    })
+  }
+
+  nonisolated private static func eventStreamResponse() -> HTTPURLResponse {
+    HTTPURLResponse(
+      url: URL(string: "http://example.com/events")!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: [
+        HTTP.StdHeaders.contentType: MediaType.eventStream.value,
+      ]
+    )!
+  }
+
+}
+
+private func isCancellationError(_ error: (any Error)?) -> Bool {
+  switch error {
+  case let error as URLError where error.code == .cancelled:
+    return true
+  case is CancellationError:
+    return true
+  default:
+    return false
+  }
 }

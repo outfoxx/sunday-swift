@@ -14,45 +14,67 @@
  * limitations under the License.
  */
 
-//  swiftlint:disable type_body_length function_parameter_count
-
 import Foundation
 import PotentCodables
 import OSLog
+import Synchronization
+
+private struct RegisteredProblem: Sendable {
+
+  let decode: @Sendable (MediaTypeDecoder, Data) throws -> any Problem
+
+  static func erase<P: Problem>(_ problemType: P.Type) -> RegisteredProblem {
+    RegisteredProblem(
+      decode: { decoder, data in try decoder.decode(P.self, from: data) }
+    )
+  }
+
+}
 
 
-private let eventStreamLogger = Logger.for(category: "Event Streams")
+private struct URLSessionTransportState: Sendable {
+
+  var isClosed = false
+  var eventSources: [UUID: EventSource] = [:]
+
+}
 
 
-public class NetworkRequestFactory: RequestFactory {
+// swiftlint:disable type_body_length function_parameter_count
+/// URLSession-backed transport shared by generated clients.
+public final class URLSessionTransport: Transport, Sendable {
 
   public static let eventRequestTimeoutInterval: TimeInterval = 15 * 60 // 15 minutes
 
   public let baseURL: URI.Template
-  public let session: NetworkSession
-  public let eventSession: NetworkSession
-  public let adapter: NetworkRequestAdapter?
+  public let session: URLSession
+  public let eventSession: URLSession
+  public let adapter: RequestAdapter?
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
   public let mediaTypeDecoders: MediaTypeDecoders
   public let pathEncoders: PathEncoders
   public let eventRequestTimeoutInterval: TimeInterval
-  private var problemTypes: [String: Problem.Type] = [:]
+  private let problemTypes = Mutex<[String: RegisteredProblem]>([:])
+  private let state = Mutex(URLSessionTransportState())
 
   public init(
     baseURL: URI.Template,
-    session: NetworkSession,
-    eventSession: NetworkSession? = nil,
-    adapter: NetworkRequestAdapter? = nil,
+    session: URLSession,
+    eventSession: URLSession? = nil,
+    adapter: RequestAdapter? = nil,
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default,
-    eventRequestTimeoutInterval: TimeInterval = NetworkRequestFactory.eventRequestTimeoutInterval,
+    eventRequestTimeoutInterval: TimeInterval = URLSessionTransport.eventRequestTimeoutInterval,
     pathEncoders: PathEncoders = .default
   ) {
     self.baseURL = baseURL
     self.session = session
-    self.eventSession = eventSession ?? session.copy(configuration: .events())
+    guard let eventConfiguration = session.configuration.copy() as? URLSessionConfiguration else {
+      fatalError("URLSessionConfiguration.copy() returned an unexpected type")
+    }
+    self.eventSession = eventSession ?? .sunday(configuration: .events(from: eventConfiguration))
     self.adapter = adapter
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
@@ -62,7 +84,7 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public convenience init(
-    baseURL: URI.Template, adapter: NetworkRequestAdapter? = nil,
+    baseURL: URI.Template, adapter: RequestAdapter? = nil,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
     sessionConfiguration: URLSessionConfiguration = .rest(),
     requestQueue: DispatchQueue = .global(qos: .utility),
@@ -71,7 +93,8 @@ public class NetworkRequestFactory: RequestFactory {
   ) {
     self.init(
       baseURL: baseURL,
-      session: .init(configuration: sessionConfiguration, serverTrustPolicyManager: serverTrustPolicyManager),
+      session: .sunday(configuration: sessionConfiguration, serverTrustPolicyManager: serverTrustPolicyManager),
+      eventSession: .sunday(configuration: .events(), serverTrustPolicyManager: serverTrustPolicyManager),
       adapter: adapter,
       requestQueue: requestQueue,
       mediaTypeEncoders: mediaTypeEncoders,
@@ -80,23 +103,30 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   deinit {
+    closeEventSources()
     session.close(cancelOutstandingTasks: true)
+    eventSession.close(cancelOutstandingTasks: true)
   }
 
-  public func registerProblem(type: URL, problemType: Problem.Type) {
+  public func registerProblem<P: Problem>(type: URL, problemType: P.Type) {
     registerProblem(type: type.absoluteString, problemType: problemType)
   }
 
-  public func registerProblem(type: String, problemType: Problem.Type) {
-    problemTypes[type] = problemType
+  public func registerProblem<P: Problem>(type: String, problemType: P.Type) {
+    problemTypes.withLock { $0[type] = RegisteredProblem.erase(problemType) }
   }
 
-  public func request<B: Encodable>(
+  public func transportRequest<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) async throws -> URLRequest {
 
-    var url = try baseURL.complete(relative: pathTemplate, parameters: pathParameters ?? [:], encoders: pathEncoders)
+    var url =
+      try baseURL.complete(
+        relative: pathTemplate,
+        parameters: try URI.Template.parameters(from: pathParameters ?? [:]),
+        encoders: pathEncoders
+      )
 
     // Encode & add query parameters to url
     if let queryParameters = queryParameters, !queryParameters.isEmpty {
@@ -106,7 +136,7 @@ public class NetworkRequestFactory: RequestFactory {
       }
 
       var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-      urlComponents.percentEncodedQuery = urlQueryEncoder.encodeQueryString(parameters: queryParameters)
+      urlComponents.percentEncodedQuery = try urlQueryEncoder.encodeQueryString(parameters: queryParameters)
 
       guard let queryUrl = urlComponents.url else {
         throw SundayError.invalidURL(urlComponents)
@@ -156,20 +186,20 @@ public class NetworkRequestFactory: RequestFactory {
       urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
     }
 
-    return try await adapter?.adapt(requestFactory: self, urlRequest: urlRequest) ?? urlRequest
+    return try await adapter?.adapt(transport: self, urlRequest: urlRequest) ?? urlRequest
   }
 
-  public func response(request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
+  private func dataResponse(request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
 
     return try await session.validatedData(for: request)
   }
 
-  public func response<B: Encodable>(
+  private func dataResponse<B: Encodable>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
   ) async throws -> (Data?, HTTPURLResponse) {
 
-    let request = try await request(
+    let request = try await transportRequest(
       method: method,
       pathTemplate: pathTemplate,
       pathParameters: pathParameters,
@@ -180,7 +210,30 @@ public class NetworkRequestFactory: RequestFactory {
       headers: headers
     )
 
-    return try await session.validatedData(for: request)
+    return try await dataResponse(request: request)
+  }
+
+  public func transportResponse(request: URLRequest) async throws -> HTTPURLResponse {
+    try await dataResponse(request: request).1
+  }
+
+  public func transportResponse<B: Encodable>(
+    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
+    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
+  ) async throws -> HTTPURLResponse {
+
+    let request = try await transportRequest(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    )
+
+    return try await transportResponse(request: request)
   }
 
   public func parse<D: Decodable>(dataResponse: (Data?, HTTPURLResponse)) throws -> D {
@@ -212,11 +265,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     do {
 
-      guard let value = try mediaTypeDecoder.decode(D.self, from: data) as D? else {
-        throw SundayError.responseDecodingFailed(reason: .missingValue)
-      }
-
-      return value
+      return try mediaTypeDecoder.decode(D.self, from: data)
 
     }
     catch {
@@ -240,13 +289,13 @@ public class NetworkRequestFactory: RequestFactory {
       let contentType = MediaType(contentTypeHeader),
       contentType == .problem
     else {
-      return Problem(statusCode: response.statusCode)
+      return HTTP.StatusProblem(statusCode: response.statusCode)
     }
 
     // Ensure data is available
     guard let data = possibleData, !data.isEmpty else {
       // Return standard problem
-      return Problem(statusCode: response.statusCode)
+      return HTTP.StatusProblem(statusCode: response.statusCode)
     }
 
     // Find decoder
@@ -269,23 +318,23 @@ public class NetworkRequestFactory: RequestFactory {
 
     // Find registered problem type
     guard
-      let type = problemData.removeValue(forKey: "type")?.stringValue,
-      let problemType = problemTypes[type]
+      let type = problemData["type"]?.stringValue,
+      let registeredProblem = problemTypes.withLock({ $0[type] })
     else {
       // Return generic problem
-      return Problem(statusCode: response.statusCode, data: problemData)
+      return GenericProblem(statusCode: response.statusCode, data: problemData)
     }
 
     // Parse registered problem type
     do {
-      return try mediaTypeDecoder.decode(problemType, from: data)
+      return try registeredProblem.decode(mediaTypeDecoder, data)
     }
     catch {
       return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
     }
   }
 
-  public func resultResponse<B: Encodable, D: Decodable>(
+  public func response<B: Encodable, D: Decodable>(
     method: HTTP.Method,
     pathTemplate: String,
     pathParameters: Parameters?,
@@ -294,11 +343,11 @@ public class NetworkRequestFactory: RequestFactory {
     contentTypes: [MediaType]?,
     acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) async throws -> ResultResponse<D> {
+  ) async throws -> OperationResponse<D> {
 
     do {
 
-      let dataResponse = try await response(
+      let dataResponse = try await dataResponse(
         method: method,
         pathTemplate: pathTemplate,
         pathParameters: pathParameters,
@@ -311,7 +360,7 @@ public class NetworkRequestFactory: RequestFactory {
 
       let result = try parse(dataResponse: dataResponse) as D
 
-      return ResultResponse(result: result, response: dataResponse.1)
+      return OperationResponse(result: result, response: dataResponse.1)
     }
     catch {
       throw parse(error: error)
@@ -319,7 +368,7 @@ public class NetworkRequestFactory: RequestFactory {
 
   }
 
-  public func resultResponse<B>(
+  public func response<B>(
     method: HTTP.Method,
     pathTemplate: String,
     pathParameters: Parameters?,
@@ -328,11 +377,11 @@ public class NetworkRequestFactory: RequestFactory {
     contentTypes: [MediaType]?,
     acceptTypes: [MediaType]?,
     headers: Parameters?
-  ) async throws -> ResultResponse<Void> where B: Encodable {
+  ) async throws -> OperationResponse<Void> where B: Encodable {
 
     do {
 
-      let dataResponse = try await response(
+      let dataResponse = try await dataResponse(
         method: method,
         pathTemplate: pathTemplate,
         pathParameters: pathParameters,
@@ -345,7 +394,7 @@ public class NetworkRequestFactory: RequestFactory {
 
       _ = try parse(dataResponse: dataResponse) as Empty
 
-      return ResultResponse(result: (), response: dataResponse.1)
+      return OperationResponse(result: (), response: dataResponse.1)
     }
     catch {
       throw parse(error: error)
@@ -360,7 +409,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     do {
 
-      let dataResponse = try await response(
+      let dataResponse = try await dataResponse(
         method: method,
         pathTemplate: pathTemplate,
         pathParameters: pathParameters,
@@ -383,7 +432,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     do {
 
-      let dataResponse = try await response(request: request)
+      let dataResponse = try await dataResponse(request: request)
 
       return try parse(dataResponse: dataResponse)
 
@@ -397,7 +446,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     do {
 
-      let dataResponse = try await response(request: request)
+      let dataResponse = try await dataResponse(request: request)
 
       _ = try parse(dataResponse: dataResponse) as Empty
 
@@ -414,7 +463,7 @@ public class NetworkRequestFactory: RequestFactory {
 
     do {
 
-      let dataResponse = try await response(
+      let dataResponse = try await dataResponse(
         method: method,
         pathTemplate: pathTemplate,
         pathParameters: pathParameters,
@@ -433,14 +482,18 @@ public class NetworkRequestFactory: RequestFactory {
     }
   }
 
+  /// Creates a caller-owned event source for the generated request.
+  ///
+  /// The returned source is not retained by the transport. Callers are responsible for closing it.
   public func eventSource<B>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
-  ) -> EventSource where B: Encodable {
+  ) -> EventSource where B: Encodable & Sendable {
 
-    eventSource(from: {
-      if self.session.isClosed { return nil }
-      return try await self.request(
+    eventSource(from: { @Sendable [weak self] in
+      guard let self else { return nil }
+
+      return try await self.transportRequest(
         method: method,
         pathTemplate: pathTemplate,
         pathParameters: pathParameters,
@@ -453,10 +506,17 @@ public class NetworkRequestFactory: RequestFactory {
     })
   }
 
-  public func eventSource(from requestFactory: @escaping () async throws -> URLRequest?) -> EventSource {
+  /// Creates a caller-owned event source for a custom request builder.
+  ///
+  /// The returned source is not retained by the transport. Callers are responsible for closing it.
+  public func eventSource(from request: @escaping @Sendable () async throws -> URLRequest?) -> EventSource {
+    makeEventSource(from: request)
+  }
 
-    return EventSource(queue: requestQueue) { headers in
-      guard let request = try await requestFactory() else { return nil }
+  private func makeEventSource(from request: @escaping @Sendable () async throws -> URLRequest?) -> EventSource {
+    EventSource(queue: requestQueue) { [weak self] headers in
+      guard let self else { return nil }
+      guard let request = try await request() else { return nil }
       let updatedRequest =
         request
           .adding(httpHeaders: headers)
@@ -468,14 +528,15 @@ public class NetworkRequestFactory: RequestFactory {
   public func eventStream<B, D>(
     method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
     body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
-    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
-  ) -> AsyncStream<D> where B: Encodable {
+    decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
+  ) -> AsyncStream<D> where B: Encodable & Sendable {
 
     eventStream(
       decoder: decoder,
-      from: {
-        if self.session.isClosed { return nil }
-        return try await self.request(
+      from: { @Sendable [weak self] in
+        guard let self else { return nil }
+
+        return try await self.transportRequest(
           method: method,
           pathTemplate: pathTemplate,
           pathParameters: pathParameters,
@@ -490,8 +551,8 @@ public class NetworkRequestFactory: RequestFactory {
   }
 
   public func eventStream<D>(
-    decoder: @escaping (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?,
-    from requestFactory: @escaping () async throws -> URLRequest?
+    decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?,
+    from request: @escaping @Sendable () async throws -> URLRequest?
   ) -> AsyncStream<D> {
 
     guard let jsonDecoder = try? mediaTypeDecoders.find(for: .json) as? TextMediaTypeDecoder else {
@@ -500,85 +561,75 @@ public class NetworkRequestFactory: RequestFactory {
 
     return AsyncStream(D.self) { continuation in
 
-      let eventSource = eventSource(from: requestFactory)
+      let eventSource = makeEventSource(from: request)
+      guard let registration = register(eventSource: eventSource) else {
+        continuation.finish()
+        return
+      }
+      let setup = URLSessionTransportEventStreamSetup()
 
-      continuation.onTermination = { @Sendable _ in  eventSource.close() }
+      continuation.onTermination = { @Sendable [weak self] _ in
+        setup.terminate()?.cancel()
 
-      eventSource.onMessage = { event, id, data in
-
-        // Ingore empty data events
-
-        guard let data = data else {
-          return
+        Task {
+          await eventSource.close()
+          await eventSource.setOnMessage(nil)
+          await eventSource.setOnError(nil)
+          await eventSource.setOnStateError(nil)
+          self?.unregister(registration: registration)
         }
-
-        // Parse JSON and pass event on
-
-        do {
-          guard let event = try decoder(jsonDecoder, event, id, data, eventStreamLogger) else {
-            return
-          }
-
-          continuation.yield(event)
-        }
-        catch {
-          eventStreamLogger.error("Unable to decode event: \(error.localizedDescription, privacy: .public)")
-          return
-        }
-
       }
 
-      eventSource.connect()
+      let setupTask = setup.start(
+        eventSource: eventSource,
+        continuation: continuation,
+        shouldCancel: { [weak self] in self?.isClosed ?? true },
+        jsonDecoder: jsonDecoder,
+        decoder: decoder
+      )
+      setup.store(task: setupTask)
     }
   }
 
   public func close(cancelOutstandingRequests: Bool = true) {
+    closeEventSources()
     session.close(cancelOutstandingTasks: cancelOutstandingRequests)
     eventSession.close(cancelOutstandingTasks: cancelOutstandingRequests)
   }
 
-}
+  private func register(eventSource: EventSource) -> UUID? {
+    state.withLock { state in
+      guard !state.isClosed else {
+        return nil
+      }
 
-
-
-public extension NetworkRequestFactory {
-
-  func result<B: Encodable>(
-    method: HTTP.Method,
-    path: String,
-    body: B? = nil,
-    contentType: MediaType? = nil,
-    acceptTypes: [MediaType]? = nil
-  ) async throws {
-    return try await result(
-      method: method,
-      pathTemplate: path,
-      pathParameters: nil,
-      queryParameters: nil,
-      body: body,
-      contentTypes: contentType.flatMap { [$0] },
-      acceptTypes: acceptTypes,
-      headers: nil
-    )
+      let registration = UUID()
+      state.eventSources[registration] = eventSource
+      return registration
+    }
   }
 
-  func result<B: Encodable, D: Decodable>(
-    method: HTTP.Method,
-    path: String,
-    body: B? = nil,
-    contentType: MediaType? = nil,
-    acceptTypes: [MediaType]? = nil
-  ) async throws -> D {
-    return try await result(
-      method: method,
-      pathTemplate: path,
-      pathParameters: nil,
-      queryParameters: nil,
-      body: body,
-      contentTypes: contentType.flatMap { [$0] },
-      acceptTypes: acceptTypes,
-      headers: nil
-    )
+  private func unregister(registration: UUID) {
+    _ = state.withLock { state in
+      state.eventSources.removeValue(forKey: registration)
+    }
+  }
+
+  private func closeEventSources() {
+    let currentEventSources = state.withLock { state in
+      state.isClosed = true
+      let currentEventSources = Array(state.eventSources.values)
+      state.eventSources.removeAll()
+      return currentEventSources
+    }
+    currentEventSources.forEach { eventSource in
+      Task { await eventSource.close() }
+    }
+  }
+
+  private var isClosed: Bool {
+    state.withLock { $0.isClosed }
   }
 
 }
+// swiftlint:enable type_body_length function_parameter_count
