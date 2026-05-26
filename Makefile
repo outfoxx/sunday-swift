@@ -32,13 +32,13 @@ build-test-macos: check-tools
 	$(call buildtest,macos,platform=macOS)
 
 build-test-ios: check-tools
-	$(call buildtest,ios,platform=iOS Simulator$(comma)name=iPhone 16)
+	$(call buildtest,ios,platform=iOS Simulator$(comma)name=iPhone 17)
 
 build-test-tvos: check-tools
 	$(call buildtest,tvos,platform=tvOS Simulator$(comma)name=Apple TV)
 
 build-test-watchos: check-tools
-	$(call buildtest,watchos,platform=watchOS Simulator$(comma)name=Apple Watch Series 10 (46mm))
+	$(call buildtest,watchos,platform=watchOS Simulator$(comma)name=Apple Watch Series 11 (46mm))
 
 build-test-visionos: check-tools
 	$(call buildtest,visionos,platform=visionOS Simulator$(comma)name=Apple Vision Pro)
