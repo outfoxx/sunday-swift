@@ -16,34 +16,36 @@
 
 import Foundation
 import ScreamURITemplate
+import Synchronization
+
+typealias HTTPParameters = Parameters
 
 public extension URI {
 
-  struct Template: ExpressibleByStringLiteral {
+  struct Template: ExpressibleByStringLiteral, Sendable {
+
+    /// Marker protocol for values supported by URI template expansion.
+    public protocol ParameterValue: Sendable {}
+
+    public typealias Parameters = [String: (any Sendable)?]
 
     public enum Error: Swift.Error {
       case missingParameterValue(name: String)
       case unsupportedParameterType(name: String, type: Any.Type)
     }
 
-    private class Cache {
+    private static let cache = Mutex<[String: URITemplate]>([:])
 
-      private var storage: [String: URITemplate] = [:]
-      private var lockQueue = DispatchQueue(label: "URI.Template.Cache Lock")
-
-      func get(uri: String) throws -> URITemplate {
-        try lockQueue.sync {
-          if let cached = storage[uri] {
-            return cached
-          }
-          let template = try URITemplate(string: uri)
-          storage[uri] = template
-          return template
+    private static func cachedTemplate(for uri: String) throws -> URITemplate {
+      try cache.withLock { storage in
+        if let cached = storage[uri] {
+          return cached
         }
+        let template = try URITemplate(string: uri)
+        storage[uri] = template
+        return template
       }
     }
-
-    private static let cache = Cache()
 
     public let format: String
     public let parameters: Parameters
@@ -83,59 +85,18 @@ public extension URI {
         full = "\(format)/\(relative)"
       }
 
-      let impl = try Self.cache.get(uri: full)
+      let impl = try Self.cachedTemplate(for: full)
       let parameters = self.parameters.merging(parameters) { $1 }
       var variables = [String: VariableValue]()
 
       for variableName in impl.variableNames {
-
-        let value = switch parameters[variableName] {
-        case let value as VariableValue:
-          value
+        let value: any ParameterValue = switch parameters[variableName] {
         case .some(.some(let value)):
-          value
-        case nil:
+          try Self.requiredTemplateParameterValue(name: variableName, value)
+        case .some(.none), nil:
           throw Error.missingParameterValue(name: variableName)
-        default:
-          throw Error.unsupportedParameterType(name: variableName, type: type(of: parameters[variableName]))
         }
-
-        guard let converted = encoders.firstSupported(value: value) else {
-          if let dictValue = value as? [String: StringVariableValue] {
-            variables[variableName] = dictValue
-            continue
-          }
-          else if let arrayValue = value as? [StringVariableValue] {
-            variables[variableName] = arrayValue
-            continue
-          }
-          else if let kvPairsValue = value as? KeyValuePairs<String, StringVariableValue> {
-            variables[variableName] = kvPairsValue
-            continue
-          }
-          else if let stringValue = value as? StringVariableValue {
-            variables[variableName] = stringValue
-            continue
-          }
-          else if let varValue = value as? VariableValue {
-            variables[variableName] = varValue
-            continue
-          }
-          else if let pathValue = value as? PathEncodable {
-            variables[variableName] = pathValue.pathDescription
-            continue
-          }
-          else if let losslessValue = value as? LosslessStringConvertible {
-            variables[variableName] = losslessValue.description
-            continue
-          }
-          else if let rawRepValue = value as? any RawRepresentable {
-            variables[variableName] = String(describing: rawRepValue.rawValue)
-            continue
-          }
-          throw Error.unsupportedParameterType(name: variableName, type: type(of: value))
-        }
-        variables[variableName] = converted
+        variables[variableName] = try variableValue(name: variableName, value: value, encoders: encoders)
       }
 
       let processedUrl = try impl.process(variables: variables)
@@ -147,6 +108,123 @@ public extension URI {
       return url
     }
 
+    static func parameters(from parameters: HTTPParameters) throws -> Parameters {
+      try Dictionary(uniqueKeysWithValues: parameters.map { key, value in
+        (key, try templateParameterValue(name: key, value))
+      })
+    }
+
+    private static func templateParameterValue(
+      name: String,
+      _ value: (any Sendable)?
+    ) throws -> (any ParameterValue)? {
+      guard let value else {
+        return nil
+      }
+      if let dictionary = value as? HTTPParameterDictionaryAdapter {
+        return HTTPParameterDictionary(
+          httpParameterValues: try Dictionary(uniqueKeysWithValues: dictionary.httpParameterValues.map { key, value in
+            (key, try templateParameterValue(name: name, value))
+          })
+        )
+      }
+      if let array = value as? HTTPParameterArrayAdapter {
+        return HTTPParameterArray(httpParameterValues: try array.httpParameterValues.compactMap { value in
+          try templateParameterValue(name: name, value)
+        })
+      }
+      if let value = value as? any ParameterValue {
+        return value
+      }
+      if value is PathEncodable || value is LosslessStringConvertible || value is any RawRepresentable {
+        return AnyTemplateParameterValue(name: name, value: value)
+      }
+      throw Error.unsupportedParameterType(name: name, type: type(of: value))
+    }
+
+    private static func requiredTemplateParameterValue(
+      name: String,
+      _ value: any Sendable
+    ) throws -> any ParameterValue {
+      guard let value = try templateParameterValue(name: name, value) else {
+        throw Error.unsupportedParameterType(name: name, type: type(of: value))
+      }
+      return value
+    }
+
+    private func variableValue(
+      name: String,
+      value: any ParameterValue,
+      encoders: PathEncoders
+    ) throws -> VariableValue {
+
+      if let converted = encoders.firstSupported(value: value) {
+        return converted
+      }
+      if let dictionary = value as? HTTPParameterDictionaryAdapter {
+        return try Dictionary(uniqueKeysWithValues: dictionary.httpParameterValues.compactMap { key, value in
+          guard let value else {
+            return nil
+          }
+          return (key, try scalarVariableValue(name: name, value: value, encoders: encoders))
+        })
+      }
+      if let array = value as? HTTPParameterArrayAdapter {
+        return try array.httpParameterValues.map { value in
+          try scalarVariableValue(name: name, value: value, encoders: encoders)
+        }
+      }
+      if let variableValue = value as? VariableValue {
+        return variableValue
+      }
+      return try scalarVariableValue(name: name, value: value, encoders: encoders)
+    }
+
+    private func scalarVariableValue(
+      name: String,
+      value: any Sendable,
+      encoders: PathEncoders
+    ) throws -> StringVariableValue {
+
+      if let converted = encoders.firstSupported(value: value) {
+        return converted
+      }
+      if let stringValue = value as? StringVariableValue {
+        return stringValue
+      }
+      if let pathValue = value as? PathEncodable {
+        return pathValue.pathDescription
+      }
+      if let value = value as? AnyTemplateParameterValue {
+        return try scalarString(value)
+      }
+      if let losslessValue = value as? LosslessStringConvertible {
+        return losslessValue.description
+      }
+      if let rawRepValue = value as? any RawRepresentable {
+        return String(describing: rawRepValue.rawValue)
+      }
+      throw Error.unsupportedParameterType(name: name, type: type(of: value))
+    }
+
+    private func scalarString(_ value: AnyTemplateParameterValue) throws -> String {
+      if let pathValue = value.value as? PathEncodable {
+        return pathValue.pathDescription
+      }
+      if let stringValue = value.value as? LosslessStringConvertible {
+        return stringValue.description
+      }
+      if let rawValue = value.value as? any RawRepresentable {
+        return String(describing: rawValue.rawValue)
+      }
+      throw Error.unsupportedParameterType(name: value.name, type: type(of: value.value))
+    }
+
   }
 
+}
+
+private struct AnyTemplateParameterValue: URI.Template.ParameterValue {
+  let name: String
+  let value: any Sendable
 }

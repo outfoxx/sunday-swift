@@ -17,6 +17,6 @@
 import Foundation
 
 
-protocol PathEncodable {
+protocol PathEncodable: Sendable {
   var pathDescription: String { get }
 }

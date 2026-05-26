@@ -23,43 +23,61 @@ import XCTest
 
 class ProblemTests: XCTestCase {
 
-  class TestProblem: Problem {
+  struct TestProblem: Problem {
 
-    static let type = URL(string: "http://example.com/test")!
+    static let typeURL = URL(string: "http://example.com/test")!
 
+    let type: URL
+    let title: String
+    let status: Int
+    let detail: String?
+    let instance: URL?
+    let parameters: [String: AnyValue]?
     let extra: String
 
     init(extra: String, instance: URL? = nil) {
+      self.type = Self.typeURL
+      self.title = "Test Problem"
+      self.status = 200
+      self.detail = "A Test Problem"
+      self.instance = instance
+      self.parameters = nil
       self.extra = extra
-      super.init(
-        type: Self.type,
-        title: "Test Problem",
-        status: 200,
-        detail: "A Test Problem",
-        instance: instance,
-        parameters: nil
-      )
     }
 
-    required init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
+      let problem = try GenericProblem(from: decoder)
       let container = try decoder.container(keyedBy: AnyCodingKey.self)
-      extra = try container.decode(String.self, forKey: AnyCodingKey("extra"))
-      try super.init(from: decoder)
+      self.type = problem.type
+      self.title = problem.title
+      self.status = problem.status
+      self.detail = problem.detail
+      self.instance = problem.instance
+      self.parameters = nil
+      self.extra = try container.decode(String.self, forKey: AnyCodingKey("extra"))
     }
 
-    override func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
+      let problem = GenericProblem(
+        type: type,
+        title: title,
+        status: status,
+        detail: detail,
+        instance: instance,
+        parameters: parameters
+      )
+      try problem.encode(to: encoder)
       var container = encoder.container(keyedBy: AnyCodingKey.self)
       try container.encode(extra, forKey: AnyCodingKey("extra"))
-      try super.encode(to: encoder)
     }
 
-    override var description: String { "CustomDesc" }
+    var description: String { "CustomDesc" }
 
   }
 
   func testInitFromStatus() throws {
 
-    let problem1 = Problem(statusCode: 404)
+    let problem1 = HTTP.StatusProblem(statusCode: 404)
     XCTAssertEqual(problem1.type, URL(string: "about:blank"))
     XCTAssertEqual(problem1.status, 404)
     XCTAssertEqual(problem1.statusCode, .notFound)
@@ -68,7 +86,7 @@ class ProblemTests: XCTestCase {
     XCTAssertNil(problem1.instance)
     XCTAssertNil(problem1.parameters)
 
-    let problem2 = Problem(statusCode: .notFound)
+    let problem2 = HTTP.StatusProblem(statusCode: .notFound)
     XCTAssertEqual(problem2.type, URL(string: "about:blank"))
     XCTAssertEqual(problem2.status, 404)
     XCTAssertEqual(problem2.statusCode, .notFound)
@@ -79,10 +97,19 @@ class ProblemTests: XCTestCase {
 
   }
 
+  func testEncodingOmitsAbsentOptionalMembers() throws {
+
+    let problemJSON = try JSON.Encoder.default.encodeString(HTTP.StatusProblem(statusCode: 404))
+
+    XCTAssertFalse(problemJSON.contains("\"detail\""))
+    XCTAssertFalse(problemJSON.contains("\"instance\""))
+
+  }
+
   func testInitFromTree() throws {
 
     let problem1 =
-      Problem(statusCode: 400, data: [
+      GenericProblem(statusCode: 400, data: [
         "type": "http://example.com/test",
         "title": "Test",
         "detail": "Some Details",
@@ -97,7 +124,7 @@ class ProblemTests: XCTestCase {
     XCTAssertEqual(problem1.instance, URL(string: "id:12345"))
     XCTAssertEqual(problem1.parameters, ["extra": "test"])
 
-    let problem2 = Problem(statusCode: .badRequest, data: [
+    let problem2 = GenericProblem(statusCode: .badRequest, data: [
       "type": "http://example.com/test",
       "title": "Test",
       "detail": "Some Details",
@@ -117,8 +144,8 @@ class ProblemTests: XCTestCase {
   func testDescription() {
 
     let problemDesc =
-      Problem(
-        type: TestProblem.type,
+      GenericProblem(
+        type: TestProblem.typeURL,
         title: "Test Problem",
         status: 200,
         detail: "A Test Problem",
@@ -159,7 +186,7 @@ class ProblemTests: XCTestCase {
 
     let problemJSON = try JSON.Encoder.default.encodeString(problem)
 
-    let decodedProblem = try JSON.Decoder.default.decode(Problem.self, from: problemJSON)
+    let decodedProblem = try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)
 
     XCTAssertEqual(problem.type, decodedProblem.type)
     XCTAssertEqual(problem.title, decodedProblem.title)
@@ -169,11 +196,38 @@ class ProblemTests: XCTestCase {
     XCTAssertEqual(["extra": AnyValue.string(problem.extra)], decodedProblem.parameters)
   }
 
+  func testStatusProblemCodableFlattensParameters() throws {
+
+    let problem =
+      HTTP.StatusProblem(
+        type: TestProblem.typeURL,
+        title: "Test Problem",
+        status: 200,
+        detail: "A Test Problem",
+        instance: URL(string: "id:12345"),
+        parameters: ["extra": "some extra"]
+      )
+
+    let problemJSON = try JSON.Encoder.default.encodeString(problem)
+
+    XCTAssertTrue(problemJSON.contains("\"extra\""))
+    XCTAssertFalse(problemJSON.contains("\"parameters\""))
+
+    let decodedProblem = try JSON.Decoder.default.decode(HTTP.StatusProblem.self, from: problemJSON)
+
+    XCTAssertEqual(problem.type, decodedProblem.type)
+    XCTAssertEqual(problem.title, decodedProblem.title)
+    XCTAssertEqual(problem.status, decodedProblem.status)
+    XCTAssertEqual(problem.detail, decodedProblem.detail)
+    XCTAssertEqual(problem.instance, decodedProblem.instance)
+    XCTAssertEqual(problem.parameters, decodedProblem.parameters)
+  }
+
   func testCustomDecodingForGenericProblems() throws {
 
     let customProblem = TestProblem(extra: "Some Extra", instance: URL(string: "id:12345"))
     let genericProblem =
-      Problem(
+      GenericProblem(
         type: customProblem.type,
         title: customProblem.title,
         status: customProblem.status,
@@ -207,7 +261,7 @@ class ProblemTests: XCTestCase {
       }
       """
 
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
       guard case DecodingError.dataCorrupted(let errorCtx) = error else {
         return XCTFail("Wrong Error")
       }
@@ -225,7 +279,7 @@ class ProblemTests: XCTestCase {
       }
       """
 
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
       guard case DecodingError.dataCorrupted(let errorCtx) = error else {
         return XCTFail("Wrong Error")
       }
@@ -243,7 +297,7 @@ class ProblemTests: XCTestCase {
       }
       """
 
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(Problem.self, from: problemJSON)) { error in
+    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
       guard case DecodingError.dataCorrupted(let errorCtx) = error else {
         return XCTFail("Wrong Error")
       }

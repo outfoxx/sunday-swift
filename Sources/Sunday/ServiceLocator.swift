@@ -40,7 +40,7 @@ public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDele
     public let port: Int
   }
 
-  public typealias Signal = () -> Void
+  public typealias Signal = @Sendable () -> Void
 
   public var located: [Service] = []
 
@@ -62,10 +62,12 @@ public class ServiceLocator: NSObject, NetServiceBrowserDelegate, NetServiceDele
     browser.delegate = self
     browser.searchForServices(ofType: type, inDomain: domain)
 
-    Thread.detachNewThread {
-      self.browser.schedule(in: RunLoop.current, forMode: .default)
-      RunLoop.current.run()
-    }
+    Thread.detachNewThreadSelector(#selector(runBrowser), toTarget: self, with: nil)
+  }
+
+  @objc private func runBrowser() {
+    browser.schedule(in: RunLoop.current, forMode: .default)
+    RunLoop.current.run()
   }
 
   public func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {

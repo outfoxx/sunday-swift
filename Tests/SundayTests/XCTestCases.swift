@@ -20,7 +20,8 @@ import XCTest
 extension XCTestCase {
 
   // Wait with a default timeout
-  func waitForExpectations(handler: XCWaitCompletionHandler? = nil) {
+  @MainActor
+  func waitForExpectations(handler: (@Sendable (Error?) -> Void)? = nil) {
     waitForExpectations(timeout: 30.0, handler: handler)
   }
 

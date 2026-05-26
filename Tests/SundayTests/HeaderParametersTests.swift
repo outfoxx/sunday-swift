@@ -79,7 +79,7 @@ class HeaderParametersTests: XCTestCase {
 
   func testLosslessStringConvertibleValues() throws {
 
-    struct SpecialParam: LosslessStringConvertible {
+    struct SpecialParam: LosslessStringConvertible, Sendable {
 
       let value: String
 
@@ -104,7 +104,7 @@ class HeaderParametersTests: XCTestCase {
 
   func testFailsOnUnknownParameterTypes() throws {
 
-    struct Tester {
+    struct Tester: Sendable {
       let value = "tester"
     }
 

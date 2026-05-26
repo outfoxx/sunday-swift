@@ -110,7 +110,7 @@ class URITemplatesTests: XCTestCase {
 
   func testLosslessStringConvertibleAreSerializedCorrectly() async throws {
 
-    struct SpecialParam: LosslessStringConvertible {
+    struct SpecialParam: LosslessStringConvertible, URI.Template.ParameterValue {
 
       let value: String
 
@@ -148,13 +148,41 @@ class URITemplatesTests: XCTestCase {
 
   func testFailsWithUnsupportedValue() async throws {
 
-    class SpecialType {}
+    struct SpecialType: URI.Template.ParameterValue {}
 
     let template = URI.Template(format: "http://example.com/{id}")
 
     XCTAssertEqual(template.format, "http://example.com/{id}")
 
     try await XCTAssertThrowsError(try template.complete(parameters: ["id": SpecialType()])) { error in
+
+      guard case URI.Template.Error.unsupportedParameterType(name: let paramName, type: _) = error else {
+        return XCTFail("unexpected error")
+      }
+
+      XCTAssertEqual(paramName, "id")
+    }
+  }
+
+  func testFailsWithUnsupportedHTTPParameterValue() async throws {
+
+    struct SpecialType: Sendable {}
+
+    try await XCTAssertThrowsError(try URI.Template.parameters(from: ["id": SpecialType()])) { error in
+
+      guard case URI.Template.Error.unsupportedParameterType(name: let paramName, type: _) = error else {
+        return XCTFail("unexpected error")
+      }
+
+      XCTAssertEqual(paramName, "id")
+    }
+  }
+
+  func testFailsWithUnsupportedNestedHTTPParameterValue() async throws {
+
+    struct SpecialType: Sendable {}
+
+    try await XCTAssertThrowsError(try URI.Template.parameters(from: ["id": ["value": SpecialType()]])) { error in
 
       guard case URI.Template.Error.unsupportedParameterType(name: let paramName, type: _) = error else {
         return XCTFail("unexpected error")

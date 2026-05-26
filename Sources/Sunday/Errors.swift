@@ -17,15 +17,17 @@
 import Foundation
 
 
-public enum RequestEncodingFailureReason {
+/// Describes why request encoding failed.
+public enum RequestEncodingFailureReason: Sendable {
   case noSupportedContentTypes([MediaType])
   case noSupportedAcceptTypes([MediaType])
   case unsupportedContentType(MediaType)
   case serializationFailed(contentType: MediaType, error: Error?)
-  case unsupportedHeaderParameterValue(Any)
+  case unsupportedHeaderParameterValue(any Sendable)
 }
 
-public enum ResponseDecodingFailureReason {
+/// Describes why response decoding failed.
+public enum ResponseDecodingFailureReason: Sendable {
   case invalidContentType(String)
   case unsupportedContentType(MediaType)
   case noData
@@ -33,7 +35,8 @@ public enum ResponseDecodingFailureReason {
   case missingValue
 }
 
-public enum ResponseValidationFailureReason {
+/// Describes why response validation failed.
+public enum ResponseValidationFailureReason: Sendable {
   case unacceptableStatusCode(response: HTTPURLResponse, data: Data?)
 }
 
@@ -56,7 +59,7 @@ extension SundayError: LocalizedError {
     case .responseDecodingFailed(reason: let reason):
       return "Response Decoding Failed: \(reason)"
     case .responseValidationFailed(reason: let reason):
-      return "Resonse Validation Failed: \(reason)"
+      return "Response Validation Failed: \(reason)"
     case .unexpectedEmptyResponse:
       return "Unexpected Empty Response"
     case .invalidURL(let url):

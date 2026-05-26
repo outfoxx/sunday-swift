@@ -19,7 +19,7 @@ import PotentCBOR
 import PotentJSON
 
 
-public protocol MediaTypeDecoder {
+public protocol MediaTypeDecoder: Sendable {
   func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable
 }
 
@@ -28,11 +28,11 @@ public protocol TextMediaTypeDecoder: MediaTypeDecoder {
 }
 
 
-public struct MediaTypeDecoders {
+public struct MediaTypeDecoders: Sendable {
 
   public static let `default` = MediaTypeDecoders.Builder().registerDefault().build()
 
-  public struct Builder {
+  public struct Builder: Sendable {
 
     private var registered: [MediaType: MediaTypeDecoder]
 
@@ -68,8 +68,14 @@ public struct MediaTypeDecoders {
       return registerJSON(decoder: decoder)
     }
 
+    /**
+     * Registers a JSON decoder.
+     *
+     * Configure the decoder before registration and do not mutate it afterward.
+     * Sunday retains and uses the decoder directly during synchronous decoding.
+     */
     public func registerJSON(decoder: JSON.Decoder) -> Builder {
-      return register(decoder: decoder, forTypes: .json, .jsonStructured)
+      return register(decoder: JSONMediaTypeDecoder(decoder: decoder), forTypes: .json, .jsonStructured)
     }
 
     public func registerCBOR() -> Builder {
@@ -78,8 +84,14 @@ public struct MediaTypeDecoders {
       return registerCBOR(decoder: decoder)
     }
 
+    /**
+     * Registers a CBOR decoder.
+     *
+     * Configure the decoder before registration and do not mutate it afterward.
+     * Sunday retains and uses the decoder directly during synchronous decoding.
+     */
     public func registerCBOR(decoder: CBOR.Decoder) -> Builder {
-      return register(decoder: decoder, forTypes: .cbor)
+      return register(decoder: CBORMediaTypeDecoder(decoder: decoder), forTypes: .cbor)
     }
 
     public func registerX509() -> Builder {
@@ -122,10 +134,42 @@ public struct MediaTypeDecoders {
 }
 
 
-extension JSON.Decoder: TextMediaTypeDecoder {}
+// PotentCodables decoders expose mutable configuration, but this wrapper does not expose
+// the configured decoder after registration. Decoding uses the private instance directly.
+private struct JSONMediaTypeDecoder: TextMediaTypeDecoder {
+
+  nonisolated(unsafe) private let decoder: JSON.Decoder
+
+  init(decoder: JSON.Decoder) {
+    self.decoder = decoder
+  }
+
+  func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
+    return try decoder.decode(type, from: data)
+  }
+
+  func decode<T>(_ type: T.Type, from data: String) throws -> T where T: Decodable {
+    return try decoder.decode(type, from: data)
+  }
+
+}
 
 
-extension CBOR.Decoder: MediaTypeDecoder {}
+// PotentCodables decoders expose mutable configuration, but this wrapper does not expose
+// the configured decoder after registration. Decoding uses the private instance directly.
+private struct CBORMediaTypeDecoder: MediaTypeDecoder {
+
+  nonisolated(unsafe) private let decoder: CBOR.Decoder
+
+  init(decoder: CBOR.Decoder) {
+    self.decoder = decoder
+  }
+
+  func decode<T>(_ type: T.Type, from data: Data) throws -> T where T: Decodable {
+    return try decoder.decode(type, from: data)
+  }
+
+}
 
 
 public struct DataDecoder: MediaTypeDecoder {
