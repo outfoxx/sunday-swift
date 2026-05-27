@@ -65,6 +65,7 @@ public extension URI {
     ///   - relative: Template for the relative portion of the complete URL
     ///   - parameters: Parameters for the format; these take precedence
     ///     when encountering duplicates
+    ///   - encoders: Encoders used to format path parameter values.
     public func complete(
       relative: String = "",
       parameters: Parameters = [:],

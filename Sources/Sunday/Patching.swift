@@ -28,10 +28,10 @@ public protocol AnyPatchOp: Codable, Sendable {
 
 // MARK: UpdateOp
 
-/// Wrapper that represents a limited patch operation support seting/merging, not changing the target property in the
-/// target object. Thedelete operation is **not** supported by ``UpdateOp``.
+/// Wrapper that represents a limited patch operation supporting setting/merging, or not changing the target property in
+/// the target object. The delete operation is **not** supported by ``UpdateOp``.
 ///
-/// - Note A "no change" operation is represented by the ``nil`` value.
+/// - Note: A "no change" operation is represented by the `nil` value.
 ///
 /// - SeeAlso ``PatchOp``
 ///
@@ -88,9 +88,9 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 
 // MARK: PatchOp
 
-/// A full patch operation support seting/merging, deleting or not changing the target property in the target object.
+/// A full patch operation supporting setting/merging, deleting or not changing the target property in the target object.
 ///
-/// - Note A "no change" operation is represented by the ``nil`` value.
+/// - Note: A "no change" operation is represented by the `nil` value.
 /// - SeeAlso ``UpdateOp``
 ///
 public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
