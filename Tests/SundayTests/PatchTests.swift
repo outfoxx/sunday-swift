@@ -19,7 +19,7 @@ import Foundation
 import XCTest
 
 
-public struct Security: Equatable, Codable {
+public struct Security: Equatable, Codable, Sendable {
 
   var type: UpdateOp<String>? = .none
   var enc: PatchOp<Data>? = .none
@@ -140,7 +140,7 @@ class PatchTests: XCTestCase {
       data: .none
     )
 
-    let json = #"{"name":"Test","security":{"enc":"AQID","sig":null,"type":"17"}}"#.data(using: .utf8)!
+    let json = Data(#"{"name":"Test","security":{"enc":"AQID","sig":null,"type":"17"}}"#.utf8)
 
     XCTAssertEqual(try encoder.encode(patch), json)
 

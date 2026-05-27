@@ -19,8 +19,8 @@ import Foundation
 
 /// JSON Merge Patch Operation
 ///
-public protocol AnyPatchOp: Codable {
-  associatedtype Value: Codable
+public protocol AnyPatchOp: Codable, Sendable {
+  associatedtype Value: Codable & Sendable
 
   static func merge(_ value: Value) -> Self
 }
@@ -35,7 +35,7 @@ public protocol AnyPatchOp: Codable {
 ///
 /// - SeeAlso ``PatchOp``
 ///
-public enum UpdateOp<Value: Codable>: AnyPatchOp, Codable {
+public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 
   /// Set/Merge the target property in the target object.
   ///
@@ -93,7 +93,7 @@ public enum UpdateOp<Value: Codable>: AnyPatchOp, Codable {
 /// - Note A "no change" operation is represented by the ``nil`` value.
 /// - SeeAlso ``UpdateOp``
 ///
-public enum PatchOp<Value: Codable>: AnyPatchOp, Codable {
+public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 
   /// Set/Merge the target property in the target object.
   ///
@@ -166,7 +166,7 @@ public enum PatchOp<Value: Codable>: AnyPatchOp, Codable {
 
 extension UpdateOp {
 
-  public static func merge<NewValue: Codable>(_ value: NewValue) -> UpdateOp<NewValue> { .set(value) }
+  public static func merge<NewValue: Codable & Sendable>(_ value: NewValue) -> UpdateOp<NewValue> { .set(value) }
 
 }
 
@@ -187,7 +187,7 @@ extension UpdateOp: CustomStringConvertible {
 
 extension PatchOp {
 
-  public static func merge<NewValue: Codable>(_ value: NewValue) -> PatchOp<NewValue> { .set(value) }
+  public static func merge<NewValue: Codable & Sendable>(_ value: NewValue) -> PatchOp<NewValue> { .set(value) }
 
 }
 
@@ -209,14 +209,17 @@ extension PatchOp: CustomStringConvertible {
 
 extension KeyedDecodingContainer {
 
-  public func decodeIfExists<Value: Codable>(_ type: Value.Type, forKey key: Key) throws -> PatchOp<Value>? {
+  public func decodeIfExists<Value: Codable & Sendable>(_ type: Value.Type, forKey key: Key) throws -> PatchOp<Value>? {
     guard contains(key) else {
       return nil
     }
     return try decodeIfPresent(type, forKey: key).map { .set($0) } ?? .delete
   }
 
-  public func decodeIfExists<Value: Codable>(_ type: Value.Type, forKey key: Key) throws -> UpdateOp<Value>? {
+  public func decodeIfExists<Value: Codable & Sendable>(
+    _ type: Value.Type,
+    forKey key: Key
+  ) throws -> UpdateOp<Value>? {
     return try decodeIfPresent(type, forKey: key).map { .set($0) }
   }
 
@@ -227,7 +230,7 @@ extension KeyedDecodingContainer {
 
 extension KeyedEncodingContainer {
 
-  public mutating func encodeIfExists<Value, P: AnyPatchOp>(
+  public mutating func encodeIfExists<Value: Sendable, P: AnyPatchOp>(
     _ value: P?,
     forKey key: Key
   ) throws where P.Value == Value {

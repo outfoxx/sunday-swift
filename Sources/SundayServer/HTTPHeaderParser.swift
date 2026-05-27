@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//  swiftlint:disable cyclomatic_complexity function_body_length
-
 import Foundation
 import Sunday
 
@@ -71,7 +69,10 @@ public struct HTTPRequestParser {
   /// Process available segment of header data
   ///  - Parameter data: the data to process
   ///  - Returns: parsed headers elements
-  mutating func process(_ data: Data, connection: HTTPConnection) throws -> ParsedRequest? {
+  mutating func process( // swiftlint:disable:this cyclomatic_complexity function_body_length
+    _ data: Data,
+    connection: HTTPConnection
+  ) throws -> ParsedRequest? {
 
     func finish() throws -> ParsedRequest? {
       precondition(line != nil, "HTTP must have a request line")
@@ -156,11 +157,11 @@ public struct HTTPRequestParser {
           }
 
           if headers.contains(where: {
-            $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == "100-continue".data(using: .ascii)!
+            $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == Data("100-continue".utf8)
           }) {
 
             connection.send(
-              data: "HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".data(using: .utf8)!,
+              data: Data("HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".utf8),
               context: "Sending continuation for expectation"
             )
           }
@@ -234,7 +235,7 @@ public struct HTTPRequestParser {
             // all chunks are here
 
             // add content length
-            pushHeader(name: HTTP.StdHeaders.contentLength, value: String(entity?.count ?? 0).data(using: .ascii)!)
+            pushHeader(name: HTTP.StdHeaders.contentLength, value: Data(String(entity?.count ?? 0).utf8))
 
             // parse trailing headers (if any)
             state = .headers

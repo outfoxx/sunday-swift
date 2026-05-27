@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//  swiftlint:disable function_body_length
-
 import Foundation
 import PotentCodables
 
@@ -23,28 +21,72 @@ import PotentCodables
 /**
  * Problem details for HTTP APIs
  *
- * Swift `Error` compatible `struct` for RFC 7807 with the
+ * Swift `Error` compatible protocol for RFC 7807 with the
  * media type `application/problem+json`.
  */
-open class Problem: Error, Codable, CustomStringConvertible {
+public protocol Problem: Error, Codable, CustomStringConvertible, Sendable {
+
+  var type: URL { get }
+
+  var title: String { get }
+
+  var status: Int { get }
+
+  var detail: String? { get }
+
+  var instance: URL? { get }
+
+  var parameters: [String: AnyValue]? { get }
+
+}
+
+
+public extension Problem {
+
+  /**
+   * HTTP status code matching the problem status.
+   */
+  var statusCode: HTTP.StatusCode? {
+    HTTP.StatusCode(rawValue: status)
+  }
+
+  /**
+   * Text representation of the problem details.
+   */
+  var description: String {
+    var builder =
+      DescriptionBuilder(Self.self)
+        .add(type, named: "type")
+        .add(title, named: "title")
+        .add(status, named: "status")
+    if let detail = detail {
+      builder = builder.add(detail, named: "detail")
+    }
+    if let instance = instance {
+      builder = builder.add(instance, named: "instance")
+    }
+    if let parameters = parameters, !parameters.isEmpty {
+      builder = builder.add(parameters.mapValues { $0.unwrappedValues }, named: "parameters")
+    }
+    return builder.build()
+  }
+
+}
+
+
+/**
+ * Generic RFC 7807 problem details value.
+ */
+public struct GenericProblem: Problem {
 
   static let requiredValueMissingDescription = "Required Value Missing"
 
   public let type: URL
-
   public let title: String
-
   public let status: Int
-
   public let detail: String?
-
   public let instance: URL?
-
   public let parameters: [String: AnyValue]?
-
-  public var statusCode: HTTP.StatusCode? {
-    HTTP.StatusCode(rawValue: status)
-  }
 
   public init(
     type: URL,
@@ -70,37 +112,39 @@ open class Problem: Error, Codable, CustomStringConvertible {
     instance: URL? = nil,
     parameters: [String: AnyValue]? = nil
   ) {
-    self.type = type
-    self.title = title
-    status = statusCode.rawValue
-    self.detail = detail
-    self.instance = instance
-    self.parameters = parameters
+    self.init(
+      type: type,
+      title: title,
+      status: statusCode.rawValue,
+      detail: detail,
+      instance: instance,
+      parameters: parameters
+    )
   }
 
-  public convenience init(statusCode: Int) {
-    self.init(type: URL(string: "about:blank")!, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
+  public init(statusCode: Int) {
+    self.init(type: Self.stdType, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
   }
 
-  public convenience init(statusCode: HTTP.StatusCode) {
+  public init(statusCode: HTTP.StatusCode) {
     self.init(statusCode: statusCode.rawValue)
   }
 
-  public convenience init(statusCode: Int, data: [String: AnyValue]) {
+  public init(statusCode: Int, data: [String: AnyValue]) {
     var data = data
-    let type = (data.removeValue(forKey: "type")?.stringValue.map { URL(string: $0) } ?? Self.stdType) ?? Self.stdType
-    let title = data.removeValue(forKey: "title")?.stringValue ?? Problem.statusTitle(statusCode: statusCode)
+    let type = data.removeValue(forKey: "type")?.stringValue.flatMap { URL(string: $0) } ?? Self.stdType
+    let title = data.removeValue(forKey: "title")?.stringValue ?? Self.statusTitle(statusCode: statusCode)
     let detail = data.removeValue(forKey: "detail")?.stringValue
-    let instance = data.removeValue(forKey: "instance")?.stringValue.map { URL(string: $0) } ?? nil
+    let instance = data.removeValue(forKey: "instance")?.stringValue.flatMap { URL(string: $0) }
     let parameters = data.isEmpty ? nil : data
     self.init(type: type, title: title, status: statusCode, detail: detail, instance: instance, parameters: parameters)
   }
 
-  public convenience init(statusCode: HTTP.StatusCode, data: [String: AnyValue]) {
+  public init(statusCode: HTTP.StatusCode, data: [String: AnyValue]) {
     self.init(statusCode: statusCode.rawValue, data: data)
   }
 
-  public required init(from decoder: Decoder) throws {
+  public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: AnyCodingKey.self)
 
     var decodedType: URL?
@@ -109,8 +153,6 @@ open class Problem: Error, Codable, CustomStringConvertible {
     var detail: String?
     var instance: URL?
     var parameters: [String: AnyValue] = [:]
-
-    let isCustom = Swift.type(of: self) != Problem.self
 
     for key in container.allKeys {
       switch key {
@@ -130,76 +172,34 @@ open class Problem: Error, Codable, CustomStringConvertible {
         instance = try container.decodeIfPresent(URL.self, forKey: key)
 
       default:
-        if !isCustom {
-          parameters[key.stringValue] = try container.decode(AnyValue.self, forKey: key)
-        }
+        parameters[key.stringValue] = try container.decode(AnyValue.self, forKey: key)
       }
     }
 
-    guard let type = decodedType else {
-      throw DecodingError.dataCorruptedError(
-        forKey: CodingKeys.type,
-        in: container,
-        debugDescription: Self.requiredValueMissingDescription
-      )
-    }
-
-    guard let title = decodedTitle else {
-      throw DecodingError.dataCorruptedError(
-        forKey: CodingKeys.title,
-        in: container,
-        debugDescription: Self.requiredValueMissingDescription
-      )
-    }
-
-    guard let status = decodedStatus else {
-      throw DecodingError.dataCorruptedError(
-        forKey: CodingKeys.status,
-        in: container,
-        debugDescription: Self.requiredValueMissingDescription
-      )
-    }
-
-    self.type = type
-    self.title = title
-    self.status = status
-    self.detail = detail
-    self.instance = instance
-    self.parameters = parameters.isEmpty ? nil : parameters
+    self.init(
+      type: try Self.required(decodedType, forKey: CodingKeys.type, in: container),
+      title: try Self.required(decodedTitle, forKey: CodingKeys.title, in: container),
+      status: try Self.required(decodedStatus, forKey: CodingKeys.status, in: container),
+      detail: detail,
+      instance: instance,
+      parameters: parameters.isEmpty ? nil : parameters
+    )
   }
 
-  open func encode(to encoder: Encoder) throws {
+  public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: AnyCodingKey.self)
     try container.encode(type, forKey: CodingKeys.type)
     try container.encode(title, forKey: CodingKeys.title)
     try container.encode(status, forKey: CodingKeys.status)
-    try container.encode(detail, forKey: CodingKeys.detail)
-    try container.encode(instance, forKey: CodingKeys.instance)
+    try container.encodeIfPresent(detail, forKey: CodingKeys.detail)
+    try container.encodeIfPresent(instance, forKey: CodingKeys.instance)
     try parameters?.forEach { key, value in
       try container.encode(value, forKey: AnyCodingKey(stringValue: key, intValue: nil))
     }
   }
 
   public static func statusTitle(statusCode: Int) -> String {
-    return HTTP.StatusCode(rawValue: statusCode).map { HTTP.statusText[$0]! } ?? "Unknown"
-  }
-
-  open var description: String {
-    var builder =
-      DescriptionBuilder(Self.self)
-        .add(type, named: "type")
-        .add(title, named: "title")
-        .add(status, named: "status")
-    if let detail = detail {
-      builder = builder.add(detail, named: "detail")
-    }
-    if let instance = instance {
-      builder = builder.add(instance, named: "instance")
-    }
-    if let parameters = parameters, !parameters.isEmpty {
-      builder = builder.add(parameters.mapValues { $0.unwrappedValues }, named: "parameters")
-    }
-    return builder.build()
+    return HTTP.StatusCode(rawValue: statusCode).flatMap { HTTP.statusText[$0] } ?? "Unknown"
   }
 
   private enum CodingKeys {
@@ -211,6 +211,31 @@ open class Problem: Error, Codable, CustomStringConvertible {
   }
 
   private static let stdType = URL(string: "about:blank")!
+
+  private static func required<Value>(
+    _ value: Value?,
+    forKey key: AnyCodingKey,
+    in container: KeyedDecodingContainer<AnyCodingKey>
+  ) throws -> Value {
+    guard let value = value else {
+      throw DecodingError.dataCorruptedError(
+        forKey: key,
+        in: container,
+        debugDescription: Self.requiredValueMissingDescription
+      )
+    }
+    return value
+  }
+
+}
+
+
+public extension HTTP {
+
+  /**
+   * Basic HTTP status problem for responses without problem details.
+   */
+  typealias StatusProblem = GenericProblem
 
 }
 

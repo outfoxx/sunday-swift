@@ -60,11 +60,11 @@ class ResponseDecodingTests: XCTestCase {
 
     let baseURL = URI.Template(format: url.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
     let returnedObject =
-      try await requestFactory.result(
+      try await transport.result(
         method: .post,
         pathTemplate: "echo",
         pathParameters: nil,

@@ -21,7 +21,7 @@ import XCTest
 class EventParserTests: XCTestCase {
 
   func testDispatchOfEventsWithLineFeeds() {
-    let eventBuffer = "event: hello\nid: 12345\ndata: Hello World!\n\n".data(using: .utf8)!
+    let eventBuffer = Data("event: hello\nid: 12345\ndata: Hello World!\n\n".utf8)
 
     let parser = EventParser()
 
@@ -40,7 +40,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testDispatchOfEventsWithCarriageReturns() {
-    let eventBuffer = "event: hello\rid: 12345\rdata: Hello World!\r\r".data(using: .utf8)!
+    let eventBuffer = Data("event: hello\rid: 12345\rdata: Hello World!\r\r".utf8)
 
     let parser = EventParser()
 
@@ -59,7 +59,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testDispatchOfEventsWithCarriageReturnLineFeeds() {
-    let eventBuffer = "event: hello\r\nid: 12345\r\ndata: Hello World!\r\n\r\n".data(using: .utf8)!
+    let eventBuffer = Data("event: hello\r\nid: 12345\r\ndata: Hello World!\r\n\r\n".utf8)
 
     let parser = EventParser()
 
@@ -78,7 +78,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testDispatchOfEventsWithMixedCarriageReturnLineFeeds() {
-    let eventBuffer = "event: hello\nid: 12345\rdata: Hello World!\r\n\r\n".data(using: .utf8)!
+    let eventBuffer = Data("event: hello\nid: 12345\rdata: Hello World!\r\n\r\n".utf8)
 
     let parser = EventParser()
 
@@ -98,18 +98,18 @@ class EventParserTests: XCTestCase {
 
   func testDispatchesChunkedEvents() {
     let eventBuffers = [
-      "eve".data(using: .utf8)!,
-      "nt: hello\nid: 123".data(using: .utf8)!,
-      "45\rdata: Hello World!\r".data(using: .utf8)!,
-      "\n\r\neve".data(using: .utf8)!,
-      "nt: hello\nid: 123".data(using: .utf8)!,
+      Data("eve".utf8),
+      Data("nt: hello\nid: 123".utf8),
+      Data("45\rdata: Hello World!\r".utf8),
+      Data("\n\r\neve".utf8),
+      Data("nt: hello\nid: 123".utf8),
       Data(),
-      "45\rdata: Hello World!\r".data(using: .utf8)!,
-      "\n\r\n".data(using: .utf8)!,
-      "event: hello\nid: 123".data(using: .utf8)!,
-      "45\rdata: Hello World!\r\n\r\n".data(using: .utf8)!,
-      "45\rdata: Hello World!\r\n\r\n".data(using: .utf8)!,
-      "\r\n\r\n\r\n\r\n".data(using: .utf8)!,
+      Data("45\rdata: Hello World!\r".utf8),
+      Data("\n\r\n".utf8),
+      Data("event: hello\nid: 123".utf8),
+      Data("45\rdata: Hello World!\r\n\r\n".utf8),
+      Data("45\rdata: Hello World!\r\n\r\n".utf8),
+      Data("\r\n\r\n\r\n\r\n".utf8),
     ]
 
     let parser = EventParser()
@@ -147,7 +147,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testConcatenatesDataFields() {
-    let eventBuffer = "event: hello\ndata: Hello \ndata: World!\n\n".data(using: .utf8)!
+    let eventBuffer = Data("event: hello\ndata: Hello \ndata: World!\n\n".utf8)
 
     let parser = EventParser()
 
@@ -166,7 +166,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testAllowsEmptyValuesForFields() {
-    let eventBuffer = "retry: \nevent: \nid: \ndata: \n\n".data(using: .utf8)!
+    let eventBuffer = Data("retry: \nevent: \nid: \ndata: \n\n".utf8)
 
     let parser = EventParser()
 
@@ -185,7 +185,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testAllowsEmptyValuesForFieldsWithoutSpaces() {
-    let eventBuffer = "retry:\nevent:\nid:\ndata:\n\n".data(using: .utf8)!
+    let eventBuffer = Data("retry:\nevent:\nid:\ndata:\n\n".utf8)
 
     let parser = EventParser()
 
@@ -204,7 +204,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testAllowsEmptyValuesForFieldsWithoutColons() {
-    let eventBuffer = "retry\nevent\nid\ndata\n\n".data(using: .utf8)!
+    let eventBuffer = Data("retry\nevent\nid\ndata\n\n".utf8)
 
     let parser = EventParser()
 
@@ -223,7 +223,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testIgnoresCommentLines() {
-    let eventBuffer = ": this is a common\nevent\nid\ndata\n\n".data(using: .utf8)!
+    let eventBuffer = Data(": this is a common\nevent\nid\ndata\n\n".utf8)
 
     let parser = EventParser()
 
@@ -242,7 +242,7 @@ class EventParserTests: XCTestCase {
   }
 
   func testDispatchesOnlyCommentLines() {
-    let eventBuffer = ": ping\n\n".data(using: .utf8)!
+    let eventBuffer = Data(": ping\n\n".utf8)
 
     let parser = EventParser()
 

@@ -1,14 +1,14 @@
-// swift-tools-version:5.4
+// swift-tools-version:6.2
 
 import PackageDescription
 
 let package = Package(
   name: "Sunday",
   platforms: [
-    .iOS(.v14),
-    .tvOS(.v14),
-    .watchOS(.v7),
-    .macOS(.v11)
+    .iOS(.v18),
+    .tvOS(.v18),
+    .watchOS(.v11),
+    .macOS(.v15)
   ],
   products: [
     .library(
@@ -21,10 +21,9 @@ let package = Package(
     ),
   ],
   dependencies: [
-    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.5.0")),
+    .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.5.3")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
-    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "4.0.0")),
-    .package(url: "https://github.com/groue/Semaphore.git", .upToNextMinor(from: "0.1.0"))
+    .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "4.0.0"))
   ],
   targets: [
     .target(
@@ -32,8 +31,7 @@ let package = Package(
       dependencies: [
         "Regex",
         "PotentCodables",
-        .product(name: "ScreamURITemplate", package: "uritemplate"),
-        .product(name: "Semaphore", package: "semaphore")
+        .product(name: "ScreamURITemplate", package: "uritemplate")
       ]
     ),
     .target(

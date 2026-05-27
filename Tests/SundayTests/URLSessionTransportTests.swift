@@ -15,13 +15,14 @@
  */
 
 import PotentCodables
+import Synchronization
 import XCTest
 
 @testable import Sunday
 @testable import SundayServer
 
 
-class NetworkRequestFactoryTests: XCTestCase {
+class URLSessionTransportTests: XCTestCase {
 
 
   //
@@ -31,14 +32,14 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testEnsureDefaultsCanBeOverridden() {
 
-    let requestFactory = NetworkRequestFactory(
+    let transport = URLSessionTransport(
       baseURL: "http://example.com",
       mediaTypeEncoders: MediaTypeEncoders.Builder().build(),
       mediaTypeDecoders: MediaTypeDecoders.Builder().build()
     )
 
-    XCTAssertNil(try? requestFactory.mediaTypeEncoders.find(for: .json))
-    XCTAssertNil(try? requestFactory.mediaTypeDecoders.find(for: .json))
+    XCTAssertNil(try? transport.mediaTypeEncoders.find(for: .json))
+    XCTAssertNil(try? transport.mediaTypeDecoders.find(for: .json))
   }
 
 
@@ -49,10 +50,10 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testEncodesQueryParameters() async throws {
 
-    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
 
     let request =
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         queryParameters: ["limit": 5, "search": "1 & 2"],
@@ -64,13 +65,13 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testFailsWhenNoQueryParamEncoderIsRegisteredAndQueryParamsAreProvided() async throws {
 
-    let requestFactory = NetworkRequestFactory(
+    let transport = URLSessionTransport(
       baseURL: "http://example.com",
       mediaTypeEncoders: MediaTypeEncoders.Builder().build()
     )
 
     try await XCTAssertThrowsError(
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         queryParameters: ["limit": 5, "search": "1 & 2"],
@@ -89,10 +90,10 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testAddsCustomHeaders() async throws {
 
-    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
 
     let request =
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -108,10 +109,10 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testAddsAcceptHeader() async throws {
 
-    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
 
     let request =
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -123,13 +124,13 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testFailsIfNoneOfTheAcceptTypesHasADecoder() async throws {
 
-    let requestFactory = NetworkRequestFactory(
+    let transport = URLSessionTransport(
       baseURL: "http://example.com",
       mediaTypeDecoders: MediaTypeDecoders.Builder().build()
     )
 
     try await XCTAssertThrowsError(
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -148,13 +149,13 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testFailsIfNoneOfTheContentTypesHasAnEncoder() async throws {
 
-    let requestFactory = NetworkRequestFactory(
+    let transport = URLSessionTransport(
       baseURL: "http://example.com",
       mediaTypeEncoders: MediaTypeEncoders.Builder().build()
     )
 
     try await XCTAssertThrowsError(
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .get,
         pathTemplate: "/api",
         body: "a body",
@@ -173,25 +174,25 @@ class NetworkRequestFactoryTests: XCTestCase {
 
   func testAttachesBodyEncodedByContentType() async throws {
 
-    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
 
     let request =
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .post,
         pathTemplate: "/api",
         body: ["a": 5],
         contentTypes: [.json]
       )
 
-    XCTAssertEqual(request.httpBody, #"{"a":5}"#.data(using: .utf8))
+    XCTAssertEqual(request.httpBody, Data(#"{"a":5}"#.utf8))
   }
 
   func testSetContentTypeWhenBodyIsNonExistent() async throws {
 
-    let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
 
     let request =
-      try await requestFactory.request(
+      try await transport.transportRequest(
         method: .post,
         pathTemplate: "/api",
         body: Empty.none,
@@ -232,10 +233,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     let result: Tester =
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -263,10 +264,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     try await XCTAssertThrowsError(
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -297,10 +298,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     try await XCTAssertThrowsError(
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -322,7 +323,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { _, res in
           let headers = [HTTP.StdHeaders.contentType: ["bad/x-unknown"]]
-          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8) ?? Data())
+          res.send(status: .ok, headers: headers, body: Data("[]".utf8))
         }
       }
     }
@@ -333,10 +334,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     try await XCTAssertThrowsError(
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -358,7 +359,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { _, res in
           let headers = [HTTP.StdHeaders.contentType: ["application/x-unknown"]]
-          res.send(status: .ok, headers: headers, body: "[]".data(using: .utf8) ?? Data())
+          res.send(status: .ok, headers: headers, body: Data("[]".utf8))
         }
       }
     }
@@ -369,10 +370,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     try await XCTAssertThrowsError(
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -394,7 +395,7 @@ class NetworkRequestFactoryTests: XCTestCase {
       Path("/api") {
         GET { _, res in
           let headers = [HTTP.StdHeaders.contentType: [MediaType.json.value]]
-          res.send(status: .ok, headers: headers, body: "bad".data(using: .utf8) ?? Data())
+          res.send(status: .ok, headers: headers, body: Data("bad".utf8))
         }
       }
     }
@@ -405,10 +406,10 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
     try await XCTAssertThrowsError(
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "/api",
         body: Empty.none,
@@ -440,9 +441,9 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
-    try await requestFactory.result(
+    try await transport.result(
       method: .post,
       pathTemplate: "/api",
       pathParameters: nil,
@@ -472,13 +473,13 @@ class NetworkRequestFactoryTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let requestFactory = NetworkRequestFactory(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
 
-    let (data, _) = try await requestFactory.response(
+    let response = try await transport.transportResponse(
       request: URLRequest(url: try XCTUnwrap(URL(string: "/api", relativeTo: serverURL)))
     )
 
-    XCTAssertEqual(String(data: data ?? Data(), encoding: .utf8), "[]")
+    XCTAssertEqual(response.statusCode, 200)
   }
 
 
@@ -487,35 +488,53 @@ class NetworkRequestFactoryTests: XCTestCase {
   //
 
 
-  class TestProblem: Problem {
+  struct TestProblem: Problem {
 
-    static let type = URL(string: "http://example.com/test")!
+    static let typeURL = URL(string: "http://example.com/test")!
     static let statusCode = HTTP.StatusCode.badRequest
 
+    let type: URL
+    let title: String
+    let status: Int
+    let detail: String?
+    let instance: URL?
+    let parameters: [String: AnyValue]?
     let extra: String
 
     init(extra: String, instance: URL? = nil) {
+      self.type = Self.typeURL
+      self.title = "Test Problem"
+      self.status = Self.statusCode.rawValue
+      self.detail = "A Test Problem"
+      self.instance = instance
+      self.parameters = nil
       self.extra = extra
-      super.init(
-        type: Self.type,
-        title: "Test Problem",
-        statusCode: Self.statusCode,
-        detail: "A Test Problem",
-        instance: instance,
-        parameters: nil
-      )
     }
 
-    required init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
+      let problem = try GenericProblem(from: decoder)
       let container = try decoder.container(keyedBy: AnyCodingKey.self)
-      extra = try container.decode(String.self, forKey: AnyCodingKey("extra"))
-      try super.init(from: decoder)
+      self.type = problem.type
+      self.title = problem.title
+      self.status = problem.status
+      self.detail = problem.detail
+      self.instance = problem.instance
+      self.parameters = nil
+      self.extra = try container.decode(String.self, forKey: AnyCodingKey("extra"))
     }
 
-    override func encode(to encoder: Encoder) throws {
+    func encode(to encoder: Encoder) throws {
+      let problem = GenericProblem(
+        type: type,
+        title: title,
+        status: status,
+        detail: detail,
+        instance: instance,
+        parameters: parameters
+      )
+      try problem.encode(to: encoder)
       var container = encoder.container(keyedBy: AnyCodingKey.self)
       try container.encode(extra, forKey: AnyCodingKey("extra"))
-      try super.encode(to: encoder)
     }
 
   }
@@ -543,13 +562,13 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
-    requestFactory.registerProblem(type: TestProblem.type, problemType: TestProblem.self)
+    ProblemRegistration(type: TestProblem.typeURL, problemType: TestProblem.self).register(on: transport)
 
     do {
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "problem",
         pathParameters: nil,
@@ -564,13 +583,13 @@ class NetworkRequestFactoryTests: XCTestCase {
     catch {
       XCTAssertTrue(type(of: error) == TestProblem.self, "\(error) is not a TestProblem")
       if let problem = error as? TestProblem {
-        XCTAssertEqual(problem.type, problem.type)
-        XCTAssertEqual(problem.title, problem.title)
-        XCTAssertEqual(problem.status, problem.status)
-        XCTAssertEqual(problem.detail, problem.detail)
-        XCTAssertEqual(problem.instance, problem.instance)
+        XCTAssertEqual(problem.type, testProblem.type)
+        XCTAssertEqual(problem.title, testProblem.title)
+        XCTAssertEqual(problem.status, testProblem.status)
+        XCTAssertEqual(problem.detail, testProblem.detail)
+        XCTAssertEqual(problem.instance, testProblem.instance)
         XCTAssertNil(problem.parameters)
-        XCTAssertEqual(problem.extra, problem.extra)
+        XCTAssertEqual(problem.extra, testProblem.extra)
       }
     }
   }
@@ -598,11 +617,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
     do {
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "problem",
         pathParameters: nil,
@@ -615,14 +634,14 @@ class NetworkRequestFactoryTests: XCTestCase {
       XCTFail("Request should have thrown problem")
     }
     catch {
-      XCTAssertTrue(type(of: error) == Problem.self, "Error is not a Problem")
-      if let problem = error as? Problem {
-        XCTAssertEqual(problem.type, problem.type)
-        XCTAssertEqual(problem.title, problem.title)
-        XCTAssertEqual(problem.status, problem.status)
-        XCTAssertEqual(problem.detail, problem.detail)
-        XCTAssertEqual(problem.instance, problem.instance)
-        XCTAssertEqual(problem.parameters?["extra"], problem.parameters?["extra"])
+      XCTAssertTrue(type(of: error) == GenericProblem.self, "\(error) is not a GenericProblem")
+      if let problem = error as? GenericProblem {
+        XCTAssertEqual(problem.type, testProblem.type)
+        XCTAssertEqual(problem.title, testProblem.title)
+        XCTAssertEqual(problem.status, testProblem.status)
+        XCTAssertEqual(problem.detail, testProblem.detail)
+        XCTAssertEqual(problem.instance, testProblem.instance)
+        XCTAssertEqual(problem.parameters?["extra"], AnyValue.string(testProblem.extra))
       }
     }
   }
@@ -648,11 +667,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
     do {
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "problem",
         pathParameters: nil,
@@ -665,11 +684,11 @@ class NetworkRequestFactoryTests: XCTestCase {
       XCTFail("Request should have thrown problem")
     }
     catch {
-      XCTAssertTrue(type(of: error) == Problem.self, "Error is not a Problem")
-      if let problem = error as? Problem {
-        XCTAssertEqual(problem.type, problem.type)
-        XCTAssertEqual(problem.title, problem.title)
-        XCTAssertEqual(problem.status, problem.status)
+      XCTAssertTrue(type(of: error) == HTTP.StatusProblem.self, "\(error) is not a StatusProblem")
+      if let problem = error as? HTTP.StatusProblem {
+        XCTAssertEqual(problem.type, URL(string: "about:blank"))
+        XCTAssertEqual(problem.title, HTTP.statusText[.badRequest])
+        XCTAssertEqual(problem.status, HTTP.StatusCode.badRequest.rawValue)
         XCTAssertNil(problem.detail)
         XCTAssertNil(problem.instance)
         XCTAssertNil(problem.parameters)
@@ -698,11 +717,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
     do {
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "problem",
         pathParameters: nil,
@@ -715,11 +734,11 @@ class NetworkRequestFactoryTests: XCTestCase {
       XCTFail("Request should have thrown problem")
     }
     catch {
-      XCTAssertTrue(type(of: error) == Problem.self, "Error is not a Problem")
-      if let problem = error as? Problem {
-        XCTAssertEqual(problem.type, problem.type)
-        XCTAssertEqual(problem.title, problem.title)
-        XCTAssertEqual(problem.status, problem.status)
+      XCTAssertTrue(type(of: error) == HTTP.StatusProblem.self, "\(error) is not a StatusProblem")
+      if let problem = error as? HTTP.StatusProblem {
+        XCTAssertEqual(problem.type, URL(string: "about:blank"))
+        XCTAssertEqual(problem.title, HTTP.statusText[.badRequest])
+        XCTAssertEqual(problem.status, HTTP.StatusCode.badRequest.rawValue)
         XCTAssertNil(problem.detail)
         XCTAssertNil(problem.instance)
         XCTAssertNil(problem.parameters)
@@ -748,11 +767,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL, mediaTypeDecoders: MediaTypeDecoders.Builder().build())
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL, mediaTypeDecoders: MediaTypeDecoders.Builder().build())
+    defer { transport.close() }
 
     do {
-      try await requestFactory.result(
+      try await transport.result(
         method: .get,
         pathTemplate: "problem",
         pathParameters: nil,
@@ -793,15 +812,15 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
-    requestFactory.registerProblem(type: TestProblem.type, problemType: TestProblem.self)
+    transport.registerProblem(type: TestProblem.typeURL, problemType: TestProblem.self)
 
     do {
       let result =
         try await nilifyResponse(statuses: [], problemTypes: [TestProblem.self]) {
-          try await requestFactory.result(
+          try await transport.result(
             method: .get,
             pathTemplate: "problem",
             pathParameters: nil,
@@ -843,15 +862,15 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
-    requestFactory.registerProblem(type: TestProblem.type, problemType: TestProblem.self)
+    transport.registerProblem(type: TestProblem.typeURL, problemType: TestProblem.self)
 
     do {
       let result =
         try await nilifyResponse(statusCodes: [TestProblem.statusCode], problemTypes: []) {
-          try await requestFactory.result(
+          try await transport.result(
             method: .get,
             pathTemplate: "problem",
             pathParameters: nil,
@@ -873,7 +892,177 @@ class NetworkRequestFactoryTests: XCTestCase {
   // MARK: Event Source/Stream Building
   //
 
-  func testEventSourceBuilding() throws {
+  func testEventSourceDoesNotRetainTransport() {
+
+    weak var weakTransport: URLSessionTransport?
+
+    do {
+      let transport = URLSessionTransport(baseURL: "http://example.com")
+      weakTransport = transport
+
+      _ = transport.eventSource(
+        method: .get,
+        pathTemplate: "/events",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: Empty.none,
+        contentTypes: [.json],
+        acceptTypes: [.json],
+        headers: nil
+      )
+    }
+
+    XCTAssertNil(weakTransport)
+  }
+
+  func testDirectEventSourceIsNotRetainedByTransport() {
+
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+    defer { transport.close() }
+
+    weak var weakEventSource: EventSource?
+
+    do {
+      let eventSource = transport.eventSource(
+        method: .get,
+        pathTemplate: "/events",
+        pathParameters: nil,
+        queryParameters: nil,
+        body: Empty.none,
+        contentTypes: [.json],
+        acceptTypes: [.json],
+        headers: nil
+      )
+      weakEventSource = eventSource
+    }
+
+    XCTAssertNil(weakEventSource)
+  }
+
+  func testEventStreamDoesNotRetainTransport() {
+
+    weak var weakTransport: URLSessionTransport?
+
+    do {
+      let transport = URLSessionTransport(baseURL: "http://example.com")
+      weakTransport = transport
+
+      _ =
+        transport.eventStream(
+          method: .get,
+          pathTemplate: "/events",
+          pathParameters: nil,
+          queryParameters: nil,
+          body: Empty.none,
+          contentTypes: [.json],
+          acceptTypes: [.json],
+          headers: nil,
+          decoder: { _, _, _, _, _ in "unexpected" }
+        ) as AsyncStream<String>
+    }
+
+    XCTAssertNil(weakTransport)
+  }
+
+  func testEventStreamCancellationBeforeSetupDoesNotStartConnection() async throws {
+
+    let requestX = expectation(description: "event stream request should not be built")
+    requestX.isInverted = true
+
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+    defer { transport.close() }
+
+    let eventStream =
+      transport.eventStream(
+        decoder: { _, _, _, _, _ in "unexpected" },
+        from: {
+          try await Task.sleep(for: .milliseconds(200))
+          requestX.fulfill()
+          return nil
+        }
+      ) as AsyncStream<String>
+
+    let consumeTask = Task {
+      var iterator = eventStream.makeAsyncIterator()
+      _ = await iterator.next()
+    }
+
+    consumeTask.cancel()
+    _ = await consumeTask.result
+
+    await fulfillment(of: [requestX], timeout: 0.4)
+  }
+
+  func testEventStreamTransportCloseBeforeSetupDoesNotStartConnection() async throws {
+
+    let requestX = expectation(description: "event stream request should not be built")
+    requestX.isInverted = true
+    let consumeX = expectation(description: "event stream should finish")
+
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+
+    let eventStream =
+      transport.eventStream(
+        decoder: { _, _, _, _, _ in "unexpected" },
+        from: {
+          try await Task.sleep(for: .milliseconds(200))
+          requestX.fulfill()
+          return nil
+        }
+      ) as AsyncStream<String>
+
+    let consumeTask = Task {
+      var iterator = eventStream.makeAsyncIterator()
+      _ = await iterator.next()
+      consumeX.fulfill()
+    }
+
+    transport.close()
+
+    await fulfillment(of: [consumeX], timeout: 1.0)
+    consumeTask.cancel()
+    _ = await consumeTask.result
+    await fulfillment(of: [requestX], timeout: 0.4)
+  }
+
+  func testEventStreamSetupClosesEventSourceWhenCancelledAfterConnect() async throws {
+
+    let jsonDecoder = try XCTUnwrap(MediaTypeDecoders.default.find(for: .json) as? TextMediaTypeDecoder)
+    let shouldCancelCallCount = Mutex(0)
+    let setup = URLSessionTransportEventStreamSetup()
+    let eventSource =
+      EventSource { _ in
+        URLSession.DataEventStream(events: AsyncThrowingStream { _ in })
+      }
+
+    let eventStream =
+      AsyncStream(String.self) { continuation in
+        let setupTask =
+          setup.start(
+            eventSource: eventSource,
+            continuation: continuation,
+            shouldCancel: {
+              shouldCancelCallCount.withLock { callCount in
+                callCount += 1
+                return callCount >= 4
+              }
+            },
+            jsonDecoder: jsonDecoder,
+            decoder: { _, _, _, _, _ in "unexpected" }
+          )
+        setup.store(task: setupTask)
+      }
+
+    var iterator = eventStream.makeAsyncIterator()
+    let result = await iterator.next()
+
+    XCTAssertNil(result)
+    let readyState = await eventSource.readyState
+    XCTAssertEqual(readyState, .closed)
+  }
+
+  @MainActor
+  func testEventSourceBuilding() async throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/events") {
@@ -883,16 +1072,16 @@ class NetworkRequestFactoryTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
-            res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("event: test\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
-            res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("id: 123\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
-            res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("data: {\"some\":\r".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
-            res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("data: \"test data\"}\n\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
             res.finish(trailers: [:])
@@ -911,10 +1100,10 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
-    let eventSource = requestFactory.eventSource(
+    let eventSource = transport.eventSource(
       method: .get,
       pathTemplate: "/events",
       pathParameters: nil,
@@ -925,21 +1114,24 @@ class NetworkRequestFactoryTests: XCTestCase {
       headers: nil
     )
 
-    eventSource.addEventListener(for: "test") { _, _, _ in
-      eventSource.close()
+    await eventSource.addEventListener(for: "test") { _, _, _ in
+      Task { await eventSource.close() }
       completeX.fulfill()
     }
 
-    eventSource.connect()
+    await eventSource.connect()
 
-    waitForExpectations { _ in
-      eventSource.close()
-    }
+    await fulfillment(of: [completeX], timeout: 30)
+    await eventSource.close()
   }
 
   func testEventStreamBuilding() async throws {
 
-    struct TestEvent: Codable {
+    enum Timeout: Error {
+      case expired
+    }
+
+    struct TestEvent: Codable, Sendable {
       var some: String
     }
 
@@ -951,16 +1143,16 @@ class NetworkRequestFactoryTests: XCTestCase {
             HTTP.StdHeaders.transferEncoding: ["chunked"],
           ])
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(100)) {
-            res.send(chunk: "event: test\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("event: test\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(200)) {
-            res.send(chunk: "id: 123\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("id: 123\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(300)) {
-            res.send(chunk: "data: {\"some\":\r".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("data: {\"some\":\r".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(400)) {
-            res.send(chunk: "data: \"test data\"}\n\n".data(using: .utf8) ?? Data())
+            res.send(chunk: Data("data: \"test data\"}\n\n".utf8))
           }
           res.server.queue.asyncAfter(deadline: .now() + .milliseconds(500)) {
             res.finish(trailers: [:])
@@ -977,11 +1169,11 @@ class NetworkRequestFactoryTests: XCTestCase {
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
 
-    let requestFactory = NetworkRequestFactory(baseURL: baseURL)
-    defer { requestFactory.close() }
+    let transport = URLSessionTransport(baseURL: baseURL)
+    defer { transport.close() }
 
     let eventStream =
-      requestFactory.eventStream(
+      transport.eventStream(
         method: .get,
         pathTemplate: "/events",
         pathParameters: nil,
@@ -1000,15 +1192,67 @@ class NetworkRequestFactoryTests: XCTestCase {
         }
       ) as AsyncStream<TestEvent>
 
-    var eventStreamIter = eventStream.makeAsyncIterator()
-    let event = await eventStreamIter.next()
-    XCTAssertNotNil(event, "no event returned")
-    XCTAssertEqual(event!.some, "test data")
+    let result = try await withThrowingTaskGroup(of: [TestEvent].self) { group in
+      group.addTask {
+        var iterator = eventStream.makeAsyncIterator()
+        var events: [TestEvent] = []
+        if let event = await iterator.next() {
+          events.append(event)
+        }
 
-    // Ensure closing factory is gracefully handled by spawned EventSource
-    requestFactory.close()
+        // Ensure closing transport is gracefully handled by spawned EventSource
+        transport.close()
 
-    try await Task.sleep(nanoseconds: UInt64(0.5 * 1_000_000_000))
+        if let event = await iterator.next() {
+          events.append(event)
+        }
+        return events
+      }
+      group.addTask {
+        try await Task.sleep(for: .seconds(30))
+        throw Timeout.expired
+      }
+
+      let result = try await group.next()!
+      group.cancelAll()
+      return result
+    }
+
+    XCTAssertEqual(result.count, 1)
+    XCTAssertEqual(result.first?.some, "test data")
+  }
+
+  func testEventStreamFinishesWhenEventSourceCloses() async throws {
+
+    enum Timeout: Error {
+      case expired
+    }
+
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+    defer { transport.close() }
+
+    let eventStream =
+      transport.eventStream(
+        decoder: { _, _, _, _, _ in "unexpected" },
+        from: { nil }
+      ) as AsyncStream<String>
+
+    let result = try await withThrowingTaskGroup(of: String?.self) { group in
+      group.addTask {
+        var iterator = eventStream.makeAsyncIterator()
+        return await iterator.next()
+      }
+      group.addTask {
+        try await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000))
+        throw Timeout.expired
+      }
+
+      let result = try await group.next()!
+      group.cancelAll()
+      return result
+    }
+
+    XCTAssertNil(result)
   }
 
 }

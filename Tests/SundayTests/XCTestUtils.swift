@@ -20,7 +20,7 @@ import XCTest
 public func XCTAssertThrowsError<T>(
   _ expression: @autoclosure () async throws -> T,
   _ message: @autoclosure () -> String = "did not throw an error",
-  _ file: StaticString = #file,
+  _ file: StaticString = #filePath,
   _ line: UInt = #line,
   _ errorHandler: (Error) -> Void = { _ in /* do nothing */ }
 ) async throws {

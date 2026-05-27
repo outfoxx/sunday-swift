@@ -16,14 +16,11 @@
 
 import Foundation
 
-public class ResultResponse<T> {
 
-  public let result: T
-  public let response: HTTPURLResponse
+/// Adapts an outbound request before it is executed by a transport.
+public protocol RequestAdapter: Sendable {
 
-  public init(result: T, response: HTTPURLResponse) {
-    self.result = result
-    self.response = response
-  }
+  /// Returns an adapted request for execution.
+  func adapt(transport: some Transport, urlRequest: URLRequest) async throws -> URLRequest
 
 }

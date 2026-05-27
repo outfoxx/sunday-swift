@@ -19,7 +19,7 @@ import Foundation
 
 public struct HTTP {
 
-  public enum Method: String {
+  public enum Method: String, Sendable {
     case options = "OPTIONS"
     case get = "GET"
     case head = "HEAD"
@@ -31,7 +31,7 @@ public struct HTTP {
     case connect = "CONNECT"
   }
 
-  public enum StatusCode: Int, Codable, ExpressibleByIntegerLiteral {
+  public enum StatusCode: Int, Codable, ExpressibleByIntegerLiteral, Sendable {
     case `continue` = 100
     case switchingProtocols = 101
 
@@ -159,7 +159,7 @@ public struct HTTP {
 }
 
 
-public typealias Parameters = [String: Any?]
+public typealias Parameters = [String: (any Sendable)?]
 
 
 public extension URL {

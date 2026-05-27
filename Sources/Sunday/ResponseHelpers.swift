@@ -19,7 +19,7 @@ import Foundation
 
 public func nilifyResponse<R>(
   statusCodes: [HTTP.StatusCode],
-  problemTypes: [Problem.Type] = [],
+  problemTypes: [any Problem.Type] = [],
   block: () async throws -> R
 ) async throws -> R? {
   return try await nilifyResponse(statuses: statusCodes.map(\.rawValue), problemTypes: problemTypes, block: block)
@@ -27,16 +27,17 @@ public func nilifyResponse<R>(
 
 public func nilifyResponse<R>(
   statuses: [Int] = [404],
-  problemTypes: [Problem.Type] = [],
+  problemTypes: [any Problem.Type] = [],
   block: () async throws -> R
 ) async throws -> R? {
   do {
     return try await block()
   }
   catch {
+    // Statuses and problem types are OR-combined: either match is enough to nilify the response.
     guard
-      let problem = error as? Problem,
-      statuses.contains(problem.status) || problemTypes.contains(where: { $0 == type(of: error) })
+      let problem = error as? any Problem,
+      statuses.contains(problem.status) || problemTypes.contains(where: { $0 == type(of: problem) })
     else {
       throw error
     }

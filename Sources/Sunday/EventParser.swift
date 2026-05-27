@@ -17,7 +17,7 @@
 import Foundation
 
 
-struct EventInfo {
+struct EventInfo: Sendable {
   var retry: String?
   var event: String?
   var id: String?
@@ -29,6 +29,10 @@ class EventParser {
   static let stringEncoding: String.Encoding = .utf8
 
   private var unprocessedData: Data?
+
+  func reset() {
+    unprocessedData = nil
+  }
 
   func process(data: Data, dispatcher: (EventInfo) throws -> Void) rethrows {
 
@@ -106,12 +110,10 @@ class EventParser {
 
         // if next is line-feed, and pattern
         // repeats, we found a separator.
-        if
-          data.count > idx + 3,
-          data[idx + 1] == 0xA,
-          data[idx + 2] == 0xD,
-          data[idx + 3] == 0xA
-        {
+        if data.count > idx + 3,
+           data[idx + 1] == 0xA,
+           data[idx + 2] == 0xD,
+           data[idx + 3] == 0xA {
           return idx ..< idx + 4
         }
 

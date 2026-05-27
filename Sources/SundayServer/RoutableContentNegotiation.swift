@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-//  swiftlint:disable identifier_name
-
 import Foundation
 import Sunday
 
 
 /// Utility to set `RequestDecoding` and `ResponseEncoding` as negotiated based on
 /// `Content-Type` and `Accept` headers.
-///
-public func ContentNegotiation(
+public func ContentNegotiation( // swiftlint:disable:this identifier_name
   decoders: MediaTypeDecoders = .default,
   encoders: MediaTypeEncoders = .default,
   @RoutableBuilder buildRoutable: () -> Routable

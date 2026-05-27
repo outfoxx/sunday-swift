@@ -16,7 +16,7 @@
 
 import Foundation
 
-public typealias PathEncoder = (Any) -> String
+public typealias PathEncoder = @Sendable (Any) -> String
 
 
 public typealias PathEncoders = [String: PathEncoder]
@@ -39,7 +39,7 @@ public extension PathEncoders {
     return self[typeName]?(value)
   }
 
-  func add<T>(converter: @escaping (T) -> String) -> PathEncoders {
+  func add<T>(converter: @escaping @Sendable (T) -> String) -> PathEncoders {
     // swiftlint:disable:next force_cast
     let encoder: PathEncoder = { value in converter((value as! T)) }
     return merging([String(describing: T.self): encoder], uniquingKeysWith: { $1 })

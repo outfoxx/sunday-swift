@@ -20,7 +20,7 @@ import Sunday
 
 public extension HTTP {
 
-  struct Request {
+  struct Request: Sendable {
 
     public let method: HTTP.Method
     public let url: URLComponents
@@ -49,7 +49,7 @@ public extension HTTP {
 
   struct Response {
 
-    public struct Status: CustomStringConvertible {
+    public struct Status: CustomStringConvertible, Sendable {
       public let code: Int
       public let info: String
 

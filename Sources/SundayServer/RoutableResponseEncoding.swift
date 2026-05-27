@@ -24,7 +24,7 @@ public struct ResponseEncoding: Routable {
 
   /// Scheme use to encode response values
   ///
-  public enum Scheme {
+  public enum Scheme: Sendable {
 
     /// Encodes values using a negotiated media type and
     /// updates the `Content-Type` header accordingly.
@@ -111,7 +111,7 @@ public struct ResponseEncoding: Routable {
 }
 
 
-class EncodingHTTPResponse: HTTPResponse {
+final class EncodingHTTPResponse: HTTPResponse {
 
   let response: HTTPResponse
   let encoders: MediaTypeEncoders
@@ -125,7 +125,7 @@ class EncodingHTTPResponse: HTTPResponse {
 
   var state: HTTPResponseState { response.state }
 
-  var properties: [String: Any] {
+  var properties: [String: any Sendable] {
     get { return response.properties }
     set { response.properties = newValue }
   }
@@ -172,7 +172,6 @@ class EncodingHTTPResponse: HTTPResponse {
     do {
 
       let encoder = try encoders.find(for: contentType)
-
       let data = try encoder.encode(value)
 
       var headers = headers

@@ -16,12 +16,13 @@
 
 import Foundation
 @testable import Sunday
+import Synchronization
 import XCTest
 
 
-class NetworkRequestAdapterTests: XCTestCase {
+class RequestAdapterTests: XCTestCase {
 
-  static let requestFactory = NetworkRequestFactory(baseURL: "http://example.com")
+  static let transport = URLSessionTransport(baseURL: "http://example.com")
   static let exampleURL = URL(string: "http://example.com")!
 
   func testHostMatchingAdapter() async throws {
@@ -30,33 +31,33 @@ class NetworkRequestAdapterTests: XCTestCase {
     let adapter = HostMatchingAdapter(hostname: "example.com", adapter: marker)
 
     let matched = try await adapter.adapt(
-      requestFactory: Self.requestFactory,
+      transport: Self.transport,
       urlRequest: URLRequest(url: Self.exampleURL)
     )
     XCTAssertTrue(matched.isMarked)
 
     let unmatched = try await adapter.adapt(
-      requestFactory: Self.requestFactory,
+      transport: Self.transport,
       urlRequest: URLRequest(url: URL(string: "http://other.com")!)
     )
     XCTAssertFalse(unmatched.isMarked)
 
 
-    let setAdapater = HostMatchingAdapter(hostnames: ["example.com", "api.example.com"], adapter: marker)
+    let setAdapter = HostMatchingAdapter(hostnames: ["example.com", "api.example.com"], adapter: marker)
 
     let setMatched =
-      try await setAdapater.adapt(
-        requestFactory: Self.requestFactory,
+      try await setAdapter.adapt(
+        transport: Self.transport,
         urlRequest: URLRequest(url: URL(string: "http://api.example.com")!)
       )
     XCTAssertTrue(setMatched.isMarked)
 
-    let setUnatched =
+    let setUnmatched =
       try await adapter.adapt(
-        requestFactory: Self.requestFactory,
+        transport: Self.transport,
         urlRequest: URLRequest(url: URL(string: "http://other.example.com")!)
       )
-    XCTAssertFalse(setUnatched.isMarked)
+    XCTAssertFalse(setUnmatched.isMarked)
   }
 
   func testTokenAuth() async throws {
@@ -64,38 +65,72 @@ class NetworkRequestAdapterTests: XCTestCase {
     let adapter = HeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", token: "12345")
 
     let request =
-      try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345")
   }
 
   func testRefreshingTokenAuth() async throws {
 
-    var count = 0
+    let count = Mutex(0)
 
-    let refresher = { (_: NetworkRequestFactory) -> TokenAuthorization in
+    let refresher: @Sendable (any Transport) -> TokenAuthorization = { _ in
 
-      count += 1
+      let value = count.withLock { count in
+        count += 1
+        return count
+      }
 
-      return TokenAuthorization(token: "\(count)", expires: Date().addingTimeInterval(0.2))
+      return TokenAuthorization(token: "\(value)", expires: Date().addingTimeInterval(0.2))
     }
 
     let adapter = RefreshingHeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", refresh: refresher)
 
     let request1 =
-      try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
 
     let request2 =
-    try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
 
     try await Task.sleep(nanoseconds: UInt64(0.25 * 1_000_000_000))
 
     let request3 =
-      try await adapter.adapt(requestFactory: Self.requestFactory, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
 
     XCTAssertEqual(request1.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
     XCTAssertEqual(request2.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
     XCTAssertEqual(request3.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 2")
+  }
+
+  func testRefreshingTokenAuthSharesConcurrentRefresh() async throws {
+
+    let count = Mutex(0)
+
+    let refresher: @Sendable (any Transport) async throws -> TokenAuthorization = { _ in
+
+      try await Task.sleep(for: .milliseconds(100))
+
+      let value = count.withLock { count in
+        count += 1
+        return count
+      }
+
+      return TokenAuthorization(token: "\(value)", expires: Date().addingTimeInterval(60))
+    }
+
+    let adapter = RefreshingHeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", refresh: refresher)
+
+    async let request1 =
+      adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+
+    async let request2 =
+      adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+
+    let requests = try await [request1, request2]
+
+    XCTAssertEqual(requests[0].value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
+    XCTAssertEqual(requests[1].value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
+    XCTAssertEqual(count.withLock { $0 }, 1)
   }
 
 }
@@ -107,9 +142,9 @@ extension URLRequest {
 
 }
 
-struct MarkingAdapter: NetworkRequestAdapter {
+struct MarkingAdapter: RequestAdapter {
 
-  func adapt(requestFactory: NetworkRequestFactory, urlRequest: URLRequest) -> URLRequest {
+  func adapt(transport: some Transport, urlRequest: URLRequest) -> URLRequest {
     return urlRequest.adding(httpHeaders: ["x-marked": ["true"]])
   }
 }

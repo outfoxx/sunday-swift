@@ -17,7 +17,7 @@
 import Foundation
 
 
-public struct Empty {
+public struct Empty: Sendable {
 
   public static let instance = Empty()
 

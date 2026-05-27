@@ -23,7 +23,7 @@ import Regex
  * text along with equality and compatibility comparisons
  * that properly account for types with parameters.
  **/
-public struct MediaType {
+public struct MediaType: Sendable {
 
   public enum Error: Swift.Error {
     case invalid
@@ -33,7 +33,7 @@ public struct MediaType {
     case charSet = "charset"
   }
 
-  public enum `Type`: String, CaseIterable, Equatable, Hashable, Codable {
+  public enum `Type`: String, CaseIterable, Equatable, Hashable, Codable, Sendable {
     case application
     case audio
     case example
@@ -47,7 +47,7 @@ public struct MediaType {
     case any = "*"
   }
 
-  public enum Tree: String, CaseIterable, Equatable, Hashable, Codable {
+  public enum Tree: String, CaseIterable, Equatable, Hashable, Codable, Sendable {
     case standard = ""
     case vendor = "vnd."
     case personal = "prs."
@@ -56,7 +56,7 @@ public struct MediaType {
     case any = "*"
   }
 
-  public struct Suffix: RawRepresentable, Equatable, Hashable, Codable, ExpressibleByStringLiteral {
+  public struct Suffix: RawRepresentable, Equatable, Hashable, Codable, ExpressibleByStringLiteral, Sendable {
     public var rawValue: String
 
     public init(rawValue: String) {
@@ -113,12 +113,14 @@ public struct MediaType {
     return headers.flatMap { header in header.components(separatedBy: ",") }.compactMap { MediaType($0) }
   }
 
-  private static let fullRegex = Regex(
+  nonisolated(unsafe) private static let fullRegex = Regex(
     // swiftlint:disable:next line_length
     ##"^((?:[a-z]+|\*))\/(x(?:-|\\.)|(?:(?:vnd|prs|x)\.)|\*)?([a-z0-9\-\.]+|\*)(?:\+([a-z]+))?( *(?:; *(?:(?:[\w\.-]+) *= *(?:[\w\.-]+)) *)*)$"##,
     options: [.ignoreCase]
   )
-  private static let paramRegex = Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
+
+  nonisolated(unsafe) private static let paramRegex =
+    Regex(##" *; *([\w\.-]+) *= *([\w\.-]+)"##, options: [.ignoreCase])
 
   public init(valid: String) throws {
     guard let valid = MediaType(valid) else {

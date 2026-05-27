@@ -17,7 +17,7 @@
 import Foundation
 
 
-protocol CustomHeaderConvertible {
+protocol CustomHeaderConvertible: Sendable {
   var headerDescription: String { get }
 }
 

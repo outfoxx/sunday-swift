@@ -18,7 +18,7 @@ import Foundation
 import Sunday
 
 
-public enum HTTPCookieOption {
+public enum HTTPCookieOption: Sendable {
   case domain(String)
   case expires(Date)
   case httpOnly(Bool)
@@ -30,7 +30,7 @@ public enum HTTPCookieOption {
 }
 
 
-public enum HTTPResponseState {
+public enum HTTPResponseState: Sendable {
   case initial
   case headerSent
   case sendingBody
@@ -39,13 +39,13 @@ public enum HTTPResponseState {
 }
 
 
-public protocol HTTPResponse: AnyObject {
+public protocol HTTPResponse: AnyObject, Sendable {
 
   var server: HTTPServer { get }
 
   var state: HTTPResponseState { get }
 
-  var properties: [String: Any] { get set }
+  var properties: [String: any Sendable] { get set }
 
   func header(forName: String) -> String?
   func headers(forName: String) -> [String]

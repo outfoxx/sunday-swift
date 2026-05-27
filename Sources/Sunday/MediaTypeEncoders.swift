@@ -20,16 +20,16 @@ import PotentCodables
 import PotentJSON
 
 
-public protocol MediaTypeEncoder {
+public protocol MediaTypeEncoder: Sendable {
   func encode<T>(_ value: T) throws -> Data where T: Encodable
 }
 
 
-public struct MediaTypeEncoders {
+public struct MediaTypeEncoders: Sendable {
 
   public static let `default` = MediaTypeEncoders.Builder().registerDefault().build()
 
-  public struct Builder {
+  public struct Builder: Sendable {
 
     private var registered: [MediaType: MediaTypeEncoder]
 
@@ -51,6 +51,12 @@ public struct MediaTypeEncoders {
         .registerX509()
     }
 
+    /**
+     * Registers a URL form encoder.
+     *
+     * Configure the encoder before registration and do not mutate it afterward.
+     * Sunday retains and uses the encoder directly during synchronous encoding.
+     */
     public func registerURL(
       arrayEndcoding: WWWFormURLEncoder.ArrayEncoding = .unbracketed,
       boolEncoding: WWWFormURLEncoder.BoolEncoding = .literal,
@@ -82,8 +88,14 @@ public struct MediaTypeEncoders {
       return registerJSON(encoder: encoder)
     }
 
+    /**
+     * Registers a JSON encoder.
+     *
+     * Configure the encoder before registration and do not mutate it afterward.
+     * Sunday retains and uses the encoder directly during synchronous encoding.
+     */
     public func registerJSON(encoder: JSON.Encoder) -> Builder {
-      return register(encoder: encoder, forTypes: .json, .jsonStructured)
+      return register(encoder: JSONMediaTypeEncoder(encoder: encoder), forTypes: .json, .jsonStructured)
     }
 
     public func registerCBOR() -> Builder {
@@ -92,8 +104,14 @@ public struct MediaTypeEncoders {
       return registerCBOR(encoder: encoder)
     }
 
+    /**
+     * Registers a CBOR encoder.
+     *
+     * Configure the encoder before registration and do not mutate it afterward.
+     * Sunday retains and uses the encoder directly during synchronous encoding.
+     */
     public func registerCBOR(encoder: CBOR.Encoder) -> Builder {
-      return register(encoder: encoder, forTypes: .cbor)
+      return register(encoder: CBORMediaTypeEncoder(encoder: encoder), forTypes: .cbor)
     }
 
     public func registerX509() -> Builder {
@@ -132,10 +150,38 @@ public struct MediaTypeEncoders {
 }
 
 
-extension JSON.Encoder: MediaTypeEncoder {}
+// PotentCodables encoders expose mutable configuration, but this wrapper does not expose
+// the configured encoder after registration. Encoding uses the private instance directly.
+private struct JSONMediaTypeEncoder: MediaTypeEncoder {
+
+  nonisolated(unsafe) private let encoder: JSON.Encoder
+
+  init(encoder: JSON.Encoder) {
+    self.encoder = encoder
+  }
+
+  func encode<T>(_ value: T) throws -> Data where T: Encodable {
+    return try encoder.encode(value)
+  }
+
+}
 
 
-extension CBOR.Encoder: MediaTypeEncoder {}
+// PotentCodables encoders expose mutable configuration, but this wrapper does not expose
+// the configured encoder after registration. Encoding uses the private instance directly.
+private struct CBORMediaTypeEncoder: MediaTypeEncoder {
+
+  nonisolated(unsafe) private let encoder: CBOR.Encoder
+
+  init(encoder: CBOR.Encoder) {
+    self.encoder = encoder
+  }
+
+  func encode<T>(_ value: T) throws -> Data where T: Encodable {
+    return try encoder.encode(value)
+  }
+
+}
 
 
 public struct DataEncoder: MediaTypeEncoder {
