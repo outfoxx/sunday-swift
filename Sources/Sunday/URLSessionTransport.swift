@@ -58,10 +58,18 @@ public final class URLSessionTransport: Transport, Sendable {
   private let problemTypes = Mutex<[String: RegisteredProblem]>([:])
   private let state = Mutex(URLSessionTransportState())
 
+  /// Creates a URLSession-backed transport.
+  ///
+  /// - Parameters:
+  ///   - session: Session used for non-streaming requests and responses.
+  ///   - eventSession: Session used for server-sent event streams. Pass `session` when event streams
+  ///     must use the same delegate or session behavior. Pass a session created with
+  ///     `.sunday(configuration: .events(...))` or an equivalent configuration when SSE-specific
+  ///     timeout and resource settings are required.
   public init(
     baseURL: URI.Template,
     session: URLSession,
-    eventSession: URLSession? = nil,
+    eventSession: URLSession,
     adapter: RequestAdapter? = nil,
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
@@ -71,10 +79,7 @@ public final class URLSessionTransport: Transport, Sendable {
   ) {
     self.baseURL = baseURL
     self.session = session
-    guard let eventConfiguration = session.configuration.copy() as? URLSessionConfiguration else {
-      fatalError("URLSessionConfiguration.copy() returned an unexpected type")
-    }
-    self.eventSession = eventSession ?? .sunday(configuration: .events(from: eventConfiguration))
+    self.eventSession = eventSession
     self.adapter = adapter
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
@@ -105,7 +110,9 @@ public final class URLSessionTransport: Transport, Sendable {
   deinit {
     closeEventSources()
     session.close(cancelOutstandingTasks: true)
-    eventSession.close(cancelOutstandingTasks: true)
+    if eventSession !== session {
+      eventSession.close(cancelOutstandingTasks: true)
+    }
   }
 
   public func registerProblem<P: Problem>(type: URL, problemType: P.Type) {
@@ -594,7 +601,9 @@ public final class URLSessionTransport: Transport, Sendable {
   public func close(cancelOutstandingRequests: Bool = true) {
     closeEventSources()
     session.close(cancelOutstandingTasks: cancelOutstandingRequests)
-    eventSession.close(cancelOutstandingTasks: cancelOutstandingRequests)
+    if eventSession !== session {
+      eventSession.close(cancelOutstandingTasks: cancelOutstandingRequests)
+    }
   }
 
   private func register(eventSource: EventSource) -> UUID? {
