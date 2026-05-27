@@ -1263,7 +1263,7 @@ class URLSessionTransportTests: XCTestCase {
         return await iterator.next()
       }
       group.addTask {
-        try await Task.sleep(nanoseconds: UInt64(1.0 * 1_000_000_000))
+        try await Task.sleep(for: .seconds(30))
         throw Timeout.expired
       }
 
