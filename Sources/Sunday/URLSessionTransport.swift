@@ -61,11 +61,18 @@ public final class URLSessionTransport: Transport, Sendable {
   /// Creates a URLSession-backed transport.
   ///
   /// - Parameters:
+  ///   - baseURL: Base URI template used to resolve request paths.
   ///   - session: Session used for non-streaming requests and responses.
   ///   - eventSession: Session used for server-sent event streams. Pass `session` when event streams
   ///     must use the same delegate or session behavior. Pass a session created with
   ///     `.sunday(configuration: .events(...))` or an equivalent configuration when SSE-specific
   ///     timeout and resource settings are required.
+  ///   - adapter: Optional adapter applied to generated requests.
+  ///   - requestQueue: Queue used to schedule request preparation work.
+  ///   - mediaTypeEncoders: Encoders used to serialize request bodies.
+  ///   - mediaTypeDecoders: Decoders used to deserialize response bodies.
+  ///   - eventRequestTimeoutInterval: Timeout used for server-sent event requests.
+  ///   - pathEncoders: Encoders used to format path parameter values.
   public init(
     baseURL: URI.Template,
     session: URLSession,
