@@ -42,6 +42,26 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertNil(try? transport.mediaTypeDecoders.find(for: .json))
   }
 
+  func testCanUseProvidedSessionForEvents() {
+
+    let session = URLSession(configuration: .ephemeral)
+    let transport = URLSessionTransport(baseURL: "http://example.com", session: session, eventSession: session)
+
+    XCTAssertTrue(transport.eventSession === session)
+    transport.close()
+  }
+
+  func testUsesExplicitEventSessionWhenProvided() {
+
+    let session = URLSession(configuration: .ephemeral)
+    let eventSession = URLSession(configuration: .ephemeral)
+    let transport = URLSessionTransport(baseURL: "http://example.com", session: session, eventSession: eventSession)
+
+    XCTAssertTrue(transport.eventSession === eventSession)
+    XCTAssertFalse(transport.eventSession === session)
+    transport.close()
+  }
+
 
   //
   // MARK: Request Building
