@@ -59,7 +59,10 @@ public extension URLSession {
     case data(Data)
   }
 
-  struct DataEventStream: AsyncSequence<DataEvent, Error> {
+  struct DataEventStream: AsyncSequence {
+
+    public typealias Element = DataEvent
+    public typealias Failure = Error
 
     private enum Source {
       case request(URLSession, URLRequest)
