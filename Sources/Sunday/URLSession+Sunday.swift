@@ -36,13 +36,39 @@ public extension URLSession {
 
   func validatedData(for request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
 
-    let (data, response) = try await data(for: request)
+    if
+      URLProtocol.property(
+        forKey: streamingBodyRequestPropertyKey,
+        in: request
+      ) is StreamingBodyRequestProperty
+    {
+      let (responseBody, response) = try await streamingData(for: request)
+      return try validate(responseBody: responseBody, response: response)
+    }
 
+    let (responseBody, response) = try await data(for: request)
+
+    return try validate(responseBody: responseBody, response: response)
+  }
+
+  private func streamingData(for request: URLRequest) async throws -> (Data, URLResponse) {
+    let (bytes, response) = try await bytes(for: request)
+    var data = Data()
+    data.reserveCapacity(16 * 1024)
+
+    for try await byte in bytes {
+      data.append(byte)
+    }
+
+    return (data, response)
+  }
+
+  private func validate(responseBody: Data, response: URLResponse) throws -> (Data?, HTTPURLResponse) {
     guard let httpResponse = response as? HTTPURLResponse else {
       throw URLError(.badServerResponse)
     }
 
-    let responseData = data.isEmpty ? nil : data
+    let responseData = responseBody.isEmpty ? nil : responseBody
 
     if 400 ..< 600 ~= httpResponse.statusCode {
       throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(

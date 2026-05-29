@@ -130,20 +130,19 @@ public final class URLSessionTransport: Transport, Sendable {
     problemTypes.withLock { $0[type] = RegisteredProblem.erase(problemType) }
   }
 
-  public func transportRequest<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
+  public func transportRequest<RequestBody: Sendable>(
+    spec: OperationSpec<RequestBody>
   ) async throws -> URLRequest {
 
     var url =
       try baseURL.complete(
-        relative: pathTemplate,
-        parameters: try URI.Template.parameters(from: pathParameters ?? [:]),
+        relative: spec.pathTemplate,
+        parameters: try URI.Template.parameters(from: spec.pathParameters ?? [:]),
         encoders: pathEncoders
       )
 
     // Encode & add query parameters to url
-    if let queryParameters = queryParameters, !queryParameters.isEmpty {
+    if let queryParameters = spec.queryParameters, !queryParameters.isEmpty {
 
       guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
         fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
@@ -161,10 +160,10 @@ public final class URLSessionTransport: Transport, Sendable {
 
     // Build basic request
     var urlRequest = URLRequest(url: url)
-    urlRequest.httpMethod = method.rawValue
+    urlRequest.httpMethod = spec.method.rawValue
 
     // Encode and add headers
-    if let headers = headers {
+    if let headers = spec.headers {
 
       try HeaderParameters.encode(headers: headers)
         .forEach { entry in
@@ -173,7 +172,7 @@ public final class URLSessionTransport: Transport, Sendable {
     }
 
     // Determine & add accept header
-    if let acceptTypes = acceptTypes {
+    if let acceptTypes = spec.acceptTypes {
       let supportedAcceptTypes = acceptTypes.filter { mediaTypeDecoders.supports(for: $0) }
       if supportedAcceptTypes.isEmpty {
         throw SundayError.requestEncodingFailed(reason: .noSupportedAcceptTypes(acceptTypes))
@@ -184,20 +183,33 @@ public final class URLSessionTransport: Transport, Sendable {
       urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
     }
 
-    // Determine content type
-    let contentType = contentTypes?.first { mediaTypeEncoders.supports(for: $0) }
+    let preparedBody = try spec.prepareBody(mediaTypeEncoders: mediaTypeEncoders)
+    let contentType =
+      preparedBody?.contentType ??
+      spec.contentTypes?.first { mediaTypeEncoders.supports(for: $0) }
 
     // If matched, add content type (even if body is nil, to match any expected server requirements)
     if let contentType = contentType {
       urlRequest.setValue(contentType.value, forHTTPHeaderField: HTTP.StdHeaders.contentType)
     }
 
-    // Encode & add body data
-    if let body = body {
-      guard let contentType = contentType else {
-        throw SundayError.requestEncodingFailed(reason: .noSupportedContentTypes(contentTypes ?? []))
+    switch preparedBody {
+    case .data(let data, _):
+      urlRequest.httpBody = data
+    case .stream(let streamingBody, _):
+      urlRequest.httpBodyStream = try streamingBody.makeInputStream()
+      let mutableRequest = (urlRequest as NSURLRequest).mutableCopy() as? NSMutableURLRequest
+      guard let mutableRequest else {
+        throw SundayError.requestEncodingFailed(reason: .streamCreationFailed)
       }
-      urlRequest.httpBody = try mediaTypeEncoders.find(for: contentType).encode(body)
+      URLProtocol.setProperty(
+        StreamingBodyRequestProperty(body: streamingBody),
+        forKey: streamingBodyRequestPropertyKey,
+        in: mutableRequest
+      )
+      urlRequest = mutableRequest as URLRequest
+    case nil:
+      break
     }
 
     return try await adapter?.adapt(transport: self, urlRequest: urlRequest) ?? urlRequest
@@ -208,22 +220,11 @@ public final class URLSessionTransport: Transport, Sendable {
     return try await session.validatedData(for: request)
   }
 
-  private func dataResponse<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
+  private func dataResponse<RequestBody: Sendable>(
+    spec: OperationSpec<RequestBody>
   ) async throws -> (Data?, HTTPURLResponse) {
 
-    let request = try await transportRequest(
-      method: method,
-      pathTemplate: pathTemplate,
-      pathParameters: pathParameters,
-      queryParameters: queryParameters,
-      body: body,
-      contentTypes: contentTypes,
-      acceptTypes: acceptTypes,
-      headers: headers
-    )
-
+    let request = try await transportRequest(spec: spec)
     return try await dataResponse(request: request)
   }
 
@@ -231,23 +232,10 @@ public final class URLSessionTransport: Transport, Sendable {
     try await dataResponse(request: request).1
   }
 
-  public func transportResponse<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
+  public func transportResponse<RequestBody: Sendable>(
+    spec: OperationSpec<RequestBody>
   ) async throws -> HTTPURLResponse {
-
-    let request = try await transportRequest(
-      method: method,
-      pathTemplate: pathTemplate,
-      pathParameters: pathParameters,
-      queryParameters: queryParameters,
-      body: body,
-      contentTypes: contentTypes,
-      acceptTypes: acceptTypes,
-      headers: headers
-    )
-
-    return try await transportResponse(request: request)
+    try await dataResponse(spec: spec).1
   }
 
   public func parse<D: Decodable>(dataResponse: (Data?, HTTPURLResponse)) throws -> D {
@@ -348,29 +336,13 @@ public final class URLSessionTransport: Transport, Sendable {
     }
   }
 
-  public func response<B: Encodable, D: Decodable>(
-    method: HTTP.Method,
-    pathTemplate: String,
-    pathParameters: Parameters?,
-    queryParameters: Parameters?,
-    body: B?,
-    contentTypes: [MediaType]?,
-    acceptTypes: [MediaType]?,
-    headers: Parameters?
+  public func response<RequestBody: Sendable, D: Decodable>(
+    spec: OperationSpec<RequestBody>
   ) async throws -> OperationResponse<D> {
 
     do {
 
-      let dataResponse = try await dataResponse(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )
+      let dataResponse = try await dataResponse(spec: spec)
 
       let result = try parse(dataResponse: dataResponse) as D
 
@@ -382,29 +354,13 @@ public final class URLSessionTransport: Transport, Sendable {
 
   }
 
-  public func response<B>(
-    method: HTTP.Method,
-    pathTemplate: String,
-    pathParameters: Parameters?,
-    queryParameters: Parameters?,
-    body: B?,
-    contentTypes: [MediaType]?,
-    acceptTypes: [MediaType]?,
-    headers: Parameters?
-  ) async throws -> OperationResponse<Void> where B: Encodable {
+  public func response<RequestBody: Sendable>(
+    spec: OperationSpec<RequestBody>
+  ) async throws -> OperationResponse<Void> {
 
     do {
 
-      let dataResponse = try await dataResponse(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )
+      let dataResponse = try await dataResponse(spec: spec)
 
       _ = try parse(dataResponse: dataResponse) as Empty
 
@@ -416,23 +372,13 @@ public final class URLSessionTransport: Transport, Sendable {
 
   }
 
-  public func result<B: Encodable, D: Decodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
+  public func result<RequestBody: Sendable, D: Decodable>(
+    spec: OperationSpec<RequestBody>
   ) async throws -> D {
 
     do {
 
-      let dataResponse = try await dataResponse(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )
+      let dataResponse = try await dataResponse(spec: spec)
 
       return try parse(dataResponse: dataResponse)
 
@@ -470,23 +416,13 @@ public final class URLSessionTransport: Transport, Sendable {
     }
   }
 
-  public func result<B: Encodable>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters?, queryParameters: Parameters?,
-    body: B?, contentTypes: [MediaType]?, acceptTypes: [MediaType]?, headers: Parameters?
+  public func result<RequestBody: Sendable>(
+    spec: OperationSpec<RequestBody>
   ) async throws {
 
     do {
 
-      let dataResponse = try await dataResponse(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )
+      let dataResponse = try await dataResponse(spec: spec)
 
       _ = try parse(dataResponse: dataResponse) as Empty
 
@@ -499,24 +435,12 @@ public final class URLSessionTransport: Transport, Sendable {
   /// Creates a caller-owned event source for the generated request.
   ///
   /// The returned source is not retained by the transport. Callers are responsible for closing it.
-  public func eventSource<B>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil
-  ) -> EventSource where B: Encodable & Sendable {
+  public func eventSource<RequestBody: Sendable>(spec: OperationSpec<RequestBody>) -> EventSource {
 
     eventSource(from: { @Sendable [weak self] in
       guard let self else { return nil }
 
-      return try await self.transportRequest(
-        method: method,
-        pathTemplate: pathTemplate,
-        pathParameters: pathParameters,
-        queryParameters: queryParameters,
-        body: body,
-        contentTypes: contentTypes,
-        acceptTypes: acceptTypes,
-        headers: headers
-      )
+      return try await self.transportRequest(spec: spec)
     })
   }
 
@@ -539,27 +463,17 @@ public final class URLSessionTransport: Transport, Sendable {
     }
   }
 
-  public func eventStream<B, D>(
-    method: HTTP.Method, pathTemplate: String, pathParameters: Parameters? = nil, queryParameters: Parameters? = nil,
-    body: B?, contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil, headers: Parameters? = nil,
+  public func eventStream<RequestBody: Sendable, D>(
+    spec: OperationSpec<RequestBody>,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
-  ) -> AsyncStream<D> where B: Encodable & Sendable {
+  ) -> AsyncStream<D> {
 
     eventStream(
       decoder: decoder,
       from: { @Sendable [weak self] in
         guard let self else { return nil }
 
-        return try await self.transportRequest(
-          method: method,
-          pathTemplate: pathTemplate,
-          pathParameters: pathParameters,
-          queryParameters: queryParameters,
-          body: body,
-          contentTypes: contentTypes,
-          acceptTypes: acceptTypes,
-          headers: headers
-        )
+        return try await self.transportRequest(spec: spec)
       }
     )
   }

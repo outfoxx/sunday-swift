@@ -222,6 +222,230 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType), "application/json")
   }
 
+  func testAttachesStreamingFileBody() async throws {
+
+    let body = Data("archive-data".utf8)
+    let bodyURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+      .appendingPathExtension("tar")
+    try body.write(to: bodyURL)
+    defer { try? FileManager.default.removeItem(at: bodyURL) }
+
+    let contentType = try MediaType(valid: "application/x-tar")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+
+    let request =
+      try await transport.transportRequest(
+        spec: OperationSpec.streaming(
+          method: .post,
+          pathTemplate: "/api",
+          body: .file(bodyURL),
+          contentTypes: [contentType]
+        )
+      )
+
+    XCTAssertNil(request.httpBody)
+    XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.contentType), "application/x-tar")
+
+    let stream = try XCTUnwrap(request.httpBodyStream)
+    stream.open()
+    defer { stream.close() }
+
+    var buffer = [UInt8](repeating: 0, count: 16)
+    let count = stream.read(&buffer, maxLength: buffer.count)
+    XCTAssertEqual(Data(buffer.prefix(count)), body)
+  }
+
+  func testExecutesStreamingOperationWithStreamBody() async throws {
+
+    let body = Data("streamed-request-body".utf8)
+    let contentType = try MediaType(valid: "application/x-tar")
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.contentType), contentType.value)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.transferEncoding), "chunked")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let operation: StreamingOperation<Void, URLSessionTransport> =
+      Operation(
+        transport: transport,
+        spec: .streaming(
+          method: .post,
+          pathTemplate: "/api",
+          body: StreamingBody(stream: { InputStream(data: body) }),
+          contentTypes: [contentType]
+        )
+      )
+
+    try await operation.execute()
+  }
+
+  func testExecutesStreamingOperationWithAsyncBytesBody() async throws {
+
+    let chunks = [Data("streamed-".utf8), Data("async-".utf8), Data("body".utf8)]
+    let body = chunks.reduce(into: Data()) { $0.append($1) }
+    let contentType = try MediaType(valid: "application/x-tar")
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.contentType), contentType.value)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.transferEncoding), "chunked")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let operation: StreamingOperation<Void, URLSessionTransport> =
+      Operation(
+        transport: transport,
+        spec: .streaming(
+          method: .post,
+          pathTemplate: "/api",
+          body: StreamingBody.bytes {
+            AsyncStream { continuation in
+              chunks.forEach { continuation.yield($0) }
+              continuation.finish()
+            }
+          },
+          contentTypes: [contentType]
+        )
+      )
+
+    try await operation.execute()
+  }
+
+  func testStreamingAsyncBytesBodyFactoryCanBeReused() async throws {
+
+    let chunks = [Data("first-".utf8), Data("second".utf8)]
+    let body = chunks.reduce(into: Data()) { $0.append($1) }
+    let contentType = try MediaType(valid: "application/x-tar")
+    let requestCount = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          requestCount.withLock { $0 += 1 }
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.transferEncoding), "chunked")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let factoryCount = Mutex(0)
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let operation: StreamingOperation<Void, URLSessionTransport> =
+      Operation(
+        transport: transport,
+        spec: .streaming(
+          method: .post,
+          pathTemplate: "/api",
+          body: StreamingBody.bytes {
+            factoryCount.withLock { $0 += 1 }
+            return AsyncStream { continuation in
+              chunks.forEach { continuation.yield($0) }
+              continuation.finish()
+            }
+          },
+          contentTypes: [contentType]
+        )
+      )
+
+    try await operation.execute()
+    try await operation.execute()
+
+    XCTAssertGreaterThanOrEqual(factoryCount.withLock { $0 }, 2)
+    XCTAssertEqual(requestCount.withLock { $0 }, 2)
+  }
+
+  func testStreamingAsyncBytesBodyStartsWhenStreamOpens() async throws {
+
+    let state = TrackingByteSequence.State()
+    let contentType = try MediaType(valid: "application/x-tar")
+    let transport = URLSessionTransport(baseURL: "http://example.com")
+
+    let request = try await transport.transportRequest(
+      spec: .streaming(
+        method: .post,
+        pathTemplate: "/api",
+        body: StreamingBody.bytes {
+          TrackingByteSequence(chunks: [Data("body".utf8)], state: state)
+        },
+        contentTypes: [contentType]
+      )
+    )
+
+    try await Task.sleep(for: .milliseconds(50))
+    XCTAssertEqual(state.starts.withLock { $0 }, 0)
+
+    let stream = try XCTUnwrap(request.httpBodyStream)
+    stream.open()
+    defer { stream.close() }
+
+    try await Task.sleep(for: .milliseconds(50))
+    XCTAssertEqual(state.starts.withLock { $0 }, 1)
+  }
+
+  func testExecutesStreamingTransportRequest() async throws {
+
+    let body = Data("manual-streamed-request-body".utf8)
+    let contentType = try MediaType(valid: "application/x-tar")
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.contentType), contentType.value)
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let request = try await transport.transportRequest(
+      spec: .streaming(
+        method: .post,
+        pathTemplate: "/api",
+        body: StreamingBody(stream: { InputStream(data: body) }),
+        contentTypes: [contentType]
+      )
+    )
+
+    let response = try await transport.transportResponse(request: request)
+
+    XCTAssertEqual(response.statusCode, 204)
+  }
+
 
   //
   // MARK: Response/Result Processing
@@ -1273,6 +1497,35 @@ class URLSessionTransportTests: XCTestCase {
     }
 
     XCTAssertNil(result)
+  }
+
+}
+
+
+private struct TrackingByteSequence: AsyncSequence, Sendable {
+
+  final class State: @unchecked Sendable {
+    let starts = Mutex(0)
+  }
+
+  typealias Element = Data
+
+  let chunks: [Data]
+  let state: State
+
+  func makeAsyncIterator() -> Iterator {
+    state.starts.withLock { $0 += 1 }
+    return Iterator(chunks: chunks.makeIterator())
+  }
+
+  struct Iterator: AsyncIteratorProtocol {
+
+    var chunks: IndexingIterator<[Data]>
+
+    mutating func next() async throws -> Data? {
+      chunks.next()
+    }
+
   }
 
 }

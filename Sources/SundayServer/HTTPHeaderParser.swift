@@ -217,7 +217,7 @@ public struct HTTPRequestParser {
           }
 
           // ensure entire encoded chunk is available
-          if (lengthLineEnd + length + Self.newlineData.count) > data.count {
+          if (lengthLineEnd + length + Self.newlineData.count) > buffer.count {
             return nil
           }
 
@@ -237,8 +237,7 @@ public struct HTTPRequestParser {
             // add content length
             pushHeader(name: HTTP.StdHeaders.contentLength, value: Data(String(entity?.count ?? 0).utf8))
 
-            // parse trailing headers (if any)
-            state = .headers
+            return try finish()
 
           }
           else {

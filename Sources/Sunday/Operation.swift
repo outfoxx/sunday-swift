@@ -18,7 +18,7 @@ import Foundation
 
 
 /// Describes a generated HTTP operation request.
-public struct OperationSpec<RequestBody: Encodable & Sendable>: Sendable {
+public struct OperationSpec<RequestBody: Sendable>: Sendable {
 
   /// The HTTP method to use.
   public let method: HTTP.Method
@@ -32,7 +32,7 @@ public struct OperationSpec<RequestBody: Encodable & Sendable>: Sendable {
   /// Query parameter values for the operation.
   public let queryParameters: Parameters?
 
-  /// Encodable request body value.
+  /// Request body value.
   public let body: RequestBody?
 
   /// Candidate media types for encoding `body`.
@@ -44,6 +44,12 @@ public struct OperationSpec<RequestBody: Encodable & Sendable>: Sendable {
   /// HTTP header parameter values for the operation.
   public let headers: Parameters?
 
+  private let prepareRequestBody: @Sendable (
+    RequestBody?,
+    [MediaType]?,
+    MediaTypeEncoders
+  ) throws -> PreparedRequestBody?
+
   /// Creates an operation request specification.
   public init(
     method: HTTP.Method,
@@ -53,7 +59,12 @@ public struct OperationSpec<RequestBody: Encodable & Sendable>: Sendable {
     body: RequestBody? = nil,
     contentTypes: [MediaType]? = nil,
     acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    prepareBody: @escaping @Sendable (
+      RequestBody?,
+      [MediaType]?,
+      MediaTypeEncoders
+    ) throws -> PreparedRequestBody?
   ) {
     self.method = method
     self.pathTemplate = pathTemplate
@@ -63,6 +74,81 @@ public struct OperationSpec<RequestBody: Encodable & Sendable>: Sendable {
     self.contentTypes = contentTypes
     self.acceptTypes = acceptTypes
     self.headers = headers
+    self.prepareRequestBody = prepareBody
+  }
+
+  func prepareBody(mediaTypeEncoders: MediaTypeEncoders) throws -> PreparedRequestBody? {
+    try prepareRequestBody(body, contentTypes, mediaTypeEncoders)
+  }
+
+}
+
+
+public extension OperationSpec where RequestBody: Encodable {
+
+  /// Creates an operation request specification with an encodable request body.
+  init(
+    method: HTTP.Method,
+    pathTemplate: String,
+    pathParameters: Parameters? = nil,
+    queryParameters: Parameters? = nil,
+    body: RequestBody? = nil,
+    contentTypes: [MediaType]? = nil,
+    acceptTypes: [MediaType]? = nil,
+    headers: Parameters? = nil
+  ) {
+    self.init(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    ) { body, contentTypes, mediaTypeEncoders in
+      guard let body else {
+        return nil
+      }
+      guard let contentType = contentTypes?.first(where: { mediaTypeEncoders.supports(for: $0) }) else {
+        throw SundayError.requestEncodingFailed(reason: .noSupportedContentTypes(contentTypes ?? []))
+      }
+      let data = try mediaTypeEncoders.find(for: contentType).encode(body)
+      return .data(data, contentType: contentType)
+    }
+  }
+
+}
+
+
+public extension OperationSpec where RequestBody == StreamingBody {
+
+  /// Creates an operation request specification with a streaming request body.
+  static func streaming(
+    method: HTTP.Method,
+    pathTemplate: String,
+    pathParameters: Parameters? = nil,
+    queryParameters: Parameters? = nil,
+    body: StreamingBody? = nil,
+    contentTypes: [MediaType]? = nil,
+    acceptTypes: [MediaType]? = nil,
+    headers: Parameters? = nil
+  ) -> OperationSpec<StreamingBody> {
+    OperationSpec<StreamingBody>(
+      method: method,
+      pathTemplate: pathTemplate,
+      pathParameters: pathParameters,
+      queryParameters: queryParameters,
+      body: body,
+      contentTypes: contentTypes,
+      acceptTypes: acceptTypes,
+      headers: headers
+    ) { body, contentTypes, _ in
+      guard let body else {
+        return nil
+      }
+      return .stream(body, contentType: contentTypes?.first)
+    }
   }
 
 }
@@ -90,7 +176,7 @@ public struct NilifySpec: Sendable {
 
 
 /// A generated operation that can be executed or converted into a native transport request.
-public struct Operation<RequestBody: Encodable & Sendable, ResponseBody: Sendable, TransportType: Transport>: Sendable {
+public struct Operation<RequestBody: Sendable, ResponseBody: Sendable, TransportType: Transport>: Sendable {
 
   /// The generated operation request specification.
   public let spec: OperationSpec<RequestBody>
@@ -108,30 +194,25 @@ public struct Operation<RequestBody: Encodable & Sendable, ResponseBody: Sendabl
 
   /// Builds a native transport request without executing it.
   public func transportRequest() async throws -> TransportType.Request {
-    try await transport.transportRequest(
-      method: spec.method,
-      pathTemplate: spec.pathTemplate,
-      pathParameters: spec.pathParameters,
-      queryParameters: spec.queryParameters,
-      body: spec.body,
-      contentTypes: spec.contentTypes,
-      acceptTypes: spec.acceptTypes,
-      headers: spec.headers
-    )
+    try await transport.transportRequest(spec: spec)
   }
 
   /// Executes the operation and returns the native transport response.
   public func transportResponse() async throws -> TransportType.Response {
-    let request = try await transportRequest()
-    return try await transport.transportResponse(request: request)
+    try await transport.transportResponse(spec: spec)
   }
 
 }
 
 
+/// An operation whose request body is streamed by the transport.
+public typealias StreamingOperation<ResponseBody: Sendable, TransportType: Transport> =
+  Operation<StreamingBody, ResponseBody, TransportType>
+
+
 /// A generated operation that can execute select problems as nil responses.
 public struct NilableOperation<
-  RequestBody: Encodable & Sendable,
+  RequestBody: Sendable,
   ResponseBody: Sendable,
   TransportType: Transport
 >: Sendable {
@@ -173,30 +254,12 @@ extension Operation where ResponseBody: Decodable {
 
   /// Executes the operation and decodes the response value.
   public func execute() async throws -> ResponseBody {
-    try await transport.result(
-      method: spec.method,
-      pathTemplate: spec.pathTemplate,
-      pathParameters: spec.pathParameters,
-      queryParameters: spec.queryParameters,
-      body: spec.body,
-      contentTypes: spec.contentTypes,
-      acceptTypes: spec.acceptTypes,
-      headers: spec.headers
-    )
+    try await transport.result(spec: spec)
   }
 
   /// Executes the operation and returns the decoded value with the HTTP response.
   public func response() async throws -> OperationResponse<ResponseBody> {
-    try await transport.response(
-      method: spec.method,
-      pathTemplate: spec.pathTemplate,
-      pathParameters: spec.pathParameters,
-      queryParameters: spec.queryParameters,
-      body: spec.body,
-      contentTypes: spec.contentTypes,
-      acceptTypes: spec.acceptTypes,
-      headers: spec.headers
-    )
+    try await transport.response(spec: spec)
   }
 
 }
@@ -239,30 +302,12 @@ extension Operation where ResponseBody == Void {
 
   /// Executes the operation and decodes the response value.
   public func execute() async throws {
-    try await transport.result(
-      method: spec.method,
-      pathTemplate: spec.pathTemplate,
-      pathParameters: spec.pathParameters,
-      queryParameters: spec.queryParameters,
-      body: spec.body,
-      contentTypes: spec.contentTypes,
-      acceptTypes: spec.acceptTypes,
-      headers: spec.headers
-    )
+    try await transport.result(spec: spec)
   }
 
   /// Executes the operation and returns the decoded value with the HTTP response.
   public func response() async throws -> OperationResponse<Void> {
-    try await transport.response(
-      method: spec.method,
-      pathTemplate: spec.pathTemplate,
-      pathParameters: spec.pathParameters,
-      queryParameters: spec.queryParameters,
-      body: spec.body,
-      contentTypes: spec.contentTypes,
-      acceptTypes: spec.acceptTypes,
-      headers: spec.headers
-    )
+    try await transport.response(spec: spec)
   }
 
 }
