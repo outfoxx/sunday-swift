@@ -53,6 +53,7 @@ public struct HTTPRequestParser {
     case line
     case headers
     case body
+    case trailers
   }
 
   private static let newlineData = Data([0xD, 0xA])
@@ -71,7 +72,7 @@ public struct HTTPRequestParser {
   ///  - Returns: parsed headers elements
   mutating func process( // swiftlint:disable:this cyclomatic_complexity function_body_length
     _ data: Data,
-    connection: HTTPConnection
+    connection: HTTPConnection? = nil
   ) throws -> ParsedRequest? {
 
     func finish() throws -> ParsedRequest? {
@@ -118,6 +119,17 @@ public struct HTTPRequestParser {
       headers?.append((name: name, value: value))
     }
 
+    func parseHeader(_ lineBytes: Data) throws {
+      let parts: [Data] = lineBytes.split(separator: Self.headerSeparator, maxSplits: 1)
+      guard parts.count == 2, let name = String(data: parts[0], encoding: .ascii)?.lowercased() else {
+        throw Error.invalidHeaderData
+      }
+
+      let value = Data(parts[1].drop { $0 == Character(" ").asciiValue })
+
+      pushHeader(name: name, value: value)
+    }
+
     // Add to "current" data, will include data that couldn't be processed
     // in previous calls
     buffer.append(data)
@@ -160,7 +172,7 @@ public struct HTTPRequestParser {
             $0.name.lowercased() == HTTP.StdHeaders.expect && $0.value == Data("100-continue".utf8)
           }) {
 
-            connection.send(
+            connection?.send(
               data: Data("HTTP/1.1 \(HTTP.Response.Status.continue)\r\n\r\n".utf8),
               context: "Sending continuation for expectation"
             )
@@ -173,15 +185,7 @@ public struct HTTPRequestParser {
         }
         else {
 
-          // parse raw header
-          let parts: [Data] = lineBytes.split(separator: Self.headerSeparator, maxSplits: 1)
-          guard parts.count == 2, let name = String(data: parts[0], encoding: .ascii)?.lowercased() else {
-            throw Error.invalidHeaderData
-          }
-
-          let value = Data(parts[1].drop { $0 == Character(" ").asciiValue })
-
-          pushHeader(name: name, value: value)
+          try parseHeader(lineBytes)
         }
 
       case .body:
@@ -224,6 +228,16 @@ public struct HTTPRequestParser {
           // remove length line from data buffer
           buffer = Data(buffer.suffix(from: lengthLineEnd))
 
+          if length == 0 {
+            // all chunks are here
+
+            // add content length
+            pushHeader(name: HTTP.StdHeaders.contentLength, value: Data(String(entity?.count ?? 0).utf8))
+
+            state = .trailers
+            continue
+          }
+
           let chunkData = popBytes(count: length)
 
           // chunks are terminated with a newline, it should be left in the buffer... pop it and verify
@@ -231,27 +245,27 @@ public struct HTTPRequestParser {
             throw Error.invalidChunkFormat
           }
 
-          if chunkData.count == 0 {
-            // all chunks are here
-
-            // add content length
-            pushHeader(name: HTTP.StdHeaders.contentLength, value: Data(String(entity?.count ?? 0).utf8))
-
-            return try finish()
-
+          // save chunk data and wait for next
+          if entity == nil {
+            entity = chunkData
           }
           else {
-
-            // save chunk data and wait for next
-            if entity == nil {
-              entity = chunkData
-            }
-            else {
-              entity!.append(chunkData)
-            }
+            entity!.append(chunkData)
           }
 
         }
+
+      case .trailers:
+        guard let lineBytes = popLineBytes() else {
+          // no newline so return and wait for more trailer data
+          return nil
+        }
+
+        guard !lineBytes.isEmpty else {
+          return try finish()
+        }
+
+        try parseHeader(lineBytes)
 
       }
     }

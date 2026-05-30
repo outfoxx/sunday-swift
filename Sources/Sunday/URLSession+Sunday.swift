@@ -23,13 +23,9 @@ public extension URLSession {
     configuration: URLSessionConfiguration,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil
   ) -> URLSession {
-    guard let serverTrustPolicyManager else {
-      return URLSession(configuration: configuration)
-    }
-
     return URLSession(
       configuration: configuration,
-      delegate: ServerTrustPolicyDelegate(serverTrustPolicyManager: serverTrustPolicyManager),
+      delegate: SundayURLSessionDelegate(serverTrustPolicyManager: serverTrustPolicyManager),
       delegateQueue: nil
     )
   }
@@ -266,12 +262,31 @@ struct DataEventBuffer {
 }
 
 
-private final class ServerTrustPolicyDelegate: NSObject, URLSessionTaskDelegate {
+private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
 
   private let serverTrustPolicyManager: ServerTrustPolicyManager?
 
   init(serverTrustPolicyManager: ServerTrustPolicyManager?) {
     self.serverTrustPolicyManager = serverTrustPolicyManager
+  }
+
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    needNewBodyStream completionHandler: @escaping @Sendable (InputStream?) -> Void
+  ) {
+    guard
+      let request = task.currentRequest ?? task.originalRequest,
+      let property = URLProtocol.property(
+        forKey: streamingBodyRequestPropertyKey,
+        in: request
+      ) as? StreamingBodyRequestProperty
+    else {
+      completionHandler(nil)
+      return
+    }
+
+    completionHandler(try? property.body.makeInputStream())
   }
 
   public func urlSession(

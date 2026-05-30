@@ -67,7 +67,6 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
   private let bytes: S
   private let state = Mutex(State.idle)
   private let runLoop = Mutex<RunLoopReference?>(nil)
-  private let runLoopReady = DispatchSemaphore(value: 0)
 
   init(outputStream: OutputStream, bytes: S) {
     self.outputStream = outputStream
@@ -77,7 +76,12 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
 
   func start() {
     let task = Task.detached { [self] in
-      startRunLoop()
+      await startRunLoop()
+
+      guard !Task.isCancelled, !isClosed else {
+        return
+      }
+
       outputStream.open()
       defer { close(cancelTask: false) }
 
@@ -198,25 +202,25 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
     }
   }
 
-  private func startRunLoop() {
-    Thread.detachNewThread { [self] in
-      runLoop.withLock { runLoop in
-        runLoop = RunLoopReference(CFRunLoopGetCurrent())
+  private func startRunLoop() async {
+    await withCheckedContinuation { continuation in
+      Thread.detachNewThread { [self] in
+        runLoop.withLock { runLoop in
+          runLoop = RunLoopReference(CFRunLoopGetCurrent())
+        }
+
+        outputStream.delegate = self
+        outputStream.schedule(in: .current, forMode: .default)
+        continuation.resume()
+
+        while !isClosed {
+          CFRunLoopRun()
+        }
+
+        outputStream.remove(from: .current, forMode: .default)
+        outputStream.delegate = nil
       }
-
-      outputStream.delegate = self
-      outputStream.schedule(in: .current, forMode: .default)
-      runLoopReady.signal()
-
-      while !isClosed {
-        CFRunLoopRun()
-      }
-
-      outputStream.remove(from: .current, forMode: .default)
-      outputStream.delegate = nil
     }
-
-    runLoopReady.wait()
   }
 
   private func close(cancelTask: Bool) {

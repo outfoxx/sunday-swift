@@ -383,6 +383,64 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertEqual(requestCount.withLock { $0 }, 2)
   }
 
+  func testStreamingAsyncBytesBodyCanBeReplayedForTemporaryRedirect() async throws {
+
+    let chunks = [Data("redirected-".utf8), Data("stream".utf8)]
+    let body = chunks.reduce(into: Data()) { $0.append($1) }
+    let contentType = try MediaType(valid: "application/x-tar")
+    let requestCount = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/redirect") {
+        POST { _, res in
+          requestCount.withLock { $0 += 1 }
+          res.send(
+            status: .temporaryRedirect,
+            headers: [HTTP.StdHeaders.location: ["/api"]],
+            body: Data()
+          )
+        }
+      }
+      Path("/api") {
+        POST { req, res in
+          requestCount.withLock { $0 += 1 }
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.transferEncoding), "chunked")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let factoryCount = Mutex(0)
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let operation: StreamingOperation<Void, URLSessionTransport> =
+      Operation(
+        transport: transport,
+        spec: .streaming(
+          method: .post,
+          pathTemplate: "/redirect",
+          body: StreamingBody.bytes {
+            factoryCount.withLock { $0 += 1 }
+            return AsyncStream { continuation in
+              chunks.forEach { continuation.yield($0) }
+              continuation.finish()
+            }
+          },
+          contentTypes: [contentType]
+        )
+      )
+
+    try await operation.execute()
+
+    XCTAssertGreaterThanOrEqual(factoryCount.withLock { $0 }, 2)
+    XCTAssertEqual(requestCount.withLock { $0 }, 2)
+  }
+
   func testStreamingAsyncBytesBodyStartsWhenStreamOpens() async throws {
 
     let state = TrackingByteSequence.State()

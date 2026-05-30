@@ -223,6 +223,30 @@ class HTTPServerTests: XCTestCase {
     XCTAssertEqual(data, Data("12345678901234567890".utf8))
   }
 
+  func testChunkedRequestTrailersAreParsed() throws {
+
+    let request =
+      "POST /trailers HTTP/1.1\r\n" +
+      "Host: localhost\r\n" +
+      "Transfer-Encoding: chunked\r\n" +
+      "Trailer: X-Upload-Digest\r\n" +
+      "\r\n" +
+      "5\r\n" +
+      "hello\r\n" +
+      "0\r\n" +
+      "X-Upload-Digest: sha-256=12345\r\n" +
+      "\r\n"
+
+    var parser = HTTPRequestParser()
+    let parsedRequest = try XCTUnwrap(parser.process(Data(request.utf8)))
+
+    XCTAssertEqual(parsedRequest.body, Data("hello".utf8))
+    XCTAssertEqual(
+      parsedRequest.headers.first { $0.name == "x-upload-digest" }.flatMap { String(data: $0.value, encoding: .ascii) },
+      "sha-256=12345"
+    )
+  }
+
   func testStartLocalAfterStopReturnsBeforeTimeout() throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true)

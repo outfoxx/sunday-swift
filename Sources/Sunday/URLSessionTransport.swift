@@ -62,7 +62,9 @@ public final class URLSessionTransport: Transport, Sendable {
   ///
   /// - Parameters:
   ///   - baseURL: Base URI template used to resolve request paths.
-  ///   - session: Session used for non-streaming requests and responses.
+  ///   - session: Session used for non-streaming requests and responses. Use `URLSession.sunday(...)`,
+  ///     or an equivalent delegate implementation, when streaming uploads must be replayed for
+  ///     redirects or authentication retries.
   ///   - eventSession: Session used for server-sent event streams. Pass `session` when event streams
   ///     must use the same delegate or session behavior. Pass a session created with
   ///     `.sunday(configuration: .events(...))` or an equivalent configuration when SSE-specific
