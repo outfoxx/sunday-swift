@@ -441,6 +441,8 @@ class URLSessionTransportTests: XCTestCase {
 
   func testStreamingAsyncBytesBodyCanBeReplayedForTemporaryRedirect() async throws {
 
+    try skipIfStreamingBodyReplayIsUnsupported()
+
     let chunks = [Data("redirected-".utf8), Data("stream".utf8)]
     let body = chunks.reduce(into: Data()) { $0.append($1) }
     let contentType = try MediaType(valid: "application/x-tar")
@@ -499,6 +501,8 @@ class URLSessionTransportTests: XCTestCase {
 
   func testStreamingBodyReplaySurfacesStreamCreationError() async throws {
 
+    try skipIfStreamingBodyReplayIsUnsupported()
+
     let body = Data("redirected-stream".utf8)
     let contentType = try MediaType(valid: "application/x-tar")
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
@@ -554,6 +558,13 @@ class URLSessionTransportTests: XCTestCase {
     }
 
     XCTAssertGreaterThanOrEqual(factoryCount.withLock { $0 }, 2)
+  }
+
+  private func skipIfStreamingBodyReplayIsUnsupported() throws {
+
+    #if os(watchOS)
+    throw XCTSkip("URLSession does not request a replacement body stream for redirected streaming uploads on watchOS.")
+    #endif
   }
 
   func testStreamingAsyncBytesBodyStartsWhenStreamOpens() async throws {
