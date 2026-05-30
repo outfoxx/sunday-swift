@@ -45,27 +45,41 @@ enum AsyncSequenceInputStream {
 
 
 // OutputStream is not Sendable, but this owner keeps it private to one writer task and only exposes cancellation.
-private final class AsyncSequenceInputStreamOwner<S>: @unchecked Sendable where S: AsyncSequence & Sendable, S.Element == Data {
+private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, @unchecked Sendable where S: AsyncSequence & Sendable, S.Element == Data {
 
   private enum State: Sendable {
     case idle
-    case running(Task<Void, Never>)
+    case running(Task<Void, Never>, CheckedContinuation<Void, any Error>?)
     case closed
+  }
+
+  private final class RunLoopReference: @unchecked Sendable {
+
+    let value: CFRunLoop
+
+    init(_ value: CFRunLoop) {
+      self.value = value
+    }
+
   }
 
   private let outputStream: OutputStream
   private let bytes: S
   private let state = Mutex(State.idle)
+  private let runLoop = Mutex<RunLoopReference?>(nil)
+  private let runLoopReady = DispatchSemaphore(value: 0)
 
   init(outputStream: OutputStream, bytes: S) {
     self.outputStream = outputStream
     self.bytes = bytes
+    super.init()
   }
 
   func start() {
     let task = Task.detached { [self] in
+      startRunLoop()
       outputStream.open()
-      defer { outputStream.close() }
+      defer { close(cancelTask: false) }
 
       do {
         for try await chunk in bytes {
@@ -83,7 +97,7 @@ private final class AsyncSequenceInputStreamOwner<S>: @unchecked Sendable where 
     state.withLock { state in
       switch state {
       case .idle:
-        state = .running(task)
+        state = .running(task, nil)
       case .running:
         task.cancel()
       case .closed:
@@ -93,13 +107,18 @@ private final class AsyncSequenceInputStreamOwner<S>: @unchecked Sendable where 
   }
 
   func cancel() {
-    state.withLock { state in
-      if case .running(let task) = state {
-        task.cancel()
-      }
-      state = .closed
+    close(cancelTask: true)
+  }
+
+  func stream(_ aStream: Stream, handle eventCode: Stream.Event) {
+    switch eventCode {
+    case .hasSpaceAvailable:
+      resumeWaitingWriter()
+    case .errorOccurred, .endEncountered:
+      resumeWaitingWriter(throwing: outputStream.streamError ?? SundayError.requestEncodingFailed(reason: .streamCreationFailed))
+    default:
+      break
     }
-    outputStream.close()
   }
 
   private func write(_ data: Data) async throws {
@@ -121,11 +140,118 @@ private final class AsyncSequenceInputStreamOwner<S>: @unchecked Sendable where 
         remaining -= written
       }
       else if written == 0 {
-        try await Task.sleep(nanoseconds: 5_000_000)
+        try await waitForSpace()
       }
       else {
         throw outputStream.streamError ?? SundayError.requestEncodingFailed(reason: .streamCreationFailed)
       }
+    }
+  }
+
+  private func waitForSpace() async throws {
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        let immediateResult: Result<Void, any Error>? =
+          state.withLock { state in
+            switch state {
+            case .idle, .closed:
+              return .failure(CancellationError())
+            case .running(_, .some):
+              return .failure(SundayError.requestEncodingFailed(reason: .streamCreationFailed))
+            case .running(let task, nil):
+              if outputStream.hasSpaceAvailable {
+                return .success(())
+              }
+              state = .running(task, continuation)
+              return nil
+            }
+          }
+
+        if let immediateResult {
+          continuation.resume(with: immediateResult)
+        }
+      }
+    } onCancel: {
+      resumeWaitingWriter(throwing: CancellationError())
+    }
+  }
+
+  private func resumeWaitingWriter(throwing error: (any Error)? = nil) {
+    let continuation =
+      state.withLock { state -> CheckedContinuation<Void, any Error>? in
+        switch state {
+        case .idle, .closed:
+          return nil
+        case .running(_, nil):
+          return nil
+        case .running(let task, .some(let continuation)):
+          state = .running(task, nil)
+          return continuation
+        }
+      }
+
+    if let error {
+      continuation?.resume(throwing: error)
+    }
+    else {
+      continuation?.resume()
+    }
+  }
+
+  private func startRunLoop() {
+    Thread.detachNewThread { [self] in
+      runLoop.withLock { runLoop in
+        runLoop = RunLoopReference(CFRunLoopGetCurrent())
+      }
+
+      outputStream.delegate = self
+      outputStream.schedule(in: .current, forMode: .default)
+      runLoopReady.signal()
+
+      while !isClosed {
+        CFRunLoopRun()
+      }
+
+      outputStream.remove(from: .current, forMode: .default)
+      outputStream.delegate = nil
+    }
+
+    runLoopReady.wait()
+  }
+
+  private func close(cancelTask: Bool) {
+    let continuation =
+      state.withLock { state -> CheckedContinuation<Void, any Error>? in
+        switch state {
+        case .idle:
+          state = .closed
+          outputStream.close()
+          return nil
+        case .running(let task, let continuation):
+          if cancelTask {
+            task.cancel()
+          }
+          state = .closed
+          outputStream.close()
+          return continuation
+        case .closed:
+          return nil
+        }
+      }
+
+    continuation?.resume(throwing: CancellationError())
+
+    if let runLoop = runLoop.withLock({ $0 }) {
+      CFRunLoopStop(runLoop.value)
+    }
+  }
+
+  private var isClosed: Bool {
+    state.withLock { state in
+      if case .closed = state {
+        return true
+      }
+      return false
     }
   }
 
