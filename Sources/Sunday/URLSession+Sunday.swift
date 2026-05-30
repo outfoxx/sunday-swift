@@ -23,26 +23,36 @@ public extension URLSession {
     configuration: URLSessionConfiguration,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil
   ) -> URLSession {
-    guard let serverTrustPolicyManager else {
-      return URLSession(configuration: configuration)
-    }
-
     return URLSession(
       configuration: configuration,
-      delegate: ServerTrustPolicyDelegate(serverTrustPolicyManager: serverTrustPolicyManager),
+      delegate: SundayURLSessionDelegate(serverTrustPolicyManager: serverTrustPolicyManager),
       delegateQueue: nil
     )
   }
 
   func validatedData(for request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
 
-    let (data, response) = try await data(for: request)
+    let responseBody: Data
+    let response: URLResponse
+    do {
+      (responseBody, response) = try await data(for: request)
+    }
+    catch {
+      if let replayError = request.streamingBodyRequestProperty?.recordedReplayError {
+        throw replayError
+      }
+      throw error
+    }
 
+    return try validate(responseBody: responseBody, response: response)
+  }
+
+  private func validate(responseBody: Data, response: URLResponse) throws -> (Data?, HTTPURLResponse) {
     guard let httpResponse = response as? HTTPURLResponse else {
       throw URLError(.badServerResponse)
     }
 
-    let responseData = data.isEmpty ? nil : data
+    let responseData = responseBody.isEmpty ? nil : responseBody
 
     if 400 ..< 600 ~= httpResponse.statusCode {
       throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
@@ -262,12 +272,38 @@ struct DataEventBuffer {
 }
 
 
-private final class ServerTrustPolicyDelegate: NSObject, URLSessionTaskDelegate {
+private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
 
   private let serverTrustPolicyManager: ServerTrustPolicyManager?
 
   init(serverTrustPolicyManager: ServerTrustPolicyManager?) {
     self.serverTrustPolicyManager = serverTrustPolicyManager
+  }
+
+  public func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    needNewBodyStream completionHandler: @escaping @Sendable (InputStream?) -> Void
+  ) {
+    guard
+      let request = task.currentRequest ?? task.originalRequest,
+      let property = URLProtocol.property(
+        forKey: streamingBodyRequestPropertyKey,
+        in: request
+      ) as? StreamingBodyRequestProperty
+    else {
+      completionHandler(nil)
+      return
+    }
+
+    do {
+      completionHandler(try property.body.makeInputStream())
+    }
+    catch {
+      property.recordReplayError(error)
+      task.cancel()
+      completionHandler(nil)
+    }
   }
 
   public func urlSession(
@@ -291,6 +327,18 @@ private final class ServerTrustPolicyDelegate: NSObject, URLSessionTaskDelegate 
     }
 
     completionHandler(.cancelAuthenticationChallenge, nil)
+  }
+
+}
+
+
+private extension URLRequest {
+
+  var streamingBodyRequestProperty: StreamingBodyRequestProperty? {
+    URLProtocol.property(
+      forKey: streamingBodyRequestPropertyKey,
+      in: self
+    ) as? StreamingBodyRequestProperty
   }
 
 }

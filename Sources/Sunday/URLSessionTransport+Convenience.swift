@@ -18,7 +18,7 @@
 public extension URLSessionTransport {
 
   /// Executes a request with a literal path and validates a void result.
-  func result<B: Encodable>(
+  func result<B: Encodable & Sendable>(
     method: HTTP.Method,
     path: String,
     body: B? = nil,
@@ -38,7 +38,7 @@ public extension URLSessionTransport {
   }
 
   /// Executes a request with a literal path and decodes a typed result.
-  func result<B: Encodable, D: Decodable>(
+  func result<B: Encodable & Sendable, D: Decodable>(
     method: HTTP.Method,
     path: String,
     body: B? = nil,

@@ -113,6 +113,10 @@ public final class RoutingHTTPServer: NSObject, HTTPServer, Sendable {
   @available(watchOS, unavailable)
   public func start(timeout: TimeInterval = 30) -> URL? {
 
+    guard canStartListener() else {
+      return nil
+    }
+
     let deadline = DispatchTime.now() + timeout
     let starter = DispatchGroup()
 
@@ -153,6 +157,10 @@ public final class RoutingHTTPServer: NSObject, HTTPServer, Sendable {
 
   public func startLocal(timeout: TimeInterval = 30) -> URL? {
 
+    guard canStartListener() else {
+      return nil
+    }
+
     listener.start(queue: queue)
 
     guard waitForReady(deadline: DispatchTime.now() + timeout) else {
@@ -167,10 +175,25 @@ public final class RoutingHTTPServer: NSObject, HTTPServer, Sendable {
   }
 
   public func stop() {
+    if recordTerminalState(.cancelled) {
+      readyGroup.leave()
+    }
+
     listener.cancel()
     connections.withLock { connections in
       connections.values.forEach { $0.close() }
       connections.removeAll()
+    }
+  }
+
+  private func canStartListener() -> Bool {
+    return stateStorage.withLock { storedState in
+      switch storedState.listenerState {
+      case .cancelled?, .failed?:
+        return false
+      default:
+        return true
+      }
     }
   }
 
@@ -179,7 +202,13 @@ public final class RoutingHTTPServer: NSObject, HTTPServer, Sendable {
   }
 
   private func update(state: NWListener.State) {
-    let shouldSignalReady = stateStorage.withLock { storedState in
+    if recordTerminalState(state) {
+      readyGroup.leave()
+    }
+  }
+
+  private func recordTerminalState(_ state: NWListener.State) -> Bool {
+    return stateStorage.withLock { storedState in
       storedState.listenerState = state
       storedState.isReady = state == .ready
       let isTerminal =
@@ -192,10 +221,6 @@ public final class RoutingHTTPServer: NSObject, HTTPServer, Sendable {
       }
       storedState.readySignaled = true
       return true
-    }
-
-    if shouldSignalReady {
-      readyGroup.leave()
     }
   }
 
