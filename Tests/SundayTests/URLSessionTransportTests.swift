@@ -383,6 +383,62 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertEqual(requestCount.withLock { $0 }, 2)
   }
 
+  func testExecutesConcurrentStreamingAsyncBytesBodies() async throws {
+
+    let contentType = try MediaType(valid: "application/x-tar")
+    let receivedBodies = Mutex<[String]>([])
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          if let data = req.body, let body = String(data: data, encoding: .utf8) {
+            receivedBodies.withLock { $0.append(body) }
+          }
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.transferEncoding), "chunked")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      for index in 0 ..< 8 {
+        group.addTask {
+          let operation: StreamingOperation<Void, URLSessionTransport> =
+            Operation(
+              transport: transport,
+              spec: .streaming(
+                method: .post,
+                pathTemplate: "/api",
+                body: StreamingBody.bytes {
+                  AsyncStream { continuation in
+                    continuation.yield(Data("body-\(index)".utf8))
+                    continuation.finish()
+                  }
+                },
+                contentTypes: [contentType]
+              )
+            )
+
+          try await operation.execute()
+        }
+      }
+
+      try await group.waitForAll()
+    }
+
+    XCTAssertEqual(
+      receivedBodies.withLock { $0.sorted() },
+      (0 ..< 8).map { "body-\($0)" }
+    )
+  }
+
   func testStreamingAsyncBytesBodyCanBeReplayedForTemporaryRedirect() async throws {
 
     let chunks = [Data("redirected-".utf8), Data("stream".utf8)]

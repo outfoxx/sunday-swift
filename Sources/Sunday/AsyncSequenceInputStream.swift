@@ -53,20 +53,9 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
     case closed
   }
 
-  private final class RunLoopReference: @unchecked Sendable {
-
-    let value: CFRunLoop
-
-    init(_ value: CFRunLoop) {
-      self.value = value
-    }
-
-  }
-
   private let outputStream: OutputStream
   private let bytes: S
   private let state = Mutex(State.idle)
-  private let runLoop = Mutex<RunLoopReference?>(nil)
 
   init(outputStream: OutputStream, bytes: S) {
     self.outputStream = outputStream
@@ -76,7 +65,7 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
 
   func start() {
     let task = Task.detached { [self] in
-      await startRunLoop()
+      await scheduleOutputStream()
 
       guard !Task.isCancelled, !isClosed else {
         return
@@ -202,24 +191,11 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
     }
   }
 
-  private func startRunLoop() async {
-    await withCheckedContinuation { continuation in
-      Thread.detachNewThread { [self] in
-        runLoop.withLock { runLoop in
-          runLoop = RunLoopReference(CFRunLoopGetCurrent())
-        }
+  private func scheduleOutputStream() async {
+    await AsyncSequenceInputStreamRunLoop.shared.schedule(outputStream, delegate: self)
 
-        outputStream.delegate = self
-        outputStream.schedule(in: .current, forMode: .default)
-        continuation.resume()
-
-        while !isClosed {
-          CFRunLoopRun()
-        }
-
-        outputStream.remove(from: .current, forMode: .default)
-        outputStream.delegate = nil
-      }
+    if isClosed {
+      AsyncSequenceInputStreamRunLoop.shared.unschedule(outputStream)
     }
   }
 
@@ -245,9 +221,7 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
 
     continuation?.resume(throwing: CancellationError())
 
-    if let runLoop = runLoop.withLock({ $0 }) {
-      CFRunLoopStop(runLoop.value)
-    }
+    AsyncSequenceInputStreamRunLoop.shared.unschedule(outputStream)
   }
 
   private var isClosed: Bool {
@@ -261,6 +235,120 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
 
   deinit {
     cancel()
+  }
+
+}
+
+
+private final class AsyncSequenceInputStreamRunLoop: @unchecked Sendable {
+
+  static let shared = AsyncSequenceInputStreamRunLoop()
+
+  private struct State: Sendable {
+    var isStarted = false
+    var runLoop: RunLoopReference?
+    var waiters: [CheckedContinuation<RunLoopReference, Never>] = []
+  }
+
+  private final class RunLoopReference: @unchecked Sendable {
+
+    let value: CFRunLoop
+
+    init(_ value: CFRunLoop) {
+      self.value = value
+    }
+
+  }
+
+  private let state = Mutex(State())
+
+  func schedule(_ outputStream: OutputStream, delegate: StreamDelegate) async {
+    let runLoop = await sharedRunLoop()
+
+    await withCheckedContinuation { continuation in
+      CFRunLoopPerformBlock(runLoop.value, CFRunLoopMode.defaultMode.rawValue) {
+        outputStream.delegate = delegate
+        outputStream.schedule(in: .current, forMode: .default)
+        continuation.resume()
+      }
+      CFRunLoopWakeUp(runLoop.value)
+    }
+  }
+
+  func unschedule(_ outputStream: OutputStream) {
+    guard let runLoop = state.withLock({ $0.runLoop }) else {
+      return
+    }
+
+    CFRunLoopPerformBlock(runLoop.value, CFRunLoopMode.defaultMode.rawValue) {
+      outputStream.remove(from: .current, forMode: .default)
+      outputStream.delegate = nil
+    }
+    CFRunLoopWakeUp(runLoop.value)
+  }
+
+  private func sharedRunLoop() async -> RunLoopReference {
+    await withCheckedContinuation { continuation in
+      var shouldStartThread = false
+      let immediateRunLoop =
+        state.withLock { state -> RunLoopReference? in
+          if let runLoop = state.runLoop {
+            return runLoop
+          }
+
+          state.waiters.append(continuation)
+          if !state.isStarted {
+            state.isStarted = true
+            shouldStartThread = true
+          }
+          return nil
+        }
+
+      if let immediateRunLoop {
+        continuation.resume(returning: immediateRunLoop)
+      }
+      else if shouldStartThread {
+        startThread()
+      }
+    }
+  }
+
+  private func startThread() {
+    Thread.detachNewThread { [self] in
+      var sourceContext = CFRunLoopSourceContext(
+        version: 0,
+        info: nil,
+        retain: nil,
+        release: nil,
+        copyDescription: nil,
+        equal: nil,
+        hash: nil,
+        schedule: nil,
+        cancel: nil,
+        perform: nil
+      )
+      guard let source = CFRunLoopSourceCreate(nil, 0, &sourceContext) else {
+        fatalError("Could not create shared input stream run loop source")
+      }
+
+      guard let runLoop = CFRunLoopGetCurrent() else {
+        fatalError("Could not get shared input stream run loop")
+      }
+      CFRunLoopAddSource(runLoop, source, CFRunLoopMode.defaultMode)
+
+      let reference = RunLoopReference(runLoop)
+      let waiters =
+        state.withLock { state in
+          state.runLoop = reference
+          let waiters = state.waiters
+          state.waiters.removeAll()
+          return waiters
+        }
+
+      waiters.forEach { $0.resume(returning: reference) }
+
+      CFRunLoopRun()
+    }
   }
 
 }
