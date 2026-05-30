@@ -277,7 +277,10 @@ class URLSessionTransportTests: XCTestCase {
     }
     defer { server.stop() }
 
-    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let transport = URLSessionTransport(
+      baseURL: .init(format: serverURL.absoluteString),
+      adapter: RebuildingRequestAdapter()
+    )
     let operation: StreamingOperation<Void, URLSessionTransport> =
       Operation(
         transport: transport,
@@ -616,6 +619,45 @@ class URLSessionTransportTests: XCTestCase {
     defer { server.stop() }
 
     let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let request = try await transport.transportRequest(
+      spec: .streaming(
+        method: .post,
+        pathTemplate: "/api",
+        body: StreamingBody(stream: { InputStream(data: body) }),
+        contentTypes: [contentType]
+      )
+    )
+
+    let response = try await transport.transportResponse(request: request)
+
+    XCTAssertEqual(response.statusCode, 204)
+  }
+
+  func testExecutesStreamingTransportRequestWhenAdapterRebuildsRequest() async throws {
+
+    let body = Data("adapter-streamed-request-body".utf8)
+    let contentType = try MediaType(valid: "application/x-tar")
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/api") {
+        POST { req, res in
+          XCTAssertEqual(req.body, body)
+          XCTAssertEqual(req.header(for: HTTP.StdHeaders.contentType), contentType.value)
+          XCTAssertEqual(req.header(for: "x-adapted"), "true")
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let transport = URLSessionTransport(
+      baseURL: .init(format: serverURL.absoluteString),
+      adapter: RebuildingRequestAdapter()
+    )
     let request = try await transport.transportRequest(
       spec: .streaming(
         method: .post,
@@ -1688,6 +1730,19 @@ class URLSessionTransportTests: XCTestCase {
 
 private enum StreamingBodyTestError: Error {
   case replayFailed
+}
+
+
+private struct RebuildingRequestAdapter: RequestAdapter {
+
+  func adapt(transport: some Transport, urlRequest: URLRequest) -> URLRequest {
+    var request = URLRequest(url: urlRequest.url!)
+    request.httpMethod = urlRequest.httpMethod
+    request.allHTTPHeaderFields = urlRequest.allHTTPHeaderFields
+    request.setValue("true", forHTTPHeaderField: "x-adapted")
+    return request
+  }
+
 }
 
 

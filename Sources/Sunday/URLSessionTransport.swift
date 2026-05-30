@@ -40,7 +40,7 @@ private struct URLSessionTransportState: Sendable {
 }
 
 
-// swiftlint:disable type_body_length function_parameter_count
+// swiftlint:disable type_body_length
 /// URLSession-backed transport shared by generated clients.
 public final class URLSessionTransport: Transport, Sendable {
 
@@ -143,47 +143,12 @@ public final class URLSessionTransport: Transport, Sendable {
         encoders: pathEncoders
       )
 
-    // Encode & add query parameters to url
-    if let queryParameters = spec.queryParameters, !queryParameters.isEmpty {
+    url = try appendQueryParameters(spec.queryParameters, to: url)
 
-      guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
-        fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
-      }
-
-      var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-      urlComponents.percentEncodedQuery = try urlQueryEncoder.encodeQueryString(parameters: queryParameters)
-
-      guard let queryUrl = urlComponents.url else {
-        throw SundayError.invalidURL(urlComponents)
-      }
-
-      url = queryUrl
-    }
-
-    // Build basic request
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = spec.method.rawValue
-
-    // Encode and add headers
-    if let headers = spec.headers {
-
-      try HeaderParameters.encode(headers: headers)
-        .forEach { entry in
-          urlRequest.addValue(entry.value, forHTTPHeaderField: entry.name)
-        }
-    }
-
-    // Determine & add accept header
-    if let acceptTypes = spec.acceptTypes {
-      let supportedAcceptTypes = acceptTypes.filter { mediaTypeDecoders.supports(for: $0) }
-      if supportedAcceptTypes.isEmpty {
-        throw SundayError.requestEncodingFailed(reason: .noSupportedAcceptTypes(acceptTypes))
-      }
-
-      let accept = supportedAcceptTypes.map(\.value).joined(separator: " , ")
-
-      urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
-    }
+    try appendHeaders(spec.headers, to: &urlRequest)
+    try appendAcceptHeader(spec.acceptTypes, to: &urlRequest)
 
     let preparedBody = try spec.prepareBody(mediaTypeEncoders: mediaTypeEncoders)
     let contentType =
@@ -198,23 +163,88 @@ public final class URLSessionTransport: Transport, Sendable {
     switch preparedBody {
     case .data(let data, _):
       urlRequest.httpBody = data
-    case .stream(let streamingBody, _):
-      urlRequest.httpBodyStream = try streamingBody.makeInputStream()
-      let mutableRequest = (urlRequest as NSURLRequest).mutableCopy() as? NSMutableURLRequest
-      guard let mutableRequest else {
-        throw SundayError.requestEncodingFailed(reason: .streamCreationFailed)
-      }
-      URLProtocol.setProperty(
-        StreamingBodyRequestProperty(body: streamingBody),
-        forKey: streamingBodyRequestPropertyKey,
-        in: mutableRequest
-      )
-      urlRequest = mutableRequest as URLRequest
+    case .stream:
+      break
     case nil:
       break
     }
 
-    return try await adapter?.adapt(transport: self, urlRequest: urlRequest) ?? urlRequest
+    urlRequest = try await adapter?.adapt(transport: self, urlRequest: urlRequest) ?? urlRequest
+
+    switch preparedBody {
+    case .stream(let streamingBody, _):
+      urlRequest = try attachStreamingBody(streamingBody, to: urlRequest)
+    case .data, nil:
+      break
+    }
+
+    return urlRequest
+  }
+
+  private func appendQueryParameters(_ queryParameters: Parameters?, to url: URL) throws -> URL {
+
+    guard let queryParameters = queryParameters, !queryParameters.isEmpty else {
+      return url
+    }
+
+    guard let urlQueryEncoder = try mediaTypeEncoders.find(for: .wwwFormUrlEncoded) as? WWWFormURLEncoder else {
+      fatalError("MediaTypeEncoder for \(MediaType.wwwFormUrlEncoded) must be an instance of WWWFormURLEncoder")
+    }
+
+    var urlComponents = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    urlComponents.percentEncodedQuery = try urlQueryEncoder.encodeQueryString(parameters: queryParameters)
+
+    guard let queryUrl = urlComponents.url else {
+      throw SundayError.invalidURL(urlComponents)
+    }
+
+    return queryUrl
+  }
+
+  private func appendHeaders(_ headers: Parameters?, to urlRequest: inout URLRequest) throws {
+
+    guard let headers else {
+      return
+    }
+
+    try HeaderParameters.encode(headers: headers)
+      .forEach { entry in
+        urlRequest.addValue(entry.value, forHTTPHeaderField: entry.name)
+      }
+  }
+
+  private func appendAcceptHeader(_ acceptTypes: [MediaType]?, to urlRequest: inout URLRequest) throws {
+
+    guard let acceptTypes else {
+      return
+    }
+
+    let supportedAcceptTypes = acceptTypes.filter { mediaTypeDecoders.supports(for: $0) }
+    if supportedAcceptTypes.isEmpty {
+      throw SundayError.requestEncodingFailed(reason: .noSupportedAcceptTypes(acceptTypes))
+    }
+
+    let accept = supportedAcceptTypes.map(\.value).joined(separator: " , ")
+
+    urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
+  }
+
+  private func attachStreamingBody(_ streamingBody: StreamingBody, to request: URLRequest) throws -> URLRequest {
+
+    var request = request
+    request.httpBodyStream = try streamingBody.makeInputStream()
+
+    let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest
+    guard let mutableRequest else {
+      throw SundayError.requestEncodingFailed(reason: .streamCreationFailed)
+    }
+    URLProtocol.setProperty(
+      StreamingBodyRequestProperty(body: streamingBody),
+      forKey: streamingBodyRequestPropertyKey,
+      in: mutableRequest
+    )
+
+    return mutableRequest as URLRequest
   }
 
   private func dataResponse(request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
@@ -564,4 +594,4 @@ public final class URLSessionTransport: Transport, Sendable {
   }
 
 }
-// swiftlint:enable type_body_length function_parameter_count
+// swiftlint:enable type_body_length
