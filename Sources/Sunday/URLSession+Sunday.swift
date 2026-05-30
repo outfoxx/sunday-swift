@@ -32,7 +32,17 @@ public extension URLSession {
 
   func validatedData(for request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
 
-    let (responseBody, response) = try await data(for: request)
+    let responseBody: Data
+    let response: URLResponse
+    do {
+      (responseBody, response) = try await data(for: request)
+    }
+    catch {
+      if let replayError = request.streamingBodyRequestProperty?.recordedReplayError {
+        throw replayError
+      }
+      throw error
+    }
 
     return try validate(responseBody: responseBody, response: response)
   }
@@ -286,7 +296,14 @@ private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
       return
     }
 
-    completionHandler(try? property.body.makeInputStream())
+    do {
+      completionHandler(try property.body.makeInputStream())
+    }
+    catch {
+      property.recordReplayError(error)
+      task.cancel()
+      completionHandler(nil)
+    }
   }
 
   public func urlSession(
@@ -310,6 +327,18 @@ private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
     }
 
     completionHandler(.cancelAuthenticationChallenge, nil)
+  }
+
+}
+
+
+private extension URLRequest {
+
+  var streamingBodyRequestProperty: StreamingBodyRequestProperty? {
+    URLProtocol.property(
+      forKey: streamingBodyRequestPropertyKey,
+      in: self
+    ) as? StreamingBodyRequestProperty
   }
 
 }

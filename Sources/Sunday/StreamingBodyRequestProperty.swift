@@ -14,15 +14,31 @@
  * limitations under the License.
  */
 
+import Synchronization
+
+
 let streamingBodyRequestPropertyKey = "io.outfoxx.sunday.streamingBody"
 
 
-final class StreamingBodyRequestProperty {
+final class StreamingBodyRequestProperty: Sendable {
 
   let body: StreamingBody
+  private let replayError = Mutex<Error?>(nil)
 
   init(body: StreamingBody) {
     self.body = body
+  }
+
+  var recordedReplayError: Error? {
+    replayError.withLock { $0 }
+  }
+
+  func recordReplayError(_ error: Error) {
+    replayError.withLock { currentError in
+      if currentError == nil {
+        currentError = error
+      }
+    }
   }
 
 }

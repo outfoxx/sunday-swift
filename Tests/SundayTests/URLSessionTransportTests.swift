@@ -441,6 +441,65 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertEqual(requestCount.withLock { $0 }, 2)
   }
 
+  func testStreamingBodyReplaySurfacesStreamCreationError() async throws {
+
+    let body = Data("redirected-stream".utf8)
+    let contentType = try MediaType(valid: "application/x-tar")
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/redirect") {
+        POST { _, res in
+          res.send(
+            status: .temporaryRedirect,
+            headers: [HTTP.StdHeaders.location: ["/api"]],
+            body: Data()
+          )
+        }
+      }
+      Path("/api") {
+        POST { _, res in
+          res.send(statusCode: .noContent)
+        }
+      }
+    }
+
+    guard let serverURL = server.startLocal(timeout: 5.0) else {
+      XCTFail("could not start local server")
+      return
+    }
+    defer { server.stop() }
+
+    let factoryCount = Mutex(0)
+    let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
+    let operation: StreamingOperation<Void, URLSessionTransport> =
+      Operation(
+        transport: transport,
+        spec: .streaming(
+          method: .post,
+          pathTemplate: "/redirect",
+          body: StreamingBody(stream: {
+            let count = factoryCount.withLock {
+              $0 += 1
+              return $0
+            }
+            guard count == 1 else {
+              throw StreamingBodyTestError.replayFailed
+            }
+            return InputStream(data: body)
+          }),
+          contentTypes: [contentType]
+        )
+      )
+
+    try await XCTAssertThrowsError(try await operation.execute()) { error in
+      guard case StreamingBodyTestError.replayFailed = error else {
+        XCTFail("Incorrect Error: \(error)")
+        return
+      }
+    }
+
+    XCTAssertGreaterThanOrEqual(factoryCount.withLock { $0 }, 2)
+  }
+
   func testStreamingAsyncBytesBodyStartsWhenStreamOpens() async throws {
 
     let state = TrackingByteSequence.State()
@@ -1557,6 +1616,11 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertNil(result)
   }
 
+}
+
+
+private enum StreamingBodyTestError: Error {
+  case replayFailed
 }
 
 
