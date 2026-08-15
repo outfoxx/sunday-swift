@@ -270,9 +270,14 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
   /// Opens a connection to the server.
   ///
-  /// If the connection is already `open` or `connecting`, this does nothing.
+  /// If the calling task is cancelled or the connection is already `open` or `connecting`, this
+  /// does nothing.
   ///
   public func connect() {
+    guard !Task.isCancelled else {
+      return
+    }
+
     guard readyState == .closed else {
       return
     }
