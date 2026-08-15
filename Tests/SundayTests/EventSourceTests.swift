@@ -74,6 +74,27 @@ private enum TestEventStreamError: Error, Sendable {
 @MainActor
 class EventSourceTests: XCTestCase {
 
+  func testCancelledTaskDoesNotConnect() async {
+
+    let eventSource =
+      EventSource { _ in
+        URLSession.DataEventStream(events: AsyncThrowingStream { _ in })
+      }
+    defer { Task { await eventSource.close() } }
+
+    let connectTask = Task {
+      withUnsafeCurrentTask { task in
+        task?.cancel()
+      }
+      await eventSource.connect()
+    }
+
+    await connectTask.value
+
+    let readyState = await eventSource.readyState
+    XCTAssertEqual(readyState, .closed)
+  }
+
   func testIgnoresDoubleConnect() async throws {
 
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
