@@ -793,7 +793,10 @@ public actor EventSource { // swiftlint:disable:this type_body_length
     guard let value else {
       return
     }
-    guard let retryTimeMaximum = EventSourceTiming.parseMilliseconds(value) else {
+    guard
+      let retryTimeMaximum = EventSourceTiming.parseMilliseconds(value),
+      retryTimeMaximum > 0
+    else {
       logger.debug("Ignoring invalid retry maximum message: retryMaximum=\(value, privacy: .public)")
       return
     }

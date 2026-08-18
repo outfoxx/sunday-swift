@@ -445,6 +445,32 @@ class EventSourceTests: XCTestCase {
     XCTAssertEqual(serverEventTimeoutInterval, .seconds(1))
   }
 
+  func testZeroRetryMaximumIsIgnored() async throws {
+
+    let eventSource =
+      EventSource { _ in
+        Self.dataEventStream(
+          data: "retry-max: 750\ndata: configured\n\nretry-max: 0\ndata: unchanged\n\n",
+          finishes: false
+        )
+      }
+    defer { Task { await eventSource.close() } }
+
+    let messageX = expectation(description: "Events Received")
+    messageX.expectedFulfillmentCount = 2
+
+    await eventSource.setOnMessage { _, _, _ in
+      messageX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [messageX], timeout: 30)
+
+    let retryTimeMaximum = await eventSource.retryTimeMaximum
+    XCTAssertEqual(retryTimeMaximum, .milliseconds(750))
+  }
+
   func testReconnectsWithLastEventId() async throws {
 
     let reconnectX = expectation(description: "reconnection")
