@@ -19,6 +19,8 @@ import Foundation
 
 struct EventInfo: Sendable {
   var retry: String?
+  var retryMaximum: String?
+  var keepalive: String?
   var event: String?
   var id: String?
   var data: String?
@@ -168,6 +170,12 @@ class EventParser {
 
       case "retry":
         info.retry = trimEventField(string: value)
+
+      case "retry-max":
+        info.retryMaximum = trimEventField(string: value)
+
+      case "keepalive":
+        info.keepalive = trimEventField(string: value)
 
       case "event":
         info.event = trimEventField(string: value)

@@ -386,7 +386,63 @@ class EventSourceTests: XCTestCase {
     await fulfillment(of: [messageX], timeout: 30)
 
     let retryTime = await eventSource.retryTime
-    XCTAssertEqual(retryTime, .milliseconds(100))
+    XCTAssertEqual(retryTime, .milliseconds(500))
+  }
+
+  func testInvalidNumericReconnectControlsAreIgnored() async throws {
+
+    let eventSource =
+      EventSource { _ in
+        Self.dataEventStream(
+          data: "retry: -1\nretry-max: 1.5\nkeepalive: +100\ndata: configured\n\n",
+          finishes: false
+        )
+      }
+    defer { Task { await eventSource.close() } }
+
+    let messageX = expectation(description: "Event Received")
+
+    await eventSource.setOnMessage { _, _, _ in
+      messageX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [messageX], timeout: 30)
+
+    let retryTime = await eventSource.retryTime
+    let retryTimeMaximum = await eventSource.retryTimeMaximum
+    let serverEventTimeoutInterval = await eventSource.serverEventTimeoutInterval
+    XCTAssertEqual(retryTime, .milliseconds(500))
+    XCTAssertNil(retryTimeMaximum)
+    XCTAssertNil(serverEventTimeoutInterval)
+  }
+
+  func testServerReconnectControlsUpdate() async throws {
+
+    let eventSource =
+      EventSource { _ in
+        Self.dataEventStream(
+          data: "retry-max: 750\nkeepalive: 100\ndata: configured\n\n",
+          finishes: false
+        )
+      }
+    defer { Task { await eventSource.close() } }
+
+    let messageX = expectation(description: "Event Received")
+
+    await eventSource.setOnMessage { _, _, _ in
+      messageX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [messageX], timeout: 30)
+
+    let retryTimeMaximum = await eventSource.retryTimeMaximum
+    let serverEventTimeoutInterval = await eventSource.serverEventTimeoutInterval
+    XCTAssertEqual(retryTimeMaximum, .milliseconds(750))
+    XCTAssertEqual(serverEventTimeoutInterval, .seconds(1))
   }
 
   func testReconnectsWithLastEventId() async throws {
@@ -588,6 +644,60 @@ class EventSourceTests: XCTestCase {
     await eventSource.connect()
 
     await fulfillment(of: [errorX], timeout: 30)
+  }
+
+  func testKeepaliveEnablesEventTimeoutWhenDefaultIsDisabled() async throws {
+
+    XCTAssertNil(EventSource.eventTimeoutIntervalDefault)
+
+    let eventSource =
+      EventSource(eventTimeoutCheckInterval: .milliseconds(20)) { _ in
+        Self.dataEventStream(data: "keepalive: 1\n\n", finishes: false)
+      }
+    defer { Task { await eventSource.close() } }
+
+    let errorX = expectation(description: "Event Timeout")
+
+    await eventSource.setOnError { error in
+      guard let error = error as? EventSource.Error, error == .eventTimeout else {
+        return
+      }
+
+      Task {
+        await eventSource.close()
+        errorX.fulfill()
+      }
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [errorX], timeout: 3)
+  }
+
+  func testExplicitEventTimeoutOverridesKeepalive() async throws {
+
+    let eventSource =
+      EventSource(eventTimeoutInterval: .milliseconds(100), eventTimeoutCheckInterval: .milliseconds(20)) { _ in
+        Self.dataEventStream(data: "keepalive: 60000\n\n", finishes: false)
+      }
+    defer { Task { await eventSource.close() } }
+
+    let errorX = expectation(description: "Event Timeout")
+
+    await eventSource.setOnError { error in
+      guard let error = error as? EventSource.Error, error == .eventTimeout else {
+        return
+      }
+
+      Task {
+        await eventSource.close()
+        errorX.fulfill()
+      }
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [errorX], timeout: 3)
   }
 
   func testCloseWhenTransportReturnsNil() async throws {
@@ -805,19 +915,166 @@ class EventSourceTests: XCTestCase {
     await eventSource.close()
   }
 
-  func testCheckRetryDelays() {
+  func testSuccessfulConnectionResetsRetryAttempt() async throws {
 
-    var delays: [DispatchTimeInterval] = []
+    let connectionCount = Mutex(0)
+    let eventSource =
+      EventSource { _ in
+        let connection = connectionCount.withLock { count in
+          defer { count += 1 }
+          return count
+        }
 
-    for attempt in 0 ..< 30 {
-      delays.append(EventSource.calculateRetryDelay(retryAttempt: attempt,
-                                                    retryTime: EventSource.retryTimeDefault,
-                                                    lastConnectTime: .milliseconds(0)))
+        if connection == 0 {
+          throw TestEventStreamError.interrupted
+        }
+
+        return Self.dataEventStream(data: "", finishes: false)
+      }
+    defer { Task { await eventSource.close() } }
+
+    let openX = expectation(description: "EventSource Opened")
+
+    await eventSource.setOnOpen {
+      Task {
+        let retryAttempt = await eventSource.retryAttempt
+        XCTAssertEqual(retryAttempt, 0)
+        await eventSource.close()
+        openX.fulfill()
+      }
     }
 
-    XCTAssertEqual(delays[0], .milliseconds(0))
-    XCTAssertEqual(delays[1], .milliseconds(100))
-    XCTAssertGreaterThan(delays[29].totalSeconds, 60)
+    await eventSource.connect()
+
+    await fulfillment(of: [openX], timeout: 3)
+    XCTAssertEqual(connectionCount.withLock { $0 }, 2)
+  }
+
+  func testCheckRetryDelays() {
+
+    let delays = (0 ... 6).map {
+      EventSource.calculateRetryDelay(
+        retryAttempt: $0,
+        retryTime: .milliseconds(500),
+        retryTimeMaximum: nil,
+        jitterFactor: 1
+      )
+    }
+
+    XCTAssertEqual(delays, [
+      .milliseconds(500),
+      .seconds(1),
+      .seconds(2),
+      .seconds(4),
+      .seconds(8),
+      .seconds(15),
+      .seconds(15),
+    ])
+
+    let serverCappedDelay = EventSource.calculateRetryDelay(
+      retryAttempt: 4,
+      retryTime: .milliseconds(500),
+      retryTimeMaximum: .seconds(3),
+      jitterFactor: 1
+    )
+    XCTAssertEqual(serverCappedDelay, .seconds(3))
+
+    let jitteredDelay = EventSource.calculateRetryDelay(
+      retryAttempt: 1,
+      retryTime: .milliseconds(500),
+      retryTimeMaximum: nil,
+      jitterFactor: 0.9
+    )
+    XCTAssertEqual(jitteredDelay, .milliseconds(900))
+  }
+
+  func testNoContentResponseStopsWithoutReconnecting() async throws {
+
+    let connectionCount = Mutex(0)
+    let reconnectX = expectation(description: "EventSource Reconnected")
+    reconnectX.isInverted = true
+    let eventSource =
+      EventSource { _ in
+        let count = connectionCount.withLock { count in
+          count += 1
+          return count
+        }
+        if count > 1 {
+          reconnectX.fulfill()
+        }
+        return Self.dataEventStream(statusCode: 204, data: "")
+      }
+    defer { Task { await eventSource.close() } }
+
+    let closeX = expectation(description: "EventSource Closed")
+
+    await eventSource.setOnStateError { error, readyState in
+      guard readyState == .closed else {
+        return
+      }
+
+      guard let error = error as? SundayError,
+            case .responseValidationFailed(reason: .unacceptableStatusCode) = error
+      else {
+        XCTFail("Expected unacceptable status error, got \(String(describing: error))")
+        closeX.fulfill()
+        return
+      }
+
+      closeX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [closeX], timeout: 3)
+    await fulfillment(of: [reconnectX], timeout: 0.75)
+    XCTAssertEqual(connectionCount.withLock { $0 }, 1)
+  }
+
+  func testHTTPValidationFailureStopsWithoutReconnecting() async throws {
+
+    let response = Self.eventStreamResponse(statusCode: 404)
+    let connectionCount = Mutex(0)
+    let reconnectX = expectation(description: "EventSource Reconnected")
+    reconnectX.isInverted = true
+    let eventSource =
+      EventSource { _ -> URLSession.DataEventStream? in
+        let count = connectionCount.withLock { count in
+          count += 1
+          return count
+        }
+        if count > 1 {
+          reconnectX.fulfill()
+        }
+        throw SundayError.responseValidationFailed(
+          reason: .unacceptableStatusCode(response: response, data: nil)
+        )
+      }
+    defer { Task { await eventSource.close() } }
+
+    let closeX = expectation(description: "EventSource Closed")
+
+    await eventSource.setOnStateError { error, readyState in
+      guard readyState == .closed else {
+        return
+      }
+
+      guard let error = error as? SundayError,
+            case .responseValidationFailed(reason: .unacceptableStatusCode) = error
+      else {
+        XCTFail("Expected unacceptable status error, got \(String(describing: error))")
+        closeX.fulfill()
+        return
+      }
+
+      closeX.fulfill()
+    }
+
+    await eventSource.connect()
+
+    await fulfillment(of: [closeX], timeout: 3)
+    await fulfillment(of: [reconnectX], timeout: 0.75)
+    XCTAssertEqual(connectionCount.withLock { $0 }, 1)
   }
 
   func testPingsResetLastEventReceivedTime() async throws {
@@ -896,12 +1153,15 @@ class EventSourceTests: XCTestCase {
     await eventSource.close()
   }
 
-  nonisolated private static func dataEventStream(data: String, finishes: Bool = true,
-                                                  finishesAfter: TimeInterval? = nil,
-                                                  throwsAfter: DispatchTimeInterval? = nil)
-    -> URLSession.DataEventStream {
+  private nonisolated static func dataEventStream(
+    statusCode: Int = 200,
+    data: String,
+    finishes: Bool = true,
+    finishesAfter: TimeInterval? = nil,
+    throwsAfter: DispatchTimeInterval? = nil
+  ) -> URLSession.DataEventStream {
     return URLSession.DataEventStream(events: AsyncThrowingStream { continuation in
-      continuation.yield(.connect(Self.eventStreamResponse()))
+      continuation.yield(.connect(Self.eventStreamResponse(statusCode: statusCode)))
       continuation.yield(.data(Data(data.utf8)))
       let finishDelay = finishesAfter.map { DispatchTimeInterval.milliseconds(Int($0 * 1000)) }
       if let streamCompletionDelay = finishDelay ?? throwsAfter {
@@ -927,10 +1187,10 @@ class EventSourceTests: XCTestCase {
     })
   }
 
-  nonisolated private static func eventStreamResponse() -> HTTPURLResponse {
+  private nonisolated static func eventStreamResponse(statusCode: Int = 200) -> HTTPURLResponse {
     HTTPURLResponse(
       url: URL(string: "http://example.com/events")!,
-      statusCode: 200,
+      statusCode: statusCode,
       httpVersion: nil,
       headerFields: [
         HTTP.StdHeaders.contentType: MediaType.eventStream.value,
