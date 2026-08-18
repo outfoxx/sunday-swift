@@ -222,6 +222,24 @@ class EventParserTests: XCTestCase {
     XCTAssertEqual(event.data, "")
   }
 
+  func testParsesReconnectControlFields() {
+    let eventBuffer = Data("retry: 500\nretry-max: 15000\nkeepalive: 5000\n\n".utf8)
+
+    let parser = EventParser()
+
+    var events: [EventInfo] = []
+    parser.process(data: eventBuffer) { events.append($0) }
+
+    XCTAssertEqual(events.count, 1)
+    guard let event = events.first else {
+      return
+    }
+
+    XCTAssertEqual(event.retry, "500")
+    XCTAssertEqual(event.retryMaximum, "15000")
+    XCTAssertEqual(event.keepalive, "5000")
+  }
+
   func testIgnoresCommentLines() {
     let eventBuffer = Data(": this is a common\nevent\nid\ndata\n\n".utf8)
 

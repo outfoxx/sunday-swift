@@ -76,10 +76,12 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   /// Global default time interval for event timeout.
   ///
   /// If an event is not received within the specified timeout the connection is forcibly restarted.
+  /// When this is `nil`, a server can enable event timeouts for a connection by sending a
+  /// `keepalive:` field.
   ///
-  /// - Important: The setting is mutable and can be modified to alter the global default. If set to
-  ///   `nil`, the default will be that event timeouts are disabled. Each `EventSource` can override
-  ///   this setting in its initializer.
+  /// - Important: The setting is mutable and can be modified to alter the global default. When set
+  ///   to `nil`, event timeouts remain disabled unless the server sends a `keepalive:` field. Each
+  ///   `EventSource` can override this setting in its initializer.
   ///
   public static var eventTimeoutIntervalDefault: DispatchTimeInterval? {
     get { eventSourceDefaults.withLock { $0.eventTimeoutInterval } }
@@ -98,27 +100,26 @@ public actor EventSource { // swiftlint:disable:this type_body_length
     set { eventSourceDefaults.withLock { $0.eventTimeoutCheckInterval = newValue } }
   }
 
-  // Maximum multiplier for the backoff algorithm.
-  private static let maxRetryTimeMultiplier = 12
-  private static let retryExponent = 2.6
-
-
   /// Current state of the `EventSource`.
   public private(set) var readyState = State.closed
 
   /// Current time interval for connection retries.
   ///
   /// The retry time defaults to the global default value `EventSource.retryTimeDefault`. It can also
-  /// be updated by the server using retry update messages.
+  /// be updated by the server using `retry:` fields. A server can cap exponential backoff using a
+  /// `retry-max:` field.
   ///
-  /// - Note: EventSource employs an exponential backoff algorithm for retries. This setting controls
-  ///   the initial retry delay and calculations for successive retries.
+  /// - Note: EventSource employs capped exponential backoff with jitter for consecutive failed
+  ///   connections. This setting controls the initial retry delay. A successful connection resets
+  ///   the backoff, so a clean server close reconnects after exactly this interval.
   ///
   /// - SeeAlso: [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html)
   ///
   public private(set) var retryTime = retryTimeDefault
 
-  internal private(set) var lastEventReceivedTime = DispatchTime.distantFuture
+  private(set) var retryTimeMaximum: DispatchTimeInterval?
+
+  private(set) var lastEventReceivedTime = DispatchTime.distantFuture
 
   private let callbackQueue: DispatchQueue
   private let dataEventStreamFactory: @Sendable (HTTP.Headers) async throws -> URLSession.DataEventStream?
@@ -130,11 +131,11 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   private var eventListeners: [String: [UUID: EventHandler]] = [:]
 
   private var lastEventId: String?
-  private var connectionAttemptTime: DispatchTime?
-  private var retryAttempt = 0
+  private(set) var retryAttempt = 0
 
   private let eventTimeoutInterval: DispatchTimeInterval?
   private let eventTimeoutCheckInterval: DispatchTimeInterval
+  private(set) var serverEventTimeoutInterval: DispatchTimeInterval?
 
   private var dataEventStreamTask: Task<Void, Never>?
   private var queuedReconnectTask: Task<Void, Never>?
@@ -152,7 +153,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   ///   - eventTimeoutInterval: Maximum amount of time `EventSource` will wait for an event before
   ///     forcibly reconnecting. Defaults to `EventSource.eventTimeoutIntervalDefault`.
   ///   - eventTimeoutCheckInterval: Frequency that event timeouts are checked. Defaults to
-  ///     `EventSource.eventTimeoutIntervalDefault`.
+  ///     `EventSource.eventTimeoutCheckIntervalDefault`.
   ///   - dataEventStreamFactory: Factory method for data event streams. It is provided a map of HTTP
   ///     headers that should be included in the generated request.
   ///
@@ -305,9 +306,8 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
     logger.debug("Connecting")
 
+    serverEventTimeoutInterval = nil
     eventParser.reset()
-
-    connectionAttemptTime = .now()
 
     let headers = connectionHeaders()
     let dataEventStreamFactory = self.dataEventStreamFactory
@@ -380,8 +380,8 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       }
 
       switch event {
-      case .connect:
-        guard await eventSource?.receivedHeaders() == true else {
+      case .connect(let response):
+        guard await eventSource?.receivedHeaders(response) == true else {
           return
         }
 
@@ -451,13 +451,16 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
     stopEventTimeoutCheck()
 
-    guard eventTimeoutInterval != nil else {
+    self.lastEventReceivedTime = lastEventReceivedTime
+
+    guard let activeEventTimeoutInterval else {
       return
     }
 
-    self.lastEventReceivedTime = lastEventReceivedTime
-
-    let eventTimeoutCheckInterval = self.eventTimeoutCheckInterval
+    let eventTimeoutCheckInterval = EventSourceTiming.timeoutCheckInterval(
+      configured: eventTimeoutCheckInterval,
+      timeout: activeEventTimeoutInterval
+    )
     eventTimeoutTask = Task { [weak self] in
       while !Task.isCancelled {
         do {
@@ -487,7 +490,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
   private func checkEventTimeout() {
 
-    guard let eventTimeoutInterval else {
+    guard let activeEventTimeoutInterval else {
       stopEventTimeoutCheck()
       return
     }
@@ -496,7 +499,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
     logger.debug("Checking Event Timeout")
     #endif
 
-    let eventTimeoutDeadline = lastEventReceivedTime + eventTimeoutInterval
+    let eventTimeoutDeadline = lastEventReceivedTime + activeEventTimeoutInterval
 
     guard DispatchTime.now() >= eventTimeoutDeadline else {
       return
@@ -511,12 +514,14 @@ public actor EventSource { // swiftlint:disable:this type_body_length
     scheduleReconnectAfterQueuedCallbacks(cancelConnection: true)
   }
 
-
+  private var activeEventTimeoutInterval: DispatchTimeInterval? {
+    eventTimeoutInterval ?? serverEventTimeoutInterval
+  }
 
   // MARK: Connection Handlers
 
 
-  private func receivedHeaders() -> Bool {
+  private func receivedHeaders(_ response: HTTPURLResponse) -> Bool {
 
     guard readyState == .connecting else {
       logger.error("Invalid state for receiving headers: state=\(self.readyState.rawValue, privacy: .public)")
@@ -524,6 +529,14 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       fireErrorEvent(error: Error.invalidState)
 
       scheduleReconnectAfterQueuedCallbacks(cancelConnection: true)
+      return false
+    }
+
+    guard response.statusCode == 200 else {
+      let error = SundayError.responseValidationFailed(
+        reason: .unacceptableStatusCode(response: response, data: nil)
+      )
+      close(notifying: error)
       return false
     }
 
@@ -573,6 +586,11 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       return
     }
 
+    if isTerminalHTTPError(error) {
+      close(notifying: error)
+      return
+    }
+
     logger.debug("Received Error: \(error.localizedDescription, privacy: .public)")
 
     fireErrorEvent(error: error)
@@ -601,6 +619,19 @@ public actor EventSource { // swiftlint:disable:this type_body_length
     }
   }
 
+  private func isTerminalHTTPError(_ error: Swift.Error) -> Bool {
+    guard let sundayError = error as? SundayError else {
+      return false
+    }
+
+    switch sundayError {
+    case .responseValidationFailed(reason: .unacceptableStatusCode):
+      return true
+    default:
+      return false
+    }
+  }
+
 
   // MARK: Reconnection
 
@@ -615,17 +646,16 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
     readyState = .connecting
 
-    let lastConnectTime = connectionAttemptTime?.distance(to: .now()) ?? .microseconds(0)
-
     let retryDelay = Self.calculateRetryDelay(
       retryAttempt: retryAttempt,
       retryTime: retryTime,
-      lastConnectTime: lastConnectTime
+      retryTimeMaximum: retryTimeMaximum,
+      jitterFactor: retryAttempt == 0 ? 1 : Double.random(in: EventSourceTiming.retryJitterRange)
     )
 
     logger.debug("Scheduling Reconnect delay=\(retryDelay.totalSeconds, format: .fixed(precision: 3))")
 
-    retryAttempt += 1
+    retryAttempt = EventSourceTiming.nextRetryAttempt(after: retryAttempt)
 
     reconnectTask = Task { [weak self] in
       do {
@@ -680,22 +710,15 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   static func calculateRetryDelay(
     retryAttempt: Int,
     retryTime: DispatchTimeInterval,
-    lastConnectTime: DispatchTimeInterval
+    retryTimeMaximum: DispatchTimeInterval?,
+    jitterFactor: Double
   ) -> DispatchTimeInterval {
-
-    let retryMultiplier = Double(min(retryAttempt, Self.maxRetryTimeMultiplier))
-    let retryTime = Double(retryTime.totalMilliseconds)
-
-    var retryDelay = pow(retryMultiplier, retryExponent) * retryTime
-
-    if retryAttempt > 0 {
-
-      retryDelay -= Double(lastConnectTime.totalMilliseconds)
-
-      retryDelay = max(retryDelay, retryTime)
-    }
-
-    return .milliseconds(Int(retryDelay))
+    EventSourceTiming.retryDelay(
+      retryAttempt: retryAttempt,
+      retryTime: retryTime,
+      retryTimeMaximum: retryTimeMaximum,
+      jitterFactor: jitterFactor
+    )
   }
 
 
@@ -707,19 +730,9 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
     lastEventReceivedTime = .now()
 
-    if let retry = info.retry {
-
-      if let retryTime = Int(retry.trimmingCharacters(in: .whitespaces), radix: 10) {
-        logger.debug("Update retry timeout: retryTime=\(retryTime)ms")
-
-        self.retryTime = .milliseconds(retryTime)
-
-      }
-      else {
-        logger.debug("Ignoring invalid retry timeout message: retry=\(retry, privacy: .public)")
-      }
-
-    }
+    updateRetryTime(from: info.retry)
+    updateRetryTimeMaximum(from: info.retryMaximum)
+    updateKeepalive(from: info.keepalive)
 
     if info.event == nil, info.id == nil, info.data == nil {
       return
@@ -763,6 +776,52 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
   }
 
+  private func updateRetryTime(from value: String?) {
+    guard let value else {
+      return
+    }
+    guard let retryTime = EventSourceTiming.parseMilliseconds(value) else {
+      logger.debug("Ignoring invalid retry timeout message: retry=\(value, privacy: .public)")
+      return
+    }
+
+    logger.debug("Update retry timeout: retryTime=\(retryTime)ms")
+    self.retryTime = .milliseconds(retryTime)
+  }
+
+  private func updateRetryTimeMaximum(from value: String?) {
+    guard let value else {
+      return
+    }
+    guard
+      let retryTimeMaximum = EventSourceTiming.parseMilliseconds(value),
+      retryTimeMaximum > 0
+    else {
+      logger.debug("Ignoring invalid retry maximum message: retryMaximum=\(value, privacy: .public)")
+      return
+    }
+
+    logger.debug("Update retry maximum: retryTimeMaximum=\(retryTimeMaximum)ms")
+    self.retryTimeMaximum = .milliseconds(retryTimeMaximum)
+  }
+
+  private func updateKeepalive(from value: String?) {
+    guard let value else {
+      return
+    }
+    guard let keepaliveInterval = EventSourceTiming.parseMilliseconds(value), keepaliveInterval > 0
+    else {
+      logger.debug("Ignoring invalid keepalive message: keepalive=\(value, privacy: .public)")
+      return
+    }
+
+    let keepaliveTimeout = EventSourceTiming.keepaliveTimeout(for: keepaliveInterval)
+    logger.debug("Update keepalive timeout: eventTimeout=\(keepaliveTimeout.totalMilliseconds)ms")
+
+    serverEventTimeoutInterval = keepaliveTimeout
+    startEventTimeoutCheck(lastEventReceivedTime: lastEventReceivedTime)
+  }
+
   private func fireErrorEvent(error: Swift.Error?) {
 
     let readyState = self.readyState
@@ -781,8 +840,8 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
 
 private struct EventSourceDefaults: Sendable {
-  var retryTime = DispatchTimeInterval.milliseconds(100)
-  var eventTimeoutInterval: DispatchTimeInterval? = DispatchTimeInterval.seconds(120)
+  var retryTime = DispatchTimeInterval.milliseconds(500)
+  var eventTimeoutInterval: DispatchTimeInterval?
   var eventTimeoutCheckInterval = DispatchTimeInterval.seconds(100)
 }
 
