@@ -620,15 +620,13 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   }
 
   private func isTerminalHTTPError(_ error: Swift.Error) -> Bool {
-    guard let sundayError = error as? SundayError else {
-      return false
-    }
-
-    switch sundayError {
-    case .responseValidationFailed(reason: .unacceptableStatusCode):
+    switch error {
+    case let error as TokenProviderError: return error.reason != .temporary
+    case is AuthorizationRequiredError,
+         SundayError.requestEncodingFailed,
+         SundayError.responseValidationFailed(reason: .unacceptableStatusCode):
       return true
-    default:
-      return false
+    default: return false
     }
   }
 

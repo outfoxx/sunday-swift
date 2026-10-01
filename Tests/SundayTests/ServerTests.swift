@@ -28,9 +28,9 @@ struct Item: Codable, Equatable {
 
 class HTTPServerTests: XCTestCase {
 
-  static func buildAndStartServer() -> (URL, RoutingHTTPServer) {
+  static func buildAndStartServer() async throws -> (URL, RoutingHTTPServer) {
 
-    let server = try! RoutingHTTPServer(port: .any, localOnly: true) {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/chunked") {
         GET { _, res in
           res.start(status: .ok, headers: [
@@ -73,17 +73,14 @@ class HTTPServerTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      fatalError()
-    }
+    let serverURL = try await startTestServer(server)
 
     return (serverURL, server)
   }
 
   func testPOST() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)
@@ -111,7 +108,7 @@ class HTTPServerTests: XCTestCase {
 
   func testGETList() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)
@@ -133,7 +130,7 @@ class HTTPServerTests: XCTestCase {
 
   func testGETItem() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)
@@ -154,7 +151,7 @@ class HTTPServerTests: XCTestCase {
 
   func testDELETE() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)
@@ -172,7 +169,7 @@ class HTTPServerTests: XCTestCase {
 
   func testPUTExpect() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)
@@ -201,7 +198,7 @@ class HTTPServerTests: XCTestCase {
 
   func testChunked() async throws {
 
-    let (serverURL, server) = Self.buildAndStartServer()
+    let (serverURL, server) = try await Self.buildAndStartServer()
     defer { server.stop() }
 
     let session = URLSession(configuration: .default)

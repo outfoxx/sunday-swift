@@ -35,7 +35,7 @@ public extension URLSession {
     let responseBody: Data
     let response: URLResponse
     do {
-      (responseBody, response) = try await data(for: request)
+      (responseBody, response) = try await securedData(for: request)
     }
     catch {
       if let replayError = request.streamingBodyRequestProperty?.recordedReplayError {
@@ -75,12 +75,12 @@ public extension URLSession {
     public typealias Failure = Error
 
     private enum Source {
-      case request(URLSession, URLRequest)
+      case request(URLSession, URLRequest, AuthenticationRecoveryBudget)
       case events(AsyncThrowingStream<DataEvent, Error>)
     }
 
     private enum IteratorState {
-      case pending(URLSession, URLRequest)
+      case pending(URLSession, URLRequest, AuthenticationRecoveryBudget)
       case streaming(URLSession.AsyncBytes.AsyncIterator, DataEventBuffer)
       case events(AsyncThrowingStream<DataEvent, Error>.Iterator)
       case finished
@@ -90,8 +90,8 @@ public extension URLSession {
 
       private var state: IteratorState
 
-      init(session: URLSession, request: URLRequest) {
-        state = .pending(session, request)
+      init(session: URLSession, request: URLRequest, budget: AuthenticationRecoveryBudget) {
+        state = .pending(session, request, budget)
       }
 
       init(events: AsyncThrowingStream<DataEvent, Error>) {
@@ -100,13 +100,13 @@ public extension URLSession {
 
       public mutating func next() async throws -> DataEvent? {
         switch state {
-        case .pending(let session, let request):
+        case .pending(let session, let request, let budget):
           guard !Task.isCancelled else {
             state = .finished
             return nil
           }
 
-          let (bytes, response) = try await session.bytes(for: request)
+          let (bytes, response) = try await session.securedBytes(for: request, budget: budget)
 
           guard let httpResponse = response as? HTTPURLResponse else {
             throw SundayError.invalidHTTPResponse
@@ -161,8 +161,8 @@ public extension URLSession {
 
     private let source: Source
 
-    init(session: URLSession, request: URLRequest) {
-      self.source = .request(session, request)
+    init(session: URLSession, request: URLRequest, budget: AuthenticationRecoveryBudget = .init()) {
+      self.source = .request(session, request, budget)
     }
 
     init(events: AsyncThrowingStream<DataEvent, Error>) {
@@ -171,8 +171,8 @@ public extension URLSession {
 
     public func makeAsyncIterator() -> AsyncIterator {
       switch source {
-      case .request(let session, let request):
-        AsyncIterator(session: session, request: request)
+      case .request(let session, let request, let budget):
+        AsyncIterator(session: session, request: request, budget: budget)
       case .events(let events):
         AsyncIterator(events: events)
       }
@@ -182,6 +182,13 @@ public extension URLSession {
 
   func dataEventStream(for request: URLRequest) throws -> DataEventStream {
     DataEventStream(session: self, request: request)
+  }
+
+  internal func dataEventStream(
+    for request: URLRequest,
+    securityBudget: AuthenticationRecoveryBudget
+  ) -> DataEventStream {
+    DataEventStream(session: self, request: request, budget: securityBudget)
   }
 
   func close(cancelOutstandingTasks: Bool) {

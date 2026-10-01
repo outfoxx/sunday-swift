@@ -25,6 +25,57 @@ SPM dependency declaration:
 ```
 
 
+Environment-aware credentials
+-----------------------------
+
+Generated clients select operation security from an explicitly selected profile. Register
+providers under the names in those bindings and pass the manager to `URLSessionTransport`.
+Secrets, interactive authorization, and token persistence remain application responsibilities.
+
+```swift
+let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+  identity: "external-service", clientID: applicationClientID,
+  clientSecret: applicationClientSecret, authentication: .clientSecretBasic
+))
+let tokens = try TokenManager(providers: ["external": provider])
+let transport = URLSessionTransport(baseURL: "https://api.example.com", tokenManager: tokens)
+```
+
+The native provider supports client credentials and application-managed authorization
+code/PKCE. For an interactive session, supply a distinct `grantIdentity` and an `authorize`
+callback returning `AuthorizationGrant` with a fresh code, redirect URI, and verifier. A
+session that cannot refresh throws `AuthorizationRequiredError`; consumed codes are never
+reused. External/static credentials implement `TokenProvider`; providers supporting refresh
+also implement `RefreshingTokenProvider`.
+
+The actor-based manager partitions tokens by provider/client identity, profile, endpoints,
+scopes, audience/resource, and grant identity. It coalesces renewal, applies expiry skew,
+preserves rotated refresh tokens, and lets individual callers cancel without interrupting
+other waiters. Canceling the last waiter cancels acquisition. Use `TokenStore` for custom
+persistence, and call `await tokens.close()` when its application/session ends. Expiry uses
+`Date` values. Endpoint overrides change acquisition without rewriting issuer trust.
+
+Managed requests suppress native redirects and ambient authentication. One recovery is
+allowed for an explicit Bearer `invalid_token` challenge on a bodyless GET, HEAD, or OPTIONS.
+403 responses and unsafe/body-carrying requests do not replay. Event subscriptions share
+one recovery budget across reconnects, and closing a subscription cancels pending acquisition.
+
+Model validation
+----------------
+
+Generated models use one hierarchy for reads, storage, editing, and subsequent requests.
+Call `model.isValid(.request)` or `try model.validate(.request)` before submitting a value;
+use `.response` for received/emitted responses. Generated type-associated validators such as
+`ItemValidation` also expose these calls, including for aliases and collection schemas.
+
+Request mode rejects declared enum/union fallbacks by default. Response mode retains the
+schema's declared tolerance. Validation never applies defaults or changes the value, and
+validity is not cached. `validate` collects stable reason codes and wire paths during the
+same canonical check used by `isValid`; `ModelValidationError.diagnostics` provides those
+failures as JSON Pointers. Shared references are allowed, while object cycles are rejected.
+Generated transport hooks revalidate current values immediately before encoding on every
+execution. Constructors and standalone Codable adapters use response semantics.
+
 License
 -------
 
@@ -41,3 +92,11 @@ License
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
     See the License for the specific language governing permissions and
     limitations under the License.
+
+Credentials are isolated by logical security scheme as well as provider and acquisition inputs.
+Discovery metadata is fetched and verified on each acquisition or renewal. Temporary provider outages
+allow event connections to reconnect; a rejected refresh grant triggers fresh client credentials only
+for the client-credentials flow. Interactive sessions require fresh application authorization.
+Built-in OAuth providers retain at most 1,024 consumed authorization-code hashes per provider instance.
+After this limit, create a provider for a newly authorized application session; old hashes are never
+evicted to allow code reuse. Refresh exchanges do not consume this history.

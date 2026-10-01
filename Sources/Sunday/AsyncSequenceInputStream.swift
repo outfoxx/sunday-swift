@@ -45,7 +45,8 @@ enum AsyncSequenceInputStream {
 
 
 // OutputStream is not Sendable, but this owner keeps it private to one writer task and only exposes cancellation.
-private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, @unchecked Sendable where S: AsyncSequence & Sendable, S.Element == Data {
+private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, @unchecked Sendable
+where S: AsyncSequence & Sendable, S.Element == Data {
 
   private enum State: Sendable {
     case idle
@@ -108,7 +109,9 @@ private final class AsyncSequenceInputStreamOwner<S>: NSObject, StreamDelegate, 
     case .hasSpaceAvailable:
       resumeWaitingWriter()
     case .errorOccurred, .endEncountered:
-      resumeWaitingWriter(throwing: outputStream.streamError ?? SundayError.requestEncodingFailed(reason: .streamCreationFailed))
+      resumeWaitingWriter(
+        throwing: outputStream.streamError ?? SundayError.requestEncodingFailed(reason: .streamCreationFailed)
+      )
     default:
       break
     }
