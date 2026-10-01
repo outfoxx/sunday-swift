@@ -104,6 +104,7 @@ actor TokenCacheEntry {
     do { result = try .success(await renew(id: id, provider: provider, request: request)) }
  catch is CancellationError { result = .failure(CancellationError()) }
  catch is AuthorizationRequiredError { result = .failure(AuthorizationRequiredError()) }
+ catch let error as TokenProviderError { result = .failure(error) }
  catch { result = .failure(TokenProviderError()) }
     guard let current = renewal, current.id == id else { return }
     renewal = nil
@@ -122,12 +123,20 @@ actor TokenCacheEntry {
     }
     let tokens: TokenSet
     if let refreshToken = stored?.refreshToken, let refreshing = provider as? any RefreshingTokenProvider {
-      let renewed = try await refreshing.refresh(request, refreshToken: refreshToken)
-      tokens = TokenSet(
-        accessToken: renewed.accessToken,
-        expiresAt: renewed.expiresAt,
-        refreshToken: renewed.refreshToken ?? refreshToken
-      )
+      do {
+        let renewed = try await refreshing.refresh(request, refreshToken: refreshToken)
+        tokens = TokenSet(
+          accessToken: renewed.accessToken,
+          expiresAt: renewed.expiresAt,
+          refreshToken: renewed.refreshToken ?? refreshToken
+        )
+      }
+      catch let error as TokenProviderError
+        where error.reason == .invalidGrant && request.binding.flow == .clientCredentials {
+        try Task.checkCancellation()
+        try await store.remove(key: key)
+        tokens = try await provider.acquire(request)
+      }
     }
     else {
       if request.binding.flow == .authorizationCode {
@@ -141,8 +150,10 @@ actor TokenCacheEntry {
     else {
       throw TokenProviderError()
     }
-    if renewal?.id == id { renewal?.committing = true }
-    // An unstructured save is deliberately independent of caller cancellation after rotation.
+    try Task.checkCancellation()
+    guard renewal?.id == id else { throw CancellationError() }
+    renewal?.committing = true
+    // Once persistence begins, cancellation must not discard a rotated refresh token.
     let save = Task { try await store.save(key: key, tokens: tokens) }
     try await save.value
     return TokenLease(key: key, tokens: tokens)

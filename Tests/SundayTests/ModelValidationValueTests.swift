@@ -15,6 +15,7 @@
  */
 
 import Foundation
+import PotentJSON
 import Sunday
 import Testing
 
@@ -229,7 +230,7 @@ struct ModelValidationValueTests {
         context = try .decodingValue(decoder)
       }
     }
-    let scalar = try JSONDecoder().decode(Scalar.self, from: Data("1.00000000000000000001".utf8))
+    let scalar = try Foundation.JSONDecoder().decode(Scalar.self, from: Data("1.00000000000000000001".utf8))
     #expect(scalar.value == 1)
     #expect(scalar.context.originalValue?.number == ModelValidationNumber("1.00000000000000000001"))
     var context = scalar.context
@@ -245,7 +246,7 @@ struct ModelValidationValueTests {
       }
     }
     let wire = #"{"x":{"string":"1","number":9007199254740993,"items":[null,false,"false",0.1234567890123456789]}}"#
-    let input = try JSONDecoder().decode(Input.self, from: Data(wire.utf8))
+    let input = try Foundation.JSONDecoder().decode(Input.self, from: Data(wire.utf8))
     #expect(input.context.presence(of: .property("missing"), inferred: .null) == .omitted)
     #expect(input.context.presence(of: .property("x"), inferred: .null) == .value)
     let nested = input.context.originalFields!["x"]!.fields!
@@ -254,6 +255,31 @@ struct ModelValidationValueTests {
     #expect(nested["items"]!.elements!.map(\.kind) == [.null, .boolean, .string, .number])
     #expect(nested["items"]!.elements![3].number == ModelValidationNumber("0.1234567890123456789"))
     #expect(input.context.matches { $0.originalFields?["x"]?.kind == .object })
+  }
+
+  @Test func jsonCapturePreservesNumbersBeyondDecimalAndDoublePrecision() throws {
+    struct Input: Decodable {
+      let context: ModelValidationContext
+      init(from decoder: Decoder) throws {
+        context = try .decoding(decoder, retainValues: true)
+      }
+    }
+    let literal = "1.00000000000000000000000000000000000000000000000001e200"
+    let decoder = PotentJSON.JSONDecoder()
+    let number = try decoder.decode(ModelValidationNumber.self, from: Data(literal.utf8))
+    #expect(number == ModelValidationNumber(literal))
+    #expect(number > ModelValidationNumber("1e200"))
+    #expect(!number.isMultipleOf(digits: [1], exponent: 200))
+    let huge = try decoder.decode(ModelValidationNumber.self, from: Data("1e300".utf8))
+    #expect(huge == ModelValidationNumber("1e300"))
+    let input = try decoder.decode(Input.self, from: Data("{\"values\":[\(literal),1e300]}".utf8))
+    let numbers = try #require(input.context.originalFields?["values"]?.elements)
+    #expect(numbers.map(\.number) == [number, huge])
+    for invalid in ["true", "null", "\"123\""] {
+      #expect(throws: DecodingError.self) {
+        try decoder.decode(ModelValidationNumber.self, from: Data(invalid.utf8))
+      }
+    }
   }
 
 }

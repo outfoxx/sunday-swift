@@ -15,7 +15,7 @@
  */
 
 import Foundation
-import Sunday
+@testable import Sunday
 import Synchronization
 import Testing
 
@@ -79,4 +79,32 @@ struct RequestValidationTests {
     #expect(body.state.withLock { $0.validations } == 3)
     #expect(body.state.withLock { $0.encodings } == 2)
   }
+  @Test func eventConveniencesValidateMutationsBeforeEncoding() async throws {
+    let body = Body()
+    let transport = URLSessionTransport(baseURL: URI.Template(format: "https://example.com"))
+    defer { transport.close() }
+    let source = transport.eventSource(
+      method: .post, pathTemplate: "/events", body: body, contentTypes: [.json],
+      requestValidation: { try $0.validate(.request) }
+    )
+    body.state.withLock { $0.unknown = true }
+    let (closed, continuation) = AsyncStream<Void>.makeStream()
+    await source.setOnStateError { error, state in
+      if error != nil, state == .closed { continuation.yield(()); continuation.finish() }
+    }
+    await source.connect()
+    for await _ in closed { break }
+    await source.close()
+    #expect(body.state.withLock { $0.validations } == 1)
+    #expect(body.state.withLock { $0.encodings } == 0)
+    let stream: AsyncStream<String> = transport.eventStream(
+      method: .post, pathTemplate: "/events", body: body, contentTypes: [.json],
+      requestValidation: { try $0.validate(.request) },
+      decoder: { _, _, _, data, _ in data }
+    )
+    for await _ in stream { Issue.record("Invalid body must not produce events") }
+    #expect(body.state.withLock { $0.validations } == 2)
+    #expect(body.state.withLock { $0.encodings } == 0)
+  }
+
 }

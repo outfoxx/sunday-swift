@@ -212,7 +212,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) -> EventSource {
     eventSource(spec: OperationSpec(
       method: method,
@@ -222,7 +223,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -232,6 +234,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
   ) -> AsyncStream<D> {
     eventStream(
@@ -243,7 +246,8 @@ public extension Transport {
         body: body,
         contentTypes: contentTypes,
         acceptTypes: acceptTypes,
-        headers: headers
+        headers: headers,
+        requestValidation: requestValidation
       ),
       decoder: decoder
     )

@@ -20,7 +20,6 @@ import Foundation
 import Synchronization
 import Testing
 
-// The local server start helper waits synchronously; keep its tests off concurrent startup paths.
 @Suite(.serialized)
 struct ManagedSecurityTests {
   private let binding = SecurityBinding(
@@ -47,8 +46,8 @@ struct ManagedSecurityTests {
     }
   }
 
-  private func transport(_ server: RoutingHTTPServer, manager: TokenManager?) throws -> URLSessionTransport {
-    let base = try #require(server.startLocal(timeout: 5))
+  private func transport(_ server: RoutingHTTPServer, manager: TokenManager?) async throws -> URLSessionTransport {
+    let base = try await startTestServer(server)
     return URLSessionTransport(baseURL: .init(format: base.absoluteString), tokenManager: manager)
   }
 
@@ -68,7 +67,7 @@ struct ManagedSecurityTests {
     }
     let provider = Provider()
     let manager = try TokenManager(providers: ["identity": provider])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     let request = try await transport.transportRequest(spec: OperationSpec<Empty>(
       method: .get, pathTemplate: "/value", security: [binding]
@@ -95,7 +94,7 @@ struct ManagedSecurityTests {
     }
     let provider = Provider()
     let manager = try TokenManager(providers: ["identity": provider])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     await #expect(throws: SundayError.self) {
       try await transport.transportResponse(spec: OperationSpec<Empty>(
@@ -125,7 +124,7 @@ struct ManagedSecurityTests {
     }
     let provider = Provider()
     let manager = try TokenManager(providers: ["identity": provider])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     await #expect(throws: SundayError.self) {
       try await transport.transportResponse(spec: OperationSpec<Empty>(
@@ -153,7 +152,7 @@ struct ManagedSecurityTests {
       }
     }
     let manager = try TokenManager(providers: ["identity": Provider()])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     let key = SecurityBinding(
       scheme: "key",
@@ -192,7 +191,7 @@ struct ManagedSecurityTests {
       Path("/other") { GET { _, res in count.withLock { $0 += 1 }; res.send(status: .noContent) } }
     }
     let manager = try TokenManager(providers: ["identity": Provider()])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     #expect(try await transport.transportResponse(spec: OperationSpec<Empty>(
       method: .get, pathTemplate: "/value", security: [binding]
@@ -234,7 +233,7 @@ struct ManagedSecurityTests {
     }
     let provider = Provider()
     let manager = try TokenManager(providers: ["identity": provider])
-    let transport = try transport(server, manager: manager)
+    let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/events", security: [binding])
     let source = transport.eventSource(spec: spec)
@@ -251,4 +250,44 @@ struct ManagedSecurityTests {
     #expect(await provider.refreshed == 1)
     await manager.close()
   }
+  @Test func temporaryCredentialFailureReconnectsEvents() async throws {
+    actor IntermittentProvider: TokenProvider {
+      nonisolated let identity = "application"
+      var attempts = 0
+      nonisolated func configure(_ binding: SecurityBinding) -> TokenConfiguration {
+        TokenConfiguration(clientIdentity: "client")
+      }
+      func acquire(_ request: TokenRequest) throws -> TokenSet {
+        attempts += 1
+        if attempts == 1 { throw TokenProviderError(reason: .temporary) }
+        return TokenSet(accessToken: "recovered")
+      }
+    }
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/events") {
+        GET { _, res in
+          res.send(
+            status: .ok, headers: ["Content-Type": ["text/event-stream"]], body: Data("data: recovered\n\n".utf8)
+          )
+        }
+      }
+    }
+    let provider = IntermittentProvider()
+    let manager = try TokenManager(providers: ["identity": provider])
+    let transport = try await transport(server, manager: manager)
+    defer { server.stop(); transport.close() }
+    let source = transport.eventSource(spec: OperationSpec<Empty>(
+      method: .get, pathTemplate: "/events", security: [binding]
+    ))
+    let (messages, continuation) = AsyncStream<String>.makeStream()
+    await source.setOnMessage { _, _, value in
+      if let value { continuation.yield(value); continuation.finish() }
+    }
+    await source.connect()
+    for await value in messages { #expect(value == "recovered"); break }
+    await source.close()
+    #expect(await provider.attempts == 2)
+    await manager.close()
+  }
+
 }

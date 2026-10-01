@@ -79,6 +79,7 @@ public actor TokenManager {
         grantIdentity: config.grantIdentity
       )
       let key = CacheIdentity(
+        scheme: selected.scheme,
         provider: binding.provider,
         providerIdentity: provider.identity,
         clientIdentity: config.clientIdentity,
@@ -106,6 +107,7 @@ public actor TokenManager {
   }
 
   private struct CacheIdentity: Encodable {
+    let scheme: String
     let provider: String
     let providerIdentity: String
     let clientIdentity: String

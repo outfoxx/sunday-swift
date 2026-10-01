@@ -33,6 +33,7 @@ struct TokenManagerTests {
     var token = TokenSet(accessToken: "initial", refreshToken: "first-refresh")
     var replacement = TokenSet(accessToken: "renewed", refreshToken: "rotated-refresh")
     var failure = false
+    var refreshFailure: TokenProviderError.Reason?
     var delay: Duration = .zero
     var canceled = false
     let started = Signal()
@@ -57,8 +58,11 @@ struct TokenManagerTests {
 
     func refresh(_ request: TokenRequest, refreshToken: String) throws -> TokenSet {
       refreshed.append(refreshToken)
+      if let refreshFailure { throw TokenProviderError(reason: refreshFailure) }
       return replacement
     }
+
+    func rejectRefresh(_ reason: TokenProviderError.Reason) { refreshFailure = reason }
 
     func configureTokens(
       initial: TokenSet? = nil,
@@ -106,6 +110,69 @@ struct TokenManagerTests {
 
     func remove(key: String) { values.removeValue(forKey: key) }
     func block() { blockSaves = true }
+  }
+
+  @Test func schemeNamesPartitionCredentials() async throws {
+    let provider = Provider()
+    let manager = try TokenManager(providers: ["identity": provider])
+    let first = try await manager.credentials(for: binding)
+    let other = SecurityBinding(scheme: "another", provider: "identity", flow: .clientCredentials,
+                                profile: "external", scopes: ["read"], transport: binding.transport)
+    let second = try await manager.credentials(for: other)
+    #expect(first.key != second.key)
+    #expect(await provider.acquired.count == 2)
+    await manager.close()
+  }
+
+  @Test(arguments: [TokenProviderError.Reason.unavailable, .temporary, .invalidGrant])
+  func rejectedRefreshRequiresNewClientCredentials(reason: TokenProviderError.Reason) async throws {
+    let provider = Provider()
+    await provider.rejectRefresh(reason)
+    let manager = try TokenManager(providers: ["identity": provider])
+    try await manager.invalidate(manager.credentials(for: binding))
+    if reason == .invalidGrant {
+      _ = try await manager.credentials(for: binding)
+      #expect(await provider.acquired.count == 2)
+    }
+    else {
+      do {
+        _ = try await manager.credentials(for: binding)
+        Issue.record("Expected provider failure")
+      }
+      catch let error as TokenProviderError { #expect(error.reason == reason) }
+      #expect(await provider.acquired.count == 1)
+    }
+    await manager.close()
+  }
+
+  private actor IgnoringProvider: TokenProvider {
+    nonisolated let identity = "ignoring"
+    let started = Signal()
+    let finish = Signal()
+    var calls = 0
+    nonisolated func configure(_ binding: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: "client") }
+    func acquire(_ request: TokenRequest) async -> TokenSet {
+      calls += 1
+      if calls == 1 {
+        await started.open()
+        await finish.wait()
+        return TokenSet(accessToken: "late")
+      }
+      return TokenSet(accessToken: "fresh")
+    }
+  }
+
+  @Test func canceledProviderCannotPersistLateAcquisition() async throws {
+    let provider = IgnoringProvider()
+    let manager = try TokenManager(providers: ["identity": provider])
+    let caller = Task { try await manager.credentials(for: binding) }
+    await provider.started.wait()
+    caller.cancel()
+    await #expect(throws: CancellationError.self) { try await caller.value }
+    await provider.finish.open()
+    #expect(try await manager.credentials(for: binding).tokens.accessToken == "fresh")
+    #expect(await provider.calls == 2)
+    await manager.close()
   }
 
   @Test func cacheRotationAndConditionalInvalidation() async throws {
@@ -251,7 +318,7 @@ struct TokenManagerTests {
     for variant in variants {
       _ = try await manager.credentials(for: variant)
     }
-    #expect(await provider.acquired.count == variants.count - 1)
+    #expect(await provider.acquired.count == variants.count)
     provider.configuration.withLock {
       $0 = TokenConfiguration(
         clientIdentity: "other",

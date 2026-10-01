@@ -16,6 +16,11 @@
 
 /// A credential provider failed. Underlying errors are deliberately excluded from diagnostics.
 public struct TokenProviderError: Error, Sendable, CustomStringConvertible {
-  public init() {}
+  /// Safe classification for transient outages and rejected grants.
+  public enum Reason: Sendable { case unavailable, temporary, invalidGrant }
+  /// Determines whether a caller can recover without exposing an underlying provider error.
+  public let reason: Reason
+  /// Creates a sanitized provider error with an optional recovery classification.
+  public init(reason: Reason = .unavailable) { self.reason = reason }
   public var description: String { "The credential provider could not supply valid credentials" }
 }

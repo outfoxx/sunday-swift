@@ -20,7 +20,6 @@ import Sunday
 import Synchronization
 import Testing
 
-// The local server start helper waits synchronously; keep its tests off concurrent startup paths.
 @Suite(.serialized)
 struct URLSessionOAuthTokenProviderTests {
   private func request(
@@ -36,8 +35,8 @@ struct URLSessionOAuthTokenProviderTests {
     ), clientIdentity: "client:name", grantIdentity: "session")
   }
 
-  private func start(_ server: RoutingHTTPServer) throws -> URL {
-    try #require(server.startLocal(timeout: 5))
+  private func start(_ server: RoutingHTTPServer) async throws -> URL {
+    try await startTestServer(server)
   }
 
   private func form(_ body: Data?) -> [String: String] {
@@ -68,7 +67,7 @@ struct URLSessionOAuthTokenProviderTests {
         }
       }
     }
-    let url = try start(server).appendingPathComponent("token")
+    let url = try await start(server).appendingPathComponent("token")
     defer { server.stop() }
     let sessionConfiguration = URLSessionConfiguration.ephemeral
     sessionConfiguration.httpAdditionalHeaders = ["Authorization": "ambient", "Cookie": "session=ambient"]
@@ -111,7 +110,7 @@ struct URLSessionOAuthTokenProviderTests {
         }
       }
     }
-    let url = try start(server).appendingPathComponent("token")
+    let url = try await start(server).appendingPathComponent("token")
     defer { server.stop() }
     let provider = try URLSessionOAuthTokenProvider(configuration: .init(
       identity: "application", clientID: "public", grantIdentity: "fresh-session",
@@ -157,7 +156,7 @@ struct URLSessionOAuthTokenProviderTests {
         }
       }
     }
-    let base = try start(server)
+    let base = try await start(server)
     defer { server.stop() }
     let selected = request(
       base.appendingPathComponent("override"),
@@ -174,7 +173,7 @@ struct URLSessionOAuthTokenProviderTests {
       }
       else { await #expect(throws: TokenProviderError.self) { try await provider.acquire(selected) } }
     }
-    #expect(requests.withLock { $0 } == ["discovery", "override", "override", "discovery"])
+    #expect(requests.withLock { $0 } == ["discovery", "override", "discovery", "override", "discovery"])
   }
 
   @Test(arguments: [
@@ -189,7 +188,7 @@ struct URLSessionOAuthTokenProviderTests {
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/token") { POST { _, res in res.send(status: .ok, text: body) } }
     }
-    let base = try start(server)
+    let base = try await start(server)
     defer { server.stop() }
     let provider = try URLSessionOAuthTokenProvider(configuration: .init(
       identity: "application", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost
@@ -210,7 +209,7 @@ struct URLSessionOAuthTokenProviderTests {
       }
       Path("/other") { POST { _, res in count.withLock { $0 += 1 }; res.send(status: .noContent) } }
     }
-    let base = try start(server)
+    let base = try await start(server)
     defer { server.stop() }
     let provider = try URLSessionOAuthTokenProvider(configuration: .init(
       identity: "application", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost
@@ -234,7 +233,7 @@ struct URLSessionOAuthTokenProviderTests {
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/token") { POST { _, _ in continuation.yield(()) } }
     }
-    let base = try start(server)
+    let base = try await start(server)
     defer { server.stop(); continuation.finish() }
     let provider = try URLSessionOAuthTokenProvider(configuration: .init(
       identity: "application", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost
@@ -246,4 +245,30 @@ struct URLSessionOAuthTokenProviderTests {
     call.cancel()
     await #expect(throws: CancellationError.self) { try await call.value }
   }
+  @Test func providerErrorsClassifyOutagesAndRejectedGrants() async throws {
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/outage") { POST { _, res in res.send(status: .internalServerError, text: "SECRET outage") } }
+      Path("/invalid") { POST { _, res in res.send(status: .badRequest, text: #"{"error":"invalid_grant"}"#) } }
+      Path("/terminal") { POST { _, res in res.send(status: .badRequest, text: #"{"error":"invalid_client"}"#) } }
+    }
+    let base = try await start(server)
+    defer { server.stop() }
+    let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+      identity: "app", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost
+    ))
+    let cases: [(String, TokenProviderError.Reason)] = [
+      ("outage", .temporary), ("invalid", .invalidGrant), ("terminal", .unavailable),
+    ]
+    for (path, reason) in cases {
+      do {
+        _ = try await provider.acquire(request(base.appendingPathComponent(path)))
+        Issue.record("Expected provider failure")
+      }
+      catch let error as TokenProviderError {
+        #expect(error.reason == reason)
+        #expect(!error.description.contains("SECRET"))
+      }
+    }
+  }
+
 }

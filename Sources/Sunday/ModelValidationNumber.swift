@@ -16,6 +16,7 @@
 
 import Foundation
 import PotentCodables
+import PotentJSON
 
 /// Exact numeric input retained for schema validation before storage conversion can round it.
 public struct ModelValidationNumber: Swift.Decodable, Swift.Hashable, Swift.Comparable, Swift.Sendable {
@@ -23,10 +24,17 @@ public struct ModelValidationNumber: Swift.Decodable, Swift.Hashable, Swift.Comp
   let digits: [Int]
   let exponent: Int
 
-  /// Decodes decimal precision first, preserving finite values outside Decimal range as Double.
+  /// Retains JSON numeric text exactly; other decoders provide their representable numeric precision.
   public init(from decoder: Decoder) throws {
     let container = try decoder.singleValueContainer()
-    if let value = try? container.decode(Foundation.Decimal.self), value.isFinite {
+    if let tree = container as? any TreeValueDecodingContainer,
+       let json = tree.decodeTreeValue() as? PotentJSON.JSON {
+      guard case .number(let number) = json, let exact = Self(validating: number.value) else {
+        throw DecodingError.dataCorruptedError(in: container, debugDescription: "Expected a finite number")
+      }
+      self = exact
+    }
+    else if let value = try? container.decode(Foundation.Decimal.self), value.isFinite {
       self.init(value.description)
     }
     else {

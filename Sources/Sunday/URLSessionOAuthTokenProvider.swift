@@ -61,7 +61,6 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   private nonisolated let configuration: Configuration
   private let session: URLSession
   private let now: @Sendable () -> Date
-  private var discoveries: [String: Discovery] = [:]
   private var consumedCodes: Set<Data> = []
 
   /// Creates an isolated acquisition session; its configuration may provide custom protocol classes for testing.
@@ -100,7 +99,9 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
         guard configuration.authentication != .none else { throw TokenProviderError() }
         form["grant_type"] = "client_credentials"
       case .authorizationCode:
-        guard let authorize = configuration.authorize else { throw AuthorizationRequiredError() }
+        guard consumedCodes.count < 1024, let authorize = configuration.authorize else {
+          throw AuthorizationRequiredError()
+        }
         let grant = try await authorize(request)
         guard !grant.code.isEmpty, !grant.redirectURI.isEmpty,
               (43 ... 128).contains(grant.codeVerifier.utf8.count),
@@ -109,7 +110,9 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
           throw TokenProviderError()
         }
         let digest = Data(SHA256.hash(data: Data(grant.code.utf8)))
-        guard consumedCodes.insert(digest).inserted else { throw AuthorizationRequiredError() }
+        guard consumedCodes.count < 1024, consumedCodes.insert(digest).inserted else {
+          throw AuthorizationRequiredError()
+        }
         form["grant_type"] = "authorization_code"
         form["code"] = grant.code
         form["redirect_uri"] = grant.redirectURI
@@ -170,11 +173,14 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
     )
     let (data, response) = try await session.data(for: native)
     guard let http = response as? HTTPURLResponse else { throw TokenProviderError() }
+    try Self.checkAvailability(http.statusCode)
     guard (200 ..< 300).contains(http.statusCode) else {
-      if refreshing, request.binding.flow == .authorizationCode,
-         (try? JSONDecoder().decode(ErrorResponse.self, from: data).error) == "invalid_grant" {
-        throw AuthorizationRequiredError()
+      let code = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+      if code == "invalid_grant" {
+        if request.binding.flow == .authorizationCode { throw AuthorizationRequiredError() }
+        throw TokenProviderError(reason: .invalidGrant)
       }
+      if code == "temporarily_unavailable" || code == "server_error" { throw TokenProviderError(reason: .temporary) }
       throw TokenProviderError()
     }
     return try decodeToken(data, scopes: request.binding.scopes)
@@ -201,19 +207,13 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
     var discovered: String?
     if let discoveryURL = request.binding.endpoints.discoveryURL {
       guard let issuer = configuration.issuer, !issuer.isEmpty else { throw TokenProviderError() }
-      let discovery: Discovery
-      if let cached = discoveries[discoveryURL] { discovery = cached }
- else {
-        var native = try URLRequest(url: Self.endpoint(discoveryURL))
-        native.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await session.data(for: native)
-        guard let http = response as? HTTPURLResponse, (200 ..< 300).contains(http.statusCode) else {
-          throw TokenProviderError()
-        }
-        discovery = try JSONDecoder().decode(Discovery.self, from: data)
-        guard discovery.issuer == issuer else { throw TokenProviderError() }
-        discoveries[discoveryURL] = discovery
-      }
+      var native = try URLRequest(url: Self.endpoint(discoveryURL))
+      native.setValue("application/json", forHTTPHeaderField: "Accept")
+      let (data, response) = try await session.data(for: native)
+      guard let http = response as? HTTPURLResponse else { throw TokenProviderError() }
+      try Self.checkAvailability(http.statusCode)
+      guard (200 ..< 300).contains(http.statusCode) else { throw TokenProviderError() }
+      let discovery = try JSONDecoder().decode(Discovery.self, from: data)
       guard discovery.issuer == issuer,
             (discovery.authenticationMethods ?? [Authentication.clientSecretBasic.rawValue])
             .contains(configuration.authentication.rawValue) else { throw TokenProviderError() }
@@ -243,9 +243,20 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
     }.joined()
   }
 
+  private static func checkAvailability(_ status: Int) throws {
+    if status == 408 || status == 429 || (500 ... 599).contains(status) { throw TokenProviderError(reason: .temporary) }
+  }
+
   private func safe(_ error: any Error) -> any Error {
     if error is CancellationError || Task.isCancelled { return CancellationError() }
     if error is AuthorizationRequiredError { return AuthorizationRequiredError() }
+    if let error = error as? TokenProviderError { return error }
+    if let error = error as? URLError,
+       [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed,
+        .notConnectedToInternet, .resourceUnavailable,
+       ].contains(error.code) {
+      return TokenProviderError(reason: .temporary)
+    }
     return TokenProviderError()
   }
 
