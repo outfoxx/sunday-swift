@@ -225,22 +225,22 @@ struct TokenManagerTests {
   }
 
   @Test func cancelingOneCallerDoesNotCancelOtherWaiters() async throws {
-    let provider = Provider()
-    await provider.configureTokens(delay: .milliseconds(50))
+    let provider = IgnoringProvider()
     let manager = try TokenManager(providers: ["identity": provider])
-    let canceled = Task { try await manager.credentials(for: binding) }
+    let surviving = Task { try await manager.credentials(for: binding) }
     await provider.started.wait()
-    // The surviving call registers before a delayed cancellation while acquisition is suspended.
-    let cancel = Task {
-      try await Task.sleep(for: .milliseconds(10))
-      canceled.cancel()
+    let callerStarted = Signal()
+    let canceled = Task {
+      await callerStarted.open()
+      return try await manager.credentials(for: binding)
     }
-    let surviving = try await manager.credentials(for: binding)
-    try await cancel.value
+    await callerStarted.wait()
+    canceled.cancel()
     await #expect(throws: CancellationError.self) { try await canceled.value }
-    #expect(surviving.tokens.accessToken == "initial")
-    #expect(await provider.acquired.count == 1)
-    #expect(await !provider.canceled)
+    // Do not release credentials until cancellation completes; runner load cannot reverse the race.
+    await provider.finish.open()
+    #expect(try await surviving.value.tokens.accessToken == "late")
+    #expect(await provider.calls == 1)
     await manager.close()
   }
 
