@@ -18,7 +18,6 @@ import Foundation
 import OSLog
 
 
-// swiftlint:disable function_parameter_count
 /// Builds and executes generated HTTP operations using a concrete transport implementation.
 public protocol Transport: Sendable {
 
@@ -78,10 +77,8 @@ public protocol Transport: Sendable {
   func close(cancelOutstandingRequests: Bool)
 
 }
-// swiftlint:enable function_parameter_count
 
 
-// swiftlint:disable function_parameter_count
 public extension Transport {
 
   /// Builds a native transport request without executing it.
@@ -89,7 +86,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> Request {
     try await transportRequest(spec: OperationSpec(
       method: method,
@@ -99,7 +97,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -108,7 +107,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> Response {
     try await transportResponse(spec: OperationSpec(
       method: method,
@@ -118,7 +118,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -127,7 +128,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> OperationResponse<D> {
     try await response(spec: OperationSpec(
       method: method,
@@ -137,7 +139,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -146,7 +149,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> OperationResponse<Void> {
     try await response(spec: OperationSpec(
       method: method,
@@ -156,7 +160,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -165,7 +170,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> D {
     try await result(spec: OperationSpec(
       method: method,
@@ -175,7 +181,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -184,7 +191,8 @@ public extension Transport {
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws {
     try await result(spec: OperationSpec(
       method: method,
@@ -194,7 +202,8 @@ public extension Transport {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      requestValidation: requestValidation
     ))
   }
 
@@ -241,4 +250,3 @@ public extension Transport {
   }
 
 }
-// swiftlint:enable function_parameter_count

@@ -44,6 +44,9 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
   /// HTTP header parameter values for the operation.
   public let headers: Parameters?
 
+  /// Selected complete security alternative; provider registration remains application-owned.
+  public let security: [SecurityBinding]?
+
   private let prepareRequestBody: @Sendable (
     RequestBody?,
     [MediaType]?,
@@ -60,6 +63,7 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     contentTypes: [MediaType]? = nil,
     acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    security: [SecurityBinding]? = nil,
     prepareBody: @escaping @Sendable (
       RequestBody?,
       [MediaType]?,
@@ -74,6 +78,7 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     self.contentTypes = contentTypes
     self.acceptTypes = acceptTypes
     self.headers = headers
+    self.security = security
     self.prepareRequestBody = prepareBody
   }
 
@@ -87,6 +92,7 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
 public extension OperationSpec where RequestBody: Encodable {
 
   /// Creates an operation request specification with an encodable request body.
+  /// Validation runs immediately before encoding on every execution, including deferred operations.
   init(
     method: HTTP.Method,
     pathTemplate: String,
@@ -95,7 +101,9 @@ public extension OperationSpec where RequestBody: Encodable {
     body: RequestBody? = nil,
     contentTypes: [MediaType]? = nil,
     acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    security: [SecurityBinding]? = nil,
+    requestValidation: (@Sendable (RequestBody) throws -> Void)? = nil
   ) {
     self.init(
       method: method,
@@ -105,13 +113,20 @@ public extension OperationSpec where RequestBody: Encodable {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      security: security
     ) { body, contentTypes, mediaTypeEncoders in
       guard let body else {
         return nil
       }
       guard let contentType = contentTypes?.first(where: { mediaTypeEncoders.supports(for: $0) }) else {
         throw SundayError.requestEncodingFailed(reason: .noSupportedContentTypes(contentTypes ?? []))
+      }
+      do {
+        try requestValidation?(body)
+      }
+      catch {
+        throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: contentType, error: error))
       }
       let data = try mediaTypeEncoders.find(for: contentType).encode(body)
       return .data(data, contentType: contentType)
@@ -132,7 +147,8 @@ public extension OperationSpec where RequestBody == StreamingBody {
     body: StreamingBody? = nil,
     contentTypes: [MediaType]? = nil,
     acceptTypes: [MediaType]? = nil,
-    headers: Parameters? = nil
+    headers: Parameters? = nil,
+    security: [SecurityBinding]? = nil
   ) -> OperationSpec<StreamingBody> {
     OperationSpec<StreamingBody>(
       method: method,
@@ -142,7 +158,8 @@ public extension OperationSpec where RequestBody == StreamingBody {
       body: body,
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
-      headers: headers
+      headers: headers,
+      security: security
     ) { body, contentTypes, _ in
       guard let body else {
         return nil
@@ -182,12 +199,15 @@ public struct Operation<RequestBody: Sendable, ResponseBody: Sendable, Transport
   public let spec: OperationSpec<RequestBody>
 
   private let transport: TransportType
+  private let responseValidation: (@Sendable (ResponseBody) throws -> Void)?
 
   /// Creates an operation bound to a transport.
   public init(
     transport: TransportType,
-    spec: OperationSpec<RequestBody>
+    spec: OperationSpec<RequestBody>,
+    responseValidation: (@Sendable (ResponseBody) throws -> Void)? = nil
   ) {
+    self.responseValidation = responseValidation
     self.transport = transport
     self.spec = spec
   }
@@ -231,9 +251,10 @@ public struct NilableOperation<
   public init(
     transport: TransportType,
     spec: OperationSpec<RequestBody>,
-    nilify: NilifySpec
+    nilify: NilifySpec,
+    responseValidation: (@Sendable (ResponseBody) throws -> Void)? = nil
   ) {
-    self.operation = Operation(transport: transport, spec: spec)
+    self.operation = Operation(transport: transport, spec: spec, responseValidation: responseValidation)
     self.nilify = nilify
   }
 
@@ -254,12 +275,16 @@ extension Operation where ResponseBody: Decodable {
 
   /// Executes the operation and decodes the response value.
   public func execute() async throws -> ResponseBody {
-    try await transport.result(spec: spec)
+    let result: ResponseBody = try await transport.result(spec: spec)
+    try responseValidation?(result)
+    return result
   }
 
   /// Executes the operation and returns the decoded value with the HTTP response.
   public func response() async throws -> OperationResponse<ResponseBody> {
-    try await transport.response(spec: spec)
+    let response: OperationResponse<ResponseBody> = try await transport.response(spec: spec)
+    try responseValidation?(response.result)
+    return response
   }
 
 }

@@ -55,6 +55,8 @@ public final class URLSessionTransport: Transport, Sendable {
   public let mediaTypeDecoders: MediaTypeDecoders
   public let pathEncoders: PathEncoders
   public let eventRequestTimeoutInterval: TimeInterval
+  /// Shared application credential providers and token cache.
+  public let tokenManager: TokenManager?
   private let problemTypes = Mutex<[String: RegisteredProblem]>([:])
   private let state = Mutex(URLSessionTransportState())
 
@@ -84,7 +86,8 @@ public final class URLSessionTransport: Transport, Sendable {
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default,
     eventRequestTimeoutInterval: TimeInterval = URLSessionTransport.eventRequestTimeoutInterval,
-    pathEncoders: PathEncoders = .default
+    pathEncoders: PathEncoders = .default,
+    tokenManager: TokenManager? = nil
   ) {
     self.baseURL = baseURL
     self.session = session
@@ -94,6 +97,7 @@ public final class URLSessionTransport: Transport, Sendable {
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
     self.pathEncoders = pathEncoders
+    self.tokenManager = tokenManager
     self.eventRequestTimeoutInterval = eventRequestTimeoutInterval
   }
 
@@ -103,7 +107,8 @@ public final class URLSessionTransport: Transport, Sendable {
     sessionConfiguration: URLSessionConfiguration = .rest(),
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
-    mediaTypeDecoders: MediaTypeDecoders = .default
+    mediaTypeDecoders: MediaTypeDecoders = .default,
+    tokenManager: TokenManager? = nil
   ) {
     self.init(
       baseURL: baseURL,
@@ -112,7 +117,8 @@ public final class URLSessionTransport: Transport, Sendable {
       adapter: adapter,
       requestQueue: requestQueue,
       mediaTypeEncoders: mediaTypeEncoders,
-      mediaTypeDecoders: mediaTypeDecoders
+      mediaTypeDecoders: mediaTypeDecoders,
+      tokenManager: tokenManager
     )
   }
 
@@ -178,7 +184,7 @@ public final class URLSessionTransport: Transport, Sendable {
       break
     }
 
-    return urlRequest
+    return try await urlRequest.withSecurity(spec.security ?? [], manager: tokenManager)
   }
 
   private func appendQueryParameters(_ queryParameters: Parameters?, to url: URL) throws -> URL {
@@ -215,7 +221,7 @@ public final class URLSessionTransport: Transport, Sendable {
 
   private func appendAcceptHeader(_ acceptTypes: [MediaType]?, to urlRequest: inout URLRequest) throws {
 
-    guard let acceptTypes else {
+    guard let acceptTypes, !acceptTypes.isEmpty else {
       return
     }
 
@@ -484,14 +490,15 @@ public final class URLSessionTransport: Transport, Sendable {
   }
 
   private func makeEventSource(from request: @escaping @Sendable () async throws -> URLRequest?) -> EventSource {
-    EventSource(queue: requestQueue) { [weak self] headers in
+    let budget = AuthenticationRecoveryBudget()
+    return EventSource(queue: requestQueue) { [weak self] headers in
       guard let self else { return nil }
       guard let request = try await request() else { return nil }
       let updatedRequest =
         request
           .adding(httpHeaders: headers)
           .with(timeoutInterval: self.eventRequestTimeoutInterval)
-      return try self.eventSession.dataEventStream(for: updatedRequest)
+      return self.eventSession.dataEventStream(for: updatedRequest, securityBudget: budget)
     }
   }
 

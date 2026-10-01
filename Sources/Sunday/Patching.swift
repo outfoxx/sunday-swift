@@ -88,7 +88,7 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 
 // MARK: PatchOp
 
-/// A full patch operation supporting setting/merging, deleting or not changing the target property in the target object.
+/// A full patch operation supporting setting/merging, deleting or leaving the target property unchanged.
 ///
 /// - Note: A "no change" operation is represented by the `nil` value.
 /// - SeeAlso ``UpdateOp``
