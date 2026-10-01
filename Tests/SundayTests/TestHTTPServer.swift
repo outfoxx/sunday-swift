@@ -16,14 +16,39 @@
 
 import Foundation
 import SundayServer
-import Testing
 
-/// Starts the synchronous test server without blocking Swift's cooperative executor.
-func startTestServer(_ server: RoutingHTTPServer) async throws -> URL {
-  let url = await withCheckedContinuation { continuation in
-    DispatchQueue.global().async {
-      continuation.resume(returning: server.startLocal(timeout: 5))
+/// Starts a test listener without blocking Swift's cooperative executor.
+/// The custom start operation also supports the Bonjour locator's synchronous API.
+func startTestServer(
+  _ server: RoutingHTTPServer,
+  timeout: TimeInterval = 30,
+  using start: @escaping @Sendable (RoutingHTTPServer, TimeInterval) -> URL? = { $0.startLocal(timeout: $1) }
+) async throws -> URL {
+  try await withTaskCancellationHandler {
+    try Task.checkCancellation()
+    let url = await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        continuation.resume(returning: start(server, timeout))
+      }
     }
+    try Task.checkCancellation()
+    guard let url else {
+      let failure = TestServerStartError(timeout: timeout, listenerState: String(describing: server.state))
+      server.stop()
+      throw failure
+    }
+    return url
+  } onCancel: {
+    server.stop()
   }
-  return try #require(url)
+}
+
+/// Works with both XCTest and Swift Testing without recording an issue in the wrong framework.
+struct TestServerStartError: Error, CustomStringConvertible {
+  let timeout: TimeInterval
+  let listenerState: String
+
+  var description: String {
+    "Test HTTP server failed to start within \(timeout)s; listener state: \(listenerState)"
+  }
 }

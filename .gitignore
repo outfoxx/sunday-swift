@@ -5,3 +5,4 @@
 /.swiftpm
 /TestResults
 .derived-data
+__pycache__/

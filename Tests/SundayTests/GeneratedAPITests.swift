@@ -155,10 +155,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -188,10 +185,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -225,10 +219,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -258,10 +249,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -291,10 +279,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -319,10 +304,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -352,10 +334,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -381,10 +360,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -412,10 +388,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)
@@ -456,10 +429,7 @@ class GeneratedAPITests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let baseURL = URI.Template(format: serverURL.absoluteString)

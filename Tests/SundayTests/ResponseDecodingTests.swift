@@ -50,10 +50,7 @@ class ResponseDecodingTests: XCTestCase {
       }
     }
 
-    guard let url = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let url = try await startTestServer(server)
     defer { server.stop() }
 
     let sourceObject = TestObject(aaa: 1, bbb: 2.0, ccc: Date.millisecondDate(), ddd: "Hello", eee: ["World"])

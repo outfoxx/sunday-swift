@@ -30,6 +30,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ env.MD_APPLE_SDK_ROOT }}-spm-
 
+    - name: Test CI helpers
+      run: python3 -m unittest discover -s tools/ci -p 'test_*.py'
+
     - name: SwiftLint
       run: |
         mkdir -p .build
@@ -68,7 +71,19 @@ jobs:
         HOMEBREW_NO_INSTALL_CLEANUP: 1
       
     - uses: actions/checkout@v4
+
+    - name: Prepare simulator
+      id: simulator
+      if: matrix.platform != 'macos'
+      timeout-minutes: 8
+      run: |
+        sudo xcodebuild -runFirstLaunch
+        xcodebuild -version
+        python3 tools/ci/prepare_simulator.py "${{ matrix.platform }}" --github-output "$GITHUB_OUTPUT"
+
     - name: Build/Test
+      env:
+        SUNDAY_TEST_DESTINATION: ${{ steps.simulator.outputs.destination }}
       run: make build-test-${{ matrix.platform }}
 
     - name: Check Test Results
