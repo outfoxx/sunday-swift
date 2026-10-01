@@ -21,7 +21,7 @@ define buildtest
 	rm -rf ./TestResults/$(1)
 	set -o pipefail && \
 		xcodebuild -scheme $(project)-Package \
-		-derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(2)' \
+		-derivedDataPath .derived-data/$(1) -resultBundleVersion 3 -resultBundlePath ./TestResults/$(1) -destination '$(if $(SUNDAY_TEST_DESTINATION),$(SUNDAY_TEST_DESTINATION),$(2))' \
 		-enableCodeCoverage=YES -enableAddressSanitizer=YES -enableThreadSanitizer=YES -enableUndefinedBehaviorSanitizer=YES \
 		-clonedSourcePackagesDirPath ${PWD}/.xcode-pkgs -packageCachePath ${PWD}/.xcode-pkgs/_cache_ \
 		-skipMacroValidation \

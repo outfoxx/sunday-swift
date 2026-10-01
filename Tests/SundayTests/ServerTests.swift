@@ -273,9 +273,8 @@ class HTTPServerTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.start(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      fatalError()
+    let serverURL = try await startTestServer(server) { server, timeout in
+      server.start(timeout: timeout)
     }
     defer { server.stop() }
 

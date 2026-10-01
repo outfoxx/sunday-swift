@@ -73,10 +73,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let transport = URLSessionTransport(
@@ -113,10 +110,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
@@ -156,10 +150,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let factoryCount = Mutex(0)
@@ -204,10 +195,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
@@ -273,10 +261,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let factoryCount = Mutex(0)
@@ -327,10 +312,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let factoryCount = Mutex(0)
@@ -414,10 +396,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let transport = URLSessionTransport(baseURL: .init(format: serverURL.absoluteString))
@@ -450,10 +429,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
       }
     }
 
-    guard let serverURL = server.startLocal(timeout: 5.0) else {
-      XCTFail("could not start local server")
-      return
-    }
+    let serverURL = try await startTestServer(server)
     defer { server.stop() }
 
     let transport = URLSessionTransport(

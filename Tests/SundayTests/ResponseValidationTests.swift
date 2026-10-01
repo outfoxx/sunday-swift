@@ -34,7 +34,7 @@ struct ResponseValidationTests {
         }
       }
     }
-    let url = try #require(server.startLocal(timeout: 5))
+    let url = try await startTestServer(server)
     defer { server.stop() }
     let transport = URLSessionTransport(baseURL: URI.Template(format: url.absoluteString))
     defer { transport.close() }
