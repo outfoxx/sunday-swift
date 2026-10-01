@@ -150,12 +150,14 @@ struct TokenManagerTests {
     let started = Signal()
     let finish = Signal()
     var calls = 0
+    var wasCanceled = false
     nonisolated func configure(_ binding: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: "client") }
     func acquire(_ request: TokenRequest) async -> TokenSet {
       calls += 1
       if calls == 1 {
         await started.open()
         await finish.wait()
+        wasCanceled = Task.isCancelled
         return TokenSet(accessToken: "late")
       }
       return TokenSet(accessToken: "fresh")
@@ -226,22 +228,32 @@ struct TokenManagerTests {
 
   @Test func cancelingOneCallerDoesNotCancelOtherWaiters() async throws {
     let provider = IgnoringProvider()
-    let manager = try TokenManager(providers: ["identity": provider])
-    let surviving = Task { try await manager.credentials(for: binding) }
+    let entry = TokenCacheEntry(key: "shared", store: MemoryTokenStore(), expirySkew: 30, now: { Date() })
+    let request = TokenRequest(binding: binding, clientIdentity: "client")
+    let surviving = Task { try await entry.credentials(provider: provider, request: request) }
     await provider.started.wait()
-    let callerStarted = Signal()
-    let canceled = Task {
-      await callerStarted.open()
-      return try await manager.credentials(for: binding)
+    let canceled = Task { try await entry.credentials(provider: provider, request: request) }
+    let deadline = ContinuousClock.now + .seconds(5)
+    while await entry.waiterCount < 2, ContinuousClock.now < deadline {
+      await Task.yield()
     }
-    await callerStarted.wait()
+    let registered = await entry.waiterCount
+    if registered != 2 {
+      surviving.cancel()
+      canceled.cancel()
+      await provider.finish.open()
+      await entry.close()
+    }
+    try #require(registered == 2)
     canceled.cancel()
     await #expect(throws: CancellationError.self) { try await canceled.value }
+    #expect(await entry.waiterCount == 1)
     // Do not release credentials until cancellation completes; runner load cannot reverse the race.
     await provider.finish.open()
     #expect(try await surviving.value.tokens.accessToken == "late")
     #expect(await provider.calls == 1)
-    await manager.close()
+    #expect(await !provider.wasCanceled)
+    await entry.close()
   }
 
   @Test func cancellationCannotDiscardCompletedRotation() async throws {

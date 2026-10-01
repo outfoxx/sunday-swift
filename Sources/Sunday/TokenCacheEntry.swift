@@ -43,6 +43,9 @@ actor TokenCacheEntry {
     self.now = now
   }
 
+  // Internal observation lets cancellation tests synchronize on registered continuations.
+  var waiterCount: Int { renewal?.waiters.count ?? 0 }
+
   func credentials(provider: any TokenProvider, request: TokenRequest) async throws -> TokenLease {
     let waiter = UUID()
     return try await withTaskCancellationHandler {
