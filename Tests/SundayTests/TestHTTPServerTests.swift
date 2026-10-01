@@ -16,7 +16,6 @@
 
 import Foundation
 import SundayServer
-import Synchronization
 import Testing
 
 struct TestHTTPServerTests {
@@ -39,17 +38,15 @@ struct TestHTTPServerTests {
     let server = try RoutingHTTPServer(port: .any, localOnly: true)
     defer { server.stop() }
     let released = DispatchSemaphore(value: 0)
-    let actorRan = Mutex(false)
     _ = try await startTestServer(server) { server, timeout in
       Task { @MainActor in
-        actorRan.withLock { $0 = true }
         released.signal()
       }
       // A synchronous call on MainActor would prevent this signal until the wait expires.
       guard released.wait(timeout: .now() + 5) == .success else { return nil }
       return server.startLocal(timeout: timeout)
     }
-    #expect(actorRan.withLock { $0 })
+    #expect(server.isReady)
   }
 
   @Test func stoppedListenerReportsItsState() async throws {
