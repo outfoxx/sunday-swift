@@ -87,6 +87,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> Request {
     try await transportRequest(spec: OperationSpec(
@@ -98,6 +99,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -108,6 +110,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> Response {
     try await transportResponse(spec: OperationSpec(
@@ -119,6 +122,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -129,6 +133,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> OperationResponse<D> {
     try await response(spec: OperationSpec(
@@ -140,6 +145,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -150,6 +156,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> OperationResponse<Void> {
     try await response(spec: OperationSpec(
@@ -161,6 +168,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -171,6 +179,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws -> D {
     try await result(spec: OperationSpec(
@@ -182,6 +191,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -192,6 +202,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) async throws {
     try await result(spec: OperationSpec(
@@ -203,6 +214,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -213,6 +225,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil
   ) -> EventSource {
     eventSource(spec: OperationSpec(
@@ -224,6 +237,7 @@ public extension Transport {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
+      parameterValidation: parameterValidation,
       requestValidation: requestValidation
     ))
   }
@@ -234,6 +248,7 @@ public extension Transport {
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
     contentTypes: [MediaType]? = nil, acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
   ) -> AsyncStream<D> {
@@ -247,7 +262,8 @@ public extension Transport {
         contentTypes: contentTypes,
         acceptTypes: acceptTypes,
         headers: headers,
-        requestValidation: requestValidation
+        parameterValidation: parameterValidation,
+      requestValidation: requestValidation
       ),
       decoder: decoder
     )

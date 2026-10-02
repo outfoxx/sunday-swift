@@ -107,4 +107,28 @@ struct RequestValidationTests {
     #expect(body.state.withLock { $0.encodings } == 0)
   }
 
+  @Test func bodylessRequestsValidateParametersOnEveryBuild() async throws {
+    let parameter = Body()
+    let transport = URLSessionTransport(baseURL: URI.Template(format: "https://example.com"))
+    defer { transport.close() }
+    let operation = Operation<Empty, Void, URLSessionTransport>(
+      transport: transport,
+      spec: OperationSpec(method: .get, pathTemplate: "/parameters",
+                          queryParameters: ["state": "known"],
+                          parameterValidation: { try parameter.validate(.request) })
+    )
+    #expect(parameter.state.withLock { $0.validations } == 0)
+    let request = try await operation.transportRequest()
+    #expect(request.httpBody == nil)
+    #expect(parameter.state.withLock { $0.validations } == 1)
+    parameter.state.withLock { $0.unknown = true }
+    do {
+      _ = try await operation.transportRequest()
+      Issue.record("Expected parameter validation failure")
+    }
+    catch is ModelValidationError {
+      #expect(parameter.state.withLock { $0.validations } == 2)
+    }
+  }
+
 }
