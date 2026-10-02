@@ -120,14 +120,58 @@ struct RequestValidationTests {
     #expect(parameter.state.withLock { $0.validations } == 0)
     let request = try await operation.transportRequest()
     #expect(request.httpBody == nil)
+    #expect(request.url?.query == "state=known")
     #expect(parameter.state.withLock { $0.validations } == 1)
     parameter.state.withLock { $0.unknown = true }
     do {
       _ = try await operation.transportRequest()
       Issue.record("Expected parameter validation failure")
     }
-    catch is ModelValidationError {
+    catch SundayError.requestEncodingFailed(reason: .parameterValidationFailed(let error)) {
+      #expect(error is ModelValidationError)
       #expect(parameter.state.withLock { $0.validations } == 2)
+      #expect(parameter.state.withLock { $0.encodings } == 0)
+    }
+  }
+
+  @Test(.timeLimit(.minutes(1))) func invalidEventParametersCloseWithoutReconnecting() async throws {
+    let parameter = Body()
+    parameter.state.withLock { $0.unknown = true }
+    let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/events",
+                                    parameterValidation: { try parameter.validate(.request) })
+    #expect(throws: SundayError.self) { try spec.validateParameters() }
+    let transport = URLSessionTransport(baseURL: URI.Template(format: "https://example.com"))
+    defer { transport.close() }
+    let source = transport.eventSource(spec: spec)
+    let (closed, continuation) = AsyncStream<Void>.makeStream()
+    await source.setOnStateError { error, state in
+      if error != nil, state == .closed { continuation.yield(()); continuation.finish() }
+    }
+    await source.connect()
+    for await _ in closed { break }
+    await source.close()
+    #expect(parameter.state.withLock { $0.validations } == 2)
+    let stream: AsyncStream<String> = transport.eventStream(spec: spec, decoder: { _, _, _, data, _ in data })
+    for await _ in stream { Issue.record("Invalid parameters must not produce events") }
+    #expect(parameter.state.withLock { $0.validations } == 3)
+    #expect(parameter.state.withLock { $0.encodings } == 0)
+  }
+
+  @Test func parameterValidationPrecedesWireConversion() async throws {
+    let parameter = Body()
+    parameter.state.withLock { $0.unknown = true }
+    let transport = URLSessionTransport(baseURL: URI.Template(format: "https://example.com"))
+    defer { transport.close() }
+    let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/parameters",
+                                    queryParameters: ["state": parameter],
+                                    parameterValidation: { try parameter.validate(.request) })
+    do {
+      _ = try await transport.transportRequest(spec: spec)
+      Issue.record("Expected validation before unsupported parameter conversion")
+    }
+    catch SundayError.requestEncodingFailed(reason: .parameterValidationFailed(let error)) {
+      #expect(error is ModelValidationError)
+      #expect(parameter.state.withLock { $0.validations } == 1)
     }
   }
 

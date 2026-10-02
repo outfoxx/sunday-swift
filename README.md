@@ -106,4 +106,5 @@ evicted to allow code reuse. Refresh exchanges do not consume this history.
 `parameterValidation` is an optional callback on the request specification. The transport invokes it
 before encoding on every request build, including bodyless requests and event streams. Generated
 callbacks validate captured typed parameters in request mode; reusing an operation checks mutable
-values again. Custom transports must invoke the callback at the same boundary before transmission.
+values again. Custom transports must call `OperationSpec.validateParameters()` before parameter encoding. Failures
+use `SundayError.requestEncodingFailed(.parameterValidationFailed(error:))` and stop SSE reconnection.

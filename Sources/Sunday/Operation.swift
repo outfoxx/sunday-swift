@@ -86,9 +86,21 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     self.prepareRequestBody = prepareBody
   }
 
+  /// Validates captured typed parameters before a custom transport encodes them.
+  public func validateParameters() throws {
+    do {
+      try parameterValidation?()
+    }
+    catch is CancellationError {
+      throw CancellationError()
+    }
+    catch {
+      throw SundayError.requestEncodingFailed(reason: .parameterValidationFailed(error: error))
+    }
+  }
+
   func prepareBody(mediaTypeEncoders: MediaTypeEncoders) throws -> PreparedRequestBody? {
-    try parameterValidation?()
-    return try prepareRequestBody(body, contentTypes, mediaTypeEncoders)
+    try prepareRequestBody(body, contentTypes, mediaTypeEncoders)
   }
 
 }
