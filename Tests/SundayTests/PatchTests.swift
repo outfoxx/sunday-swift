@@ -152,4 +152,42 @@ class PatchTests: XCTestCase {
     XCTAssertEqual(encodedJSON, json)
   }
 
+  func testOmittedFieldsRemainUnchanged() throws {
+    let patch = try decoder.decode(Device.self, from: Data("{}".utf8))
+    XCTAssertNil(patch.name)
+    XCTAssertNil(patch.security)
+    XCTAssertNil(patch.url)
+    XCTAssertNil(patch.data)
+    XCTAssertEqual(try encoder.encode(patch), Data("{}".utf8))
+  }
+
+  func testNullableFieldsPreserveExplicitDeletion() throws {
+    let json = Data(#"{"data":null,"url":null}"#.utf8)
+    let patch = try decoder.decode(Device.self, from: json)
+    XCTAssertEqual(patch.url, .delete)
+    XCTAssertEqual(patch.data, .delete)
+    XCTAssertEqual(try encoder.encode(patch), json)
+  }
+
+  func testNonNullableFieldsRejectNullWithCodingPath() throws {
+    for (json, path) in [
+      (#"{"name":null}"#, ["name"]),
+      (#"{"security":null}"#, ["security"]),
+      (#"{"security":{"type":null}}"#, ["security", "type"]),
+    ] {
+      XCTAssertThrowsError(try decoder.decode(Device.self, from: Data(json.utf8))) { error in
+        guard case DecodingError.valueNotFound(_, let context) = error else {
+          return XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertEqual(context.codingPath.map(\.stringValue), path)
+      }
+    }
+  }
+
+  func testMalformedPresentValuesAreNotTreatedAsOmitted() throws {
+    for json in [#"{"name":12}"#, #"{"security":false}"#, #"{"security":{"enc":12}}"#] {
+      XCTAssertThrowsError(try decoder.decode(Device.self, from: Data(json.utf8)))
+    }
+  }
+
 }

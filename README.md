@@ -108,3 +108,13 @@ before encoding on every request build, including bodyless requests and event st
 callbacks validate captured typed parameters in request mode; reusing an operation checks mutable
 values again. Custom transports must call `OperationSpec.validateParameters()` before parameter encoding. Failures
 use `SundayError.requestEncodingFailed(.parameterValidationFailed(error:))` and stop SSE reconnection.
+
+## Partial updates
+
+Use `UpdateOp<Value>?` for fields that can be set but not deleted, and `PatchOp<Value>?` for fields
+that can also be deleted. `nil` leaves the field unchanged, `.set(value)` supplies an update, and
+`.delete` writes JSON null to delete a member. Use non-optional value types for JSON Merge Patch;
+whether a member may be removed is independent of whether its value may be null.
+Decode with `decodeIfExists` and encode with
+`encodeIfExists` to retain these states. A present null for a non-optional `UpdateOp` value throws a
+`DecodingError` with the field's coding path; it is never silently treated as omission.
