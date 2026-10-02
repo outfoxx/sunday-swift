@@ -209,6 +209,7 @@ extension PatchOp: CustomStringConvertible {
 
 extension KeyedDecodingContainer {
 
+  /// Decodes a patch field, preserving omission as `nil` and explicit null as `.delete`.
   public func decodeIfExists<Value: Codable & Sendable>(_ type: Value.Type, forKey key: Key) throws -> PatchOp<Value>? {
     guard contains(key) else {
       return nil
@@ -216,11 +217,17 @@ extension KeyedDecodingContainer {
     return try decodeIfPresent(type, forKey: key).map { .set($0) } ?? .delete
   }
 
+  /// Decodes an update field, preserving omission as `nil` and validating every present value.
+  ///
+  /// Explicit null fails when `Value` is non-optional; it must never silently discard an update.
   public func decodeIfExists<Value: Codable & Sendable>(
     _ type: Value.Type,
     forKey key: Key
   ) throws -> UpdateOp<Value>? {
-    return try decodeIfPresent(type, forKey: key).map { .set($0) }
+    guard contains(key) else {
+      return nil
+    }
+    return .set(try decode(type, forKey: key))
   }
 
 }
