@@ -47,6 +47,8 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
   /// Selected complete security alternative; provider registration remains application-owned.
   public let security: [SecurityBinding]?
 
+  private let parameterValidation: (@Sendable () throws -> Void)?
+
   private let prepareRequestBody: @Sendable (
     RequestBody?,
     [MediaType]?,
@@ -64,6 +66,7 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
     security: [SecurityBinding]? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     prepareBody: @escaping @Sendable (
       RequestBody?,
       [MediaType]?,
@@ -79,7 +82,21 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     self.acceptTypes = acceptTypes
     self.headers = headers
     self.security = security
+    self.parameterValidation = parameterValidation
     self.prepareRequestBody = prepareBody
+  }
+
+  /// Validates captured typed parameters before a custom transport encodes them.
+  public func validateParameters() throws {
+    do {
+      try parameterValidation?()
+    }
+    catch is CancellationError {
+      throw CancellationError()
+    }
+    catch {
+      throw SundayError.requestEncodingFailed(reason: .parameterValidationFailed(error: error))
+    }
   }
 
   func prepareBody(mediaTypeEncoders: MediaTypeEncoders) throws -> PreparedRequestBody? {
@@ -103,6 +120,7 @@ public extension OperationSpec where RequestBody: Encodable {
     acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
     security: [SecurityBinding]? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (RequestBody) throws -> Void)? = nil
   ) {
     self.init(
@@ -114,7 +132,8 @@ public extension OperationSpec where RequestBody: Encodable {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
-      security: security
+      security: security,
+      parameterValidation: parameterValidation
     ) { body, contentTypes, mediaTypeEncoders in
       guard let body else {
         return nil
@@ -148,7 +167,8 @@ public extension OperationSpec where RequestBody == StreamingBody {
     contentTypes: [MediaType]? = nil,
     acceptTypes: [MediaType]? = nil,
     headers: Parameters? = nil,
-    security: [SecurityBinding]? = nil
+    security: [SecurityBinding]? = nil,
+    parameterValidation: (@Sendable () throws -> Void)? = nil
   ) -> OperationSpec<StreamingBody> {
     OperationSpec<StreamingBody>(
       method: method,
@@ -159,7 +179,8 @@ public extension OperationSpec where RequestBody == StreamingBody {
       contentTypes: contentTypes,
       acceptTypes: acceptTypes,
       headers: headers,
-      security: security
+      security: security,
+      parameterValidation: parameterValidation
     ) { body, contentTypes, _ in
       guard let body else {
         return nil

@@ -142,6 +142,8 @@ public final class URLSessionTransport: Transport, Sendable {
     spec: OperationSpec<RequestBody>
   ) async throws -> URLRequest {
 
+    try spec.validateParameters()
+
     var url =
       try baseURL.complete(
         relative: spec.pathTemplate,

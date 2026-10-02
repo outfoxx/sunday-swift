@@ -23,6 +23,7 @@ public enum RequestEncodingFailureReason: Sendable {
   case noSupportedAcceptTypes([MediaType])
   case unsupportedContentType(MediaType)
   case serializationFailed(contentType: MediaType, error: Error?)
+  case parameterValidationFailed(error: Error)
   case streamCreationFailed
   case unsupportedHeaderParameterValue(any Sendable)
 }
@@ -86,6 +87,8 @@ extension RequestEncodingFailureReason: CustomStringConvertible {
       return "Unsupported Content-Type: type=\(contentType)"
     case .serializationFailed(contentType: let contentType, error: let error):
       return "Serialization Failed\(error.map { ": \($0)" } ?? ""): content-type=\(contentType)"
+    case .parameterValidationFailed(error: let error):
+      return "Parameter Validation Failed: \(error)"
     case .streamCreationFailed:
       return "Stream Creation Failed"
     case .unsupportedHeaderParameterValue(let value):
