@@ -132,4 +132,7 @@ Synthesized Codable and the keyed `decode`/`encode` overloads preserve omitted, 
 states. Encoding `.unchanged` outside a keyed member throws, because it has no standalone JSON
 representation. Encoding `.set(nil)` also throws; it must never silently become deletion.
 `use` skips unchanged operations, and `get` returns nil for them. Legacy optional-operation
-`decodeIfExists`/`encodeIfExists` helpers remain available.
+`decodeIfExists`/`encodeIfExists` helpers remain available: nil and `.unchanged` both omit the member,
+while `.delete` preserves JSON null. Synthesized encoding also omits nil optional properties, but
+a standalone nil optional encodes as JSON null without invoking the operation's encoder. Use
+non-optional operations to retain explicit patch states.

@@ -238,22 +238,52 @@ class PatchTests: XCTestCase {
     XCTAssertEqual(try encoder.encode(UpdateOp<[String?]>.set([nil])), Data("[null]".utf8))
   }
 
-  func testLegacyOptionalHelpersStillOmitUnchanged() throws {
-    struct Fields: Codable {
-      var value: UpdateOp<String>?
-      enum CodingKeys: String, CodingKey { case value }
-      init(value: UpdateOp<String>?) { self.value = value }
+  func testLegacyOptionalHelpersPreservePatchStates() throws {
+    struct Fields: Codable, Equatable {
+      var name: UpdateOp<String>?
+      var note: PatchOp<String>?
+      enum CodingKeys: String, CodingKey { case name, note }
+      init(name: UpdateOp<String>? = nil, note: PatchOp<String>? = nil) {
+        self.name = name
+        self.note = note
+      }
       init(from decoder: Decoder) throws {
-        value = try decoder.container(keyedBy: CodingKeys.self).decodeIfExists(String.self, forKey: .value)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decodeIfExists(String.self, forKey: .name)
+        note = try container.decodeIfExists(String.self, forKey: .note)
       }
       func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfExists(value, forKey: .value)
+        try container.encodeIfExists(name, forKey: .name)
+        try container.encodeIfExists(note, forKey: .note)
       }
     }
-    XCTAssertNil(try decoder.decode(Fields.self, from: Data("{}".utf8)).value)
-    XCTAssertEqual(try encoder.encode(Fields(value: .unchanged)), Data("{}".utf8))
-    XCTAssertThrowsError(try decoder.decode(Fields.self, from: Data(#"{"value":null}"#.utf8)))
+    XCTAssertEqual(try decoder.decode(Fields.self, from: Data("{}".utf8)), Fields())
+    XCTAssertEqual(try encoder.encode(Fields()), Data("{}".utf8))
+    XCTAssertEqual(try encoder.encode(Fields(name: .unchanged, note: .unchanged)), Data("{}".utf8))
+
+    let setFields = Fields(name: .set("name"), note: .set("note"))
+    let setJSON = Data(#"{"name":"name","note":"note"}"#.utf8)
+    XCTAssertEqual(try encoder.encode(setFields), setJSON)
+    XCTAssertEqual(try decoder.decode(Fields.self, from: setJSON), setFields)
+
+    let deletedFields = Fields(note: .delete)
+    let deletedJSON = Data(#"{"note":null}"#.utf8)
+    XCTAssertEqual(try encoder.encode(deletedFields), deletedJSON)
+    XCTAssertEqual(try decoder.decode(Fields.self, from: deletedJSON), deletedFields)
+    XCTAssertEqual(try encoder.encode(Fields(name: .unchanged, note: .delete)), deletedJSON)
+    XCTAssertThrowsError(try decoder.decode(Fields.self, from: Data(#"{"name":null}"#.utf8)))
+  }
+
+  func testNilOptionalOperationsFollowOptionalEncoding() throws {
+    struct Fields: Encodable {
+      var name: UpdateOp<String>?
+      var note: PatchOp<String>?
+    }
+    let fields = Fields()
+    XCTAssertEqual(try encoder.encode(fields), Data("{}".utf8))
+    XCTAssertEqual(try encoder.encode(fields.name), Data("null".utf8))
+    XCTAssertEqual(try encoder.encode(fields.note), Data("null".utf8))
   }
 
 }
