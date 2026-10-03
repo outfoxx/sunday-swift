@@ -111,10 +111,28 @@ use `SundayError.requestEncodingFailed(.parameterValidationFailed(error:))` and 
 
 ## Partial updates
 
-Use `UpdateOp<Value>?` for fields that can be set but not deleted, and `PatchOp<Value>?` for fields
-that can also be deleted. `nil` leaves the field unchanged, `.set(value)` supplies an update, and
-`.delete` writes JSON null to delete a member. Use non-optional value types for JSON Merge Patch;
-whether a member may be removed is independent of whether its value may be null.
-Decode with `decodeIfExists` and encode with
-`encodeIfExists` to retain these states. A present null for a non-optional `UpdateOp` value throws a
-`DecodingError` with the field's coding path; it is never silently treated as omission.
+Use non-optional `UpdateOp<Value>` for members that cannot be deleted and `PatchOp<Value>` for
+members that can. Both default to `.unchanged` in generated models. `.set(value)` supplies an update;
+`PatchOp.delete` writes JSON null to delete the member. Requiredness determines deletion permission,
+independently of value nullability. Use non-optional value types: JSON Merge Patch cannot assign a
+literal null to an object member.
+
+```swift
+struct ItemPatch: Codable {
+  var name: UpdateOp<String> = .unchanged
+  var note: PatchOp<String> = .unchanged
+}
+var patch = ItemPatch()
+patch.name = .set("Updated")
+patch.note = .delete
+patch.name = .unchanged // Cancel the name update.
+```
+
+Synthesized Codable and the keyed `decode`/`encode` overloads preserve omitted, set, and deleted
+states. Encoding `.unchanged` outside a keyed member throws, because it has no standalone JSON
+representation. Encoding `.set(nil)` also throws; it must never silently become deletion.
+`use` skips unchanged operations, and `get` returns nil for them. Legacy optional-operation
+`decodeIfExists`/`encodeIfExists` helpers remain available: nil and `.unchanged` both omit the member,
+while `.delete` preserves JSON null. Synthesized encoding also omits nil optional properties, but
+a standalone nil optional encodes as JSON null without invoking the operation's encoder. Use
+non-optional operations to retain explicit patch states.
