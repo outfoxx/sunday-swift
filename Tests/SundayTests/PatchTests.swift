@@ -21,14 +21,14 @@ import XCTest
 
 public struct Security: Equatable, Codable, Sendable {
 
-  var type: UpdateOp<String>? = .none
-  var enc: PatchOp<Data>? = .none
-  var sig: PatchOp<Data>? = .none
+  var type: UpdateOp<String> = .unchanged
+  var enc: PatchOp<Data> = .unchanged
+  var sig: PatchOp<Data> = .unchanged
 
   public init(
-    type: UpdateOp<String>? = .none,
-    enc: PatchOp<Data>? = .none,
-    sig: PatchOp<Data>? = .none
+    type: UpdateOp<String> = .unchanged,
+    enc: PatchOp<Data> = .unchanged,
+    sig: PatchOp<Data> = .unchanged
   ) {
     self.type = type
     self.enc = enc
@@ -43,25 +43,25 @@ public struct Security: Equatable, Codable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.type = try container.decodeIfExists(String.self, forKey: .type)
-    self.enc = try container.decodeIfExists(Data.self, forKey: .enc)
-    self.sig = try container.decodeIfExists(Data.self, forKey: .sig)
+    self.type = try container.decode(UpdateOp<String>.self, forKey: .type)
+    self.enc = try container.decode(PatchOp<Data>.self, forKey: .enc)
+    self.sig = try container.decode(PatchOp<Data>.self, forKey: .sig)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfExists(self.type, forKey: .type)
-    try container.encodeIfExists(self.enc, forKey: .enc)
-    try container.encodeIfExists(self.sig, forKey: .sig)
+    try container.encode(self.type, forKey: .type)
+    try container.encode(self.enc, forKey: .enc)
+    try container.encode(self.sig, forKey: .sig)
   }
 }
 
 extension AnyPatchOp where Value == Security {
 
   static func merge(
-    type: UpdateOp<String>? = .none,
-    enc: PatchOp<Data>? = .none,
-    sig: PatchOp<Data>? = .none
+    type: UpdateOp<String> = .unchanged,
+    enc: PatchOp<Data> = .unchanged,
+    sig: PatchOp<Data> = .unchanged
   ) -> Self {
     Self.merge(Security(type: type, enc: enc, sig: sig))
   }
@@ -70,16 +70,16 @@ extension AnyPatchOp where Value == Security {
 
 public struct Device: Codable, Equatable {
 
-  var name: UpdateOp<String>? = .none
-  var security: UpdateOp<Security>? = .none
-  var url: PatchOp<URL>? = .none
-  var data: PatchOp<[String: String]>? = .none
+  var name: UpdateOp<String> = .unchanged
+  var security: UpdateOp<Security> = .unchanged
+  var url: PatchOp<URL> = .unchanged
+  var data: PatchOp<[String: String]> = .unchanged
 
   public init(
-    name: UpdateOp<String>? = .none,
-    security: UpdateOp<Security>? = .none,
-    url: PatchOp<URL>? = .none,
-    data: PatchOp<[String: String]>? = .none
+    name: UpdateOp<String> = .unchanged,
+    security: UpdateOp<Security> = .unchanged,
+    url: PatchOp<URL> = .unchanged,
+    data: PatchOp<[String: String]> = .unchanged
   ) {
     self.name = name
     self.security = security
@@ -96,18 +96,18 @@ public struct Device: Codable, Equatable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.name = try container.decodeIfExists(String.self, forKey: .name)
-    self.security = try container.decodeIfExists(Security.self, forKey: .security)
-    self.url = try container.decodeIfExists(URL.self, forKey: .url)
-    self.data = try container.decodeIfExists([String: String].self, forKey: .data)
+    self.name = try container.decode(UpdateOp<String>.self, forKey: .name)
+    self.security = try container.decode(UpdateOp<Security>.self, forKey: .security)
+    self.url = try container.decode(PatchOp<URL>.self, forKey: .url)
+    self.data = try container.decode(PatchOp<[String: String]>.self, forKey: .data)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfExists(self.name, forKey: .name)
-    try container.encodeIfExists(self.security, forKey: .security)
-    try container.encodeIfExists(self.url, forKey: .url)
-    try container.encodeIfExists(self.data, forKey: .data)
+    try container.encode(self.name, forKey: .name)
+    try container.encode(self.security, forKey: .security)
+    try container.encode(self.url, forKey: .url)
+    try container.encode(self.data, forKey: .data)
   }
 }
 
@@ -137,7 +137,7 @@ class PatchTests: XCTestCase {
         enc: .set(Data([1, 2, 3])),
         sig: .delete
       ),
-      data: .none
+      data: .unchanged
     )
 
     let json = Data(#"{"name":"Test","security":{"enc":"AQID","sig":null,"type":"17"}}"#.utf8)
@@ -154,14 +154,14 @@ class PatchTests: XCTestCase {
 
   func testOmittedFieldsRemainUnchanged() throws {
     let patch = try decoder.decode(Device.self, from: Data("{}".utf8))
-    XCTAssertNil(patch.name)
-    XCTAssertNil(patch.security)
-    XCTAssertNil(patch.url)
-    XCTAssertNil(patch.data)
+    XCTAssertEqual(patch.name, .unchanged)
+    XCTAssertEqual(patch.security, .unchanged)
+    XCTAssertEqual(patch.url, .unchanged)
+    XCTAssertEqual(patch.data, .unchanged)
     XCTAssertEqual(try encoder.encode(patch), Data("{}".utf8))
   }
 
-  func testNullableFieldsPreserveExplicitDeletion() throws {
+  func testDeletableFieldsPreserveExplicitDeletion() throws {
     let json = Data(#"{"data":null,"url":null}"#.utf8)
     let patch = try decoder.decode(Device.self, from: json)
     XCTAssertEqual(patch.url, .delete)
@@ -169,7 +169,7 @@ class PatchTests: XCTestCase {
     XCTAssertEqual(try encoder.encode(patch), json)
   }
 
-  func testNonNullableFieldsRejectNullWithCodingPath() throws {
+  func testUpdateFieldsRejectNullWithCodingPath() throws {
     for (json, path) in [
       (#"{"name":null}"#, ["name"]),
       (#"{"security":null}"#, ["security"]),
@@ -188,6 +188,72 @@ class PatchTests: XCTestCase {
     for json in [#"{"name":12}"#, #"{"security":false}"#, #"{"security":{"enc":12}}"#] {
       XCTAssertThrowsError(try decoder.decode(Device.self, from: Data(json.utf8)))
     }
+  }
+
+
+  func testSynthesizedCodablePreservesStatesAndCancellation() throws {
+    struct Fields: Codable, Equatable {
+      var name: UpdateOp<String> = .unchanged
+      var note: PatchOp<String> = .unchanged
+    }
+    var fields = try decoder.decode(Fields.self, from: Data("{}".utf8))
+    XCTAssertEqual(fields, Fields())
+    XCTAssertEqual(try encoder.encode(fields), Data("{}".utf8))
+    fields.name = .set("changed")
+    fields.note = .delete
+    XCTAssertEqual(try encoder.encode(fields), Data(#"{"name":"changed","note":null}"#.utf8))
+    fields.name = .unchanged
+    XCTAssertEqual(try encoder.encode(fields), Data(#"{"note":null}"#.utf8))
+    XCTAssertThrowsError(try decoder.decode(Fields.self, from: Data(#"{"name":null}"#.utf8)))
+  }
+
+  func testHelpersSkipUnchangedAndPreserveDeletion() {
+    let update = UpdateOp<String>.unchanged
+    let patch = PatchOp<String>.unchanged
+    update.use { _ in XCTFail("Unchanged update invoked callback") }
+    patch.use { _ in XCTFail("Unchanged patch invoked callback") }
+    XCTAssertNil(update.get())
+    func unexpectedDeletion() -> String { XCTFail("Unchanged invoked deletion fallback"); return "" }
+    XCTAssertNil(patch.get(deleted: unexpectedDeletion()))
+    XCTAssertEqual(UpdateOp.set("set").get(), "set")
+    XCTAssertEqual(PatchOp<String>.delete.get(deleted: "deleted"), "deleted")
+    PatchOp<String>.delete.use { XCTAssertNil($0) }
+    UpdateOp.set("set").use { XCTAssertEqual($0, "set") }
+    PatchOp.set("set").use { XCTAssertEqual($0, "set") }
+    XCTAssertTrue(update.isUnchanged)
+    XCTAssertTrue(patch.isUnchanged)
+    XCTAssertFalse(PatchOp<String>.delete.isUnchanged)
+    XCTAssertFalse(UpdateOp.set("set").isUnchanged)
+    XCTAssertEqual(String(describing: update), "unchanged")
+    XCTAssertEqual(String(describing: patch), "unchanged")
+  }
+
+  func testStandaloneUnchangedAndNullSetsHaveNoWireRepresentation() throws {
+    XCTAssertThrowsError(try encoder.encode(UpdateOp<String>.unchanged))
+    XCTAssertThrowsError(try encoder.encode([PatchOp<String>.unchanged]))
+    XCTAssertThrowsError(try encoder.encode(UpdateOp<String?>.set(nil)))
+    XCTAssertThrowsError(try encoder.encode(PatchOp<String?>.set(nil)))
+    XCTAssertThrowsError(try decoder.decode(UpdateOp<String?>.self, from: Data("null".utf8)))
+    XCTAssertEqual(try encoder.encode(PatchOp<String>.delete), Data("null".utf8))
+    XCTAssertEqual(try encoder.encode(UpdateOp<[String?]>.set([nil])), Data("[null]".utf8))
+  }
+
+  func testLegacyOptionalHelpersStillOmitUnchanged() throws {
+    struct Fields: Codable {
+      var value: UpdateOp<String>?
+      enum CodingKeys: String, CodingKey { case value }
+      init(value: UpdateOp<String>?) { self.value = value }
+      init(from decoder: Decoder) throws {
+        value = try decoder.container(keyedBy: CodingKeys.self).decodeIfExists(String.self, forKey: .value)
+      }
+      func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfExists(value, forKey: .value)
+      }
+    }
+    XCTAssertNil(try decoder.decode(Fields.self, from: Data("{}".utf8)).value)
+    XCTAssertEqual(try encoder.encode(Fields(value: .unchanged)), Data("{}".utf8))
+    XCTAssertThrowsError(try decoder.decode(Fields.self, from: Data(#"{"value":null}"#.utf8)))
   }
 
 }
