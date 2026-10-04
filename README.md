@@ -136,3 +136,16 @@ representation. Encoding `.set(nil)` also throws; it must never silently become 
 while `.delete` preserves JSON null. Synthesized encoding also omits nil optional properties, but
 a standalone nil optional encodes as JSON null without invoking the operation's encoder. Use
 non-optional operations to retain explicit patch states.
+
+## URI template variables
+
+`URI.Template.complete` expands missing and `nil` variables as undefined under RFC 6570.
+For an undefined `id`, `/items{/id}` becomes `/items`, while `/items/{id}` becomes
+`/items/` because the literal slash remains. Empty strings remain defined: an empty
+`id` in `/items{/id}` produces `/items/`. Explicit `nil` overrides a parameter
+stored on the template; omitting the override keeps the stored value. This applies
+to template expressions in both the base URI and the operation path.
+
+URI-template expansion does not enforce API-required inputs. Callers must validate
+any values their API requires before constructing a request. For example, omitting
+`env` from `https://{env}example.com` produces `https://example.com`.

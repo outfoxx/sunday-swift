@@ -59,7 +59,10 @@ public extension URI {
       self.init(format: format)
     }
 
-    /// Builds a complete URL with the provided path arguments
+    /// Builds a complete URL with the provided path arguments.
+    ///
+    /// Missing and nil variables are omitted according to RFC 6570. An empty string
+    /// remains a defined value, and an explicit nil overrides a stored parameter.
     ///
     /// - Parameters:
     ///   - relative: Template for the relative portion of the complete URL
@@ -91,12 +94,10 @@ public extension URI {
       var variables = [String: VariableValue]()
 
       for variableName in impl.variableNames {
-        let value: any ParameterValue = switch parameters[variableName] {
-        case .some(.some(let value)):
-          try Self.requiredTemplateParameterValue(name: variableName, value)
-        case .some(.none), nil:
-          throw Error.missingParameterValue(name: variableName)
+        guard case .some(.some(let parameter)) = parameters[variableName] else {
+          continue
         }
+        let value = try Self.requiredTemplateParameterValue(name: variableName, parameter)
         variables[variableName] = try variableValue(name: variableName, value: value, encoders: encoders)
       }
 
