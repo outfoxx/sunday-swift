@@ -68,6 +68,21 @@ class URLSessionTransportTests: XCTestCase {
   //
 
 
+  func testOmitsUndefinedTemplateVariablesWhenBuildingRequests() async throws {
+    let template = URI.Template(format: "https://example.com{/version}", parameters: ["version": "v1", "id": "123"])
+    let transport = URLSessionTransport(baseURL: template)
+    defer { transport.close() }
+
+    let request = try await transport.transportRequest(
+      method: .get,
+      pathTemplate: "/items{/id,missing}",
+      pathParameters: ["version": nil, "id": nil],
+      body: Empty.none
+    )
+
+    XCTAssertEqual(request.url?.absoluteString, "https://example.com/items")
+  }
+
   func testEncodesQueryParameters() async throws {
 
     let transport = URLSessionTransport(baseURL: "http://example.com")

@@ -192,22 +192,61 @@ class URITemplatesTests: XCTestCase {
     }
   }
 
-  func testFailsWithMissingParameter() async throws {
-
-    class SpecialType {}
-
-    let template = URI.Template(format: "http://example.com/{id}")
-
-    XCTAssertEqual(template.format, "http://example.com/{id}")
-
-    try await XCTAssertThrowsError(try template.complete()) { error in
-
-      guard case URI.Template.Error.missingParameterValue(name: let paramName) = error else {
-        return XCTFail("unexpected error")
-      }
-
-      XCTAssertEqual(paramName, "id")
+  func testMissingAndNullVariablesExpandToNothing() throws {
+    let expressions = ["{id}", "{+id}", "{#id}", "{.id}", "{/id}", "{;id}", "{?id}", "{&id}", "{id:3}", "{/id*}"]
+    for expression in expressions {
+      let template = URI.Template(format: "https://example.com/items\(expression)")
+      XCTAssertEqual(try template.complete().absoluteString, "https://example.com/items", expression)
+      let nullURL = try template.complete(parameters: ["id": nil])
+      XCTAssertEqual(nullURL.absoluteString, "https://example.com/items", expression)
     }
+  }
+
+  func testUndefinedVariablesDoNotAddSeparators() throws {
+    let cases = [
+      ("{missing,first,nil,last,missing}", "one,two"),
+      ("{+missing,first,nil,last,missing}", "one,two"),
+      ("{#missing,first,nil,last,missing}", "#one,two"),
+      ("{.missing,first,nil,last,missing}", ".one.two"),
+      ("{/missing,first,nil,last,missing}", "/one/two"),
+      ("{;missing,first,nil,last,missing}", ";first=one;last=two"),
+      ("{?missing,first,nil,last,missing}", "?first=one&last=two"),
+      ("{&missing,first,nil,last,missing}", "&first=one&last=two"),
+    ]
+    for (expression, suffix) in cases {
+      let template = URI.Template(format: "https://example.com/items\(expression)")
+      let url = try template.complete(parameters: ["first": "one", "nil": nil, "last": "two"])
+      XCTAssertEqual(url.absoluteString, "https://example.com/items\(suffix)", expression)
+    }
+  }
+
+  func testEmptyStringsRemainDefined() throws {
+    let cases = [
+      ("{id}", ""),
+      ("{+id}", ""),
+      ("{#id}", "#"),
+      ("{.id}", "."),
+      ("{/id}", "/"),
+      ("{;id}", ";id"),
+      ("{?id}", "?id="),
+      ("{&id}", "&id="),
+    ]
+    for (expression, suffix) in cases {
+      let template = URI.Template(format: "https://example.com/items\(expression)", parameters: ["id": ""])
+      XCTAssertEqual(try template.complete().absoluteString, "https://example.com/items\(suffix)", expression)
+    }
+  }
+
+  func testUndefinedVariablesPreserveLiteralSlashes() throws {
+    let template = URI.Template(format: "https://example.com/items/{id}")
+    XCTAssertEqual(try template.complete().absoluteString, "https://example.com/items/")
+  }
+
+  func testNullOverridesTemplateValuesInBaseAndRelativePaths() throws {
+    let template = URI.Template(format: "https://example.com{/version}", parameters: ["version": "v1", "id": "123"])
+    XCTAssertEqual(try template.complete(relative: "/items{/id}").absoluteString, "https://example.com/v1/items/123")
+    let url = try template.complete(relative: "/items{/id}", parameters: ["version": nil, "id": nil])
+    XCTAssertEqual(url.absoluteString, "https://example.com/items")
   }
 
   func testMutiplePathVariable() async throws {
