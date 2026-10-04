@@ -145,3 +145,7 @@ For an undefined `id`, `/items{/id}` becomes `/items`, while `/items/{id}` becom
 `id` in `/items{/id}` produces `/items/`. Explicit `nil` overrides a parameter
 stored on the template; omitting the override keeps the stored value. This applies
 to template expressions in both the base URI and the operation path.
+
+URI-template expansion does not enforce API-required inputs. Callers must validate
+any values their API requires before constructing a request. For example, omitting
+`env` from `https://{env}example.com` produces `https://example.com`.
