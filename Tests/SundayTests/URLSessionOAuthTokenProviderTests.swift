@@ -409,4 +409,65 @@ struct URLSessionOAuthTokenProviderTests {
     }
   }
 
+  private struct HTTPCorpus: Decodable {
+    let formatVersion: Int
+    let cases: [HTTPCase]
+  }
+
+  private struct HTTPCase: Decodable, Sendable {
+    let id: String
+    let target: String
+    let status: Int
+    let headers: [String: String]
+    let body: String
+    let expected: String
+  }
+
+  @Test func sharedHTTPFixtures() async throws {
+    let url = try #require(Bundle.module.url(forResource: "oauth-http-cases", withExtension: "json"))
+    let corpus = try JSONDecoder().decode(HTTPCorpus.self, from: Data(contentsOf: url))
+    #expect(corpus.formatVersion == 1)
+    for fixture in corpus.cases {
+      let calls = Mutex(0)
+      let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+        Path("/response") {
+          GET { _, res in
+            calls.withLock { $0 += 1 }
+            res.send(status: .init(code: fixture.status, info: "Fixture"),
+                     headers: fixture.headers.mapValues { [$0] }, body: Data(fixture.body.utf8))
+          }
+          POST { _, res in
+            calls.withLock { $0 += 1 }
+            res.send(status: .init(code: fixture.status, info: "Fixture"),
+                     headers: fixture.headers.mapValues { [$0] }, body: Data(fixture.body.utf8))
+          }
+        }
+      }
+      let base = try await start(server)
+      defer { server.stop() }
+      let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+        identity: "app", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost,
+        issuer: "https://trusted.example"
+      ))
+      let endpoint = base.appendingPathComponent("response")
+      let request = request(endpoint, discovery: fixture.target == "discovery" ? endpoint.absoluteString : nil)
+      for refresh in [false, true] {
+        do {
+          if refresh {
+            _ = try await provider.refresh(request, refreshToken: "refresh-secret")
+          }
+          else { _ = try await provider.acquire(request) }
+          Issue.record("Expected provider failure for \(fixture.id)")
+        }
+        catch let error as TokenProviderError {
+          let expected: TokenProviderError.Reason = fixture.expected == "temporary" ? .temporary :
+            (fixture.expected == "invalid_grant" ? .invalidGrant : .unavailable)
+          #expect(error.reason == expected, "\(fixture.id)")
+          #expect(!error.description.contains("SECRET"))
+        }
+      }
+      #expect(calls.withLock { $0 } == 2, "\(fixture.id)")
+    }
+  }
+
 }

@@ -1,6 +1,6 @@
 # OAuth library evaluation across runtimes
 
-Status: library-backed adapters implemented and exercised locally. Platform-matrix and hosted CI verification remain outstanding. Library selection includes all four runtimes and the Auth0/OAuthKit alternatives requested during implementation.
+Status: library-backed adapters implemented. The first PR revisions passed hosted platform matrices; acceptance follow-up changes require checks on their new heads. Library selection includes all four runtimes and the Auth0/OAuthKit alternatives requested during implementation.
 
 ## Revised adoption criteria
 
@@ -63,23 +63,47 @@ These observations support library-backed adapters with targeted checks. They do
 | Python | Authlib 1.8.0 | `prepare_token_request` and `ClientAuth` construct protocol requests; borrowed HTTPX executes them. Authlib's response parser adds no strict validation over the existing small wire checks, so those remain. Authlib Basic credentials need explicit RFC 6749 form encoding before its HTTP Basic encoding. No HTTPX2 integration or library credential lifecycle is used. |
 | Swift | AppAuthCore 3.0.0 | `OIDTokenRequest` builds URLRequests for public, Basic, and POST clients; Sunday executes them using its isolated URLSession. POST secrets use additional body parameters, while Basic uses AppAuth's credential encoder. Normalizing response models would require duplicate strict validation, so response decoding remains internal. No global session override, browser UI, or credential persistence is adopted. |
 
-The policy wrappers are private. No library types enter Sunday's public APIs. JavaScript passes only the OAuth fields consumed by this API to response processing: ID-token validation is outside scope, and passing `id_token` through would activate OIDC claim validation. Python's Authlib dependency is limited to the HTTPX/all extras. AppAuthCore adds no package dependencies; Authlib additionally resolves cryptography, joserfc, cffi and pycparser in the local locked graph. oauth4webapi has no runtime dependencies. Final packaged size remains to be measured.
+The policy wrappers are private. No library types enter Sunday's public APIs. JavaScript passes only the OAuth fields consumed by this API to response processing: ID-token validation is outside scope, and passing `id_token` through would activate OIDC claim validation. Python's Authlib dependency is limited to the HTTPX/all extras. AppAuthCore adds no package dependencies; Authlib additionally resolves cryptography, joserfc, cffi and pycparser in the local locked graph. oauth4webapi has no runtime dependencies. Measured dependency footprints are recorded below; these are dependency artifacts, not estimates of final application binary growth.
 
 Local verification after integration:
 
-- JavaScript: lint, typecheck, build, all 701 tests, replay three authentication methods, and live Keycloak acquisition/refresh for all three.
-- Python: lint, mypy, full 331-test suite at 92.31% coverage, replay, and live Keycloak for all three methods. Lifecycle failure tests pass, covering readiness timeout, Docker cleanup failure, and zero Docker calls during macOS CI startup failure.
+- JavaScript: lint, typecheck, build, all 761 tests, replay three authentication methods, and live Keycloak acquisition/refresh for all three.
+- Python: lint, mypy, full 448-test suite at 92.54% coverage, replay, and live Keycloak for all three methods. Lifecycle failure tests pass, covering readiness timeout, Docker cleanup failure, and zero Docker calls during macOS CI startup failure.
 - Swift: compiler, lint, full suite, replay and live Keycloak with public PKCE and confidential Basic/POST.
 - Kotlin: core/JDK/OkHttp check tasks pass; Nimbus request integration previously passed managed replay/live through both transports.
 
-These live checks used macOS CI selection (official Keycloak Java distribution). Python also passed container-backend acquisition/refresh after Authlib adoption. Repeat platform checks in CI. A sanitized Auth0-shaped refresh fixture is included; no live Auth0 tenant was configured and no live Auth0 compatibility is claimed.
+Live checks use both macOS CI selection (official Keycloak Java distribution) and the pinned container backend. Repeat platform checks in CI. A sanitized Auth0-shaped refresh fixture is included; no live Auth0 tenant was configured and no live Auth0 compatibility is claimed.
 
-## Remaining rollout verification
+## Acceptance follow-up
 
-1. Exercise the existing platform matrices with the new dependencies and publish linked review PRs.
-2. Expand matching fixtures to cover any remaining contextual/lifecycle gaps, including documented Auth0 shapes and consistent error categories, beyond parser acceptance.
-3. Complete infrastructure fault coverage in each native harness and measure final resolved dependency/artifact footprint.
-4. Keep replay for PRs and live integration on main through standard test entry points. Do not publish betas as part of this change.
+The independent fixture copies now include 112 wire cases and 32 HTTP cases. Accepted token fixtures include exact access-token, refresh-token, and absolute-expiry results, including absent expiry, the safe-integer boundary, and a nonzero fixed clock. Every transport runs the HTTP cases through both acquisition and refresh: JDK, OkHttp, URLSession, HTTPX, and fetch. These assert exact sanitized error categories and request counts for discovery and token responses, unexpected 2xx statuses, malformed JSON, 408/429/5xx, invalid grants, and `Retry-After: 0`.
+
+Recognized metadata endpoint validation is now consistent across runtimes: token, authorization, JWKS, registration, revocation, and introspection endpoints reject explicit null, wrong types, empty values, and insecure remote URLs. Twenty fixtures cover the previously Swift-only checks for the latter four fields. Unknown extensions remain ignored.
+
+The shared cases exposed OkHttp replaying a 408 token request. OAuth POST bodies are now one-shot and connection recovery is disabled without mutating the supplied client or its shared connection pool. A 503 with immediate Retry-After is covered as well.
+
+Native harness tests cover failed startup, readiness timeout, owned-process cleanup, corrupt cache entries, and failed-download cache cleanup. Kotlin additionally reaps archive extraction and Docker-removal helpers on timeout; Swift waits for terminated helpers before removing their directories; JavaScript recognizes signal termination as well as ordinary process exit. Backend selection remains inside the native harnesses. macOS CI does not select or discover Docker, and live failures do not fall back to replay.
+
+Existing lifecycle tests retain issuer/authentication/endpoint policy, callback ordering, cancellation, single-use grants, credential isolation, and refresh rotation coverage. The new HTTP corpus complements these tests; it does not claim every lifecycle scenario is encoded in the shared JSON format.
+
+Remaining release gates: current-head hosted checks, final review and merge, then main-branch live verification before a separately authorized beta. Live Auth0 tenant verification remains unavailable; synthetic Auth0-shaped fixtures must not be described as a live Auth0 test. Fixture ownership consolidation remains deferred.
+
+## Measured dependency footprint
+
+Measured on macOS arm64 on 2026-10-05 from the pinned resolved dependencies. These measurements deliberately use each ecosystem's artifact form and are not directly comparable download or application-size benchmarks. Provider/browser test dependencies are excluded.
+
+| Runtime | Measured artifact | Bytes | Dependency/license notes |
+|---|---|---:|---|
+| Kotlin | Eight resolved Nimbus-related runtime JARs | 2,038,533 | SDK 11.38.2, JOSE 10.9.1, content-type 2.3, lang-tag 1.7, json-smart/accessors-smart 2.6.0, JCIP 1.0-1, ASM 9.7.1. Apache-2.0 except ASM BSD-3-Clause. |
+| JavaScript | oauth4webapi 3.8.8 installed package, six files | 326,361 | MIT, zero runtime dependencies. Executable `build/index.js` is 99,856 bytes; the total includes declarations/docs/license. |
+| Python | Authlib 1.8.0 plus four transitive installed distributions | 14,200,839 | Excludes bytecode/cache files, includes distribution metadata and native extensions. Optional HTTPX/all extras only. |
+| Swift | AppAuthCore 3.0.0 macOS arm64 Debug relocatable object | 409,928 | Apache-2.0, zero package dependencies. Source subtree is 359,402 bytes across 55 files. Swift 6.4/Xcode local Debug build, not a stripped release application delta. |
+
+Kotlin JAR breakdown in bytes: OAuth SDK 921,011; JOSE 813,607; content-type 8,877; lang-tag 11,170; json-smart 122,808; accessors-smart 30,245; JCIP annotations 4,722; ASM 126,093. Measured from `runtimeClasspath.resolvedConfiguration.resolvedArtifacts` and each artifact file's length; Gradle's resolved graph contains one version of each. The request adapter keeps Sunday's Java baseline and existing coroutine transports.
+
+Python installed distribution breakdown, using `importlib.metadata.distribution(name).files`, summing existing file sizes and excluding `__pycache__`/`.pyc`: Authlib 1.8.0 799,858 bytes (BSD-3-Clause); cryptography 50.0.0 12,358,021 (Apache-2.0 OR BSD-3-Clause); joserfc 1.7.5 222,599 (BSD-3-Clause); cffi 2.1.1 616,440 (MIT-0); pycparser 3.0 203,921 (BSD-3-Clause). Native-extension sizes vary by platform. The HTTPX2 integration conflict is avoided by using Authlib's protocol layer; the existing HTTPX contract is unchanged.
+
+JavaScript measurement sums regular files beneath the resolved `node_modules/oauth4webapi`; no tree-shaking or compression is assumed. Swift measures `.build/out/Products/Debug/AppAuthCore.o` after `swift build --build-tests`, and regular files under the pinned checkout's `Sources/AppAuthCore`. Link-time dead stripping and optimization can substantially change final application size. No dependency-version substitutions were needed beyond the explicitly documented adoption changes.
 
 ## OAuthKit 2.2.0 initial review
 

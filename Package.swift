@@ -48,7 +48,7 @@ let package = Package(
         "Sunday",
         "SundayServer"
       ],
-      resources: [.copy("Resources/oauth-cases.json"), .copy("Resources/oauth-browser")]
+      resources: [.copy("Resources/oauth-cases.json"), .copy("Resources/oauth-http-cases.json"), .copy("Resources/oauth-browser")]
     ),
   ]
 )

@@ -28,7 +28,13 @@ struct OAuthWireTests {
     let kind: String
     let body: String
     let expected: String
+    let tokens: Tokens?
     let context: Context
+  }
+  struct Tokens: Decodable {
+    let accessToken: String
+    let refreshToken: String?
+    let expiresAtMillis: Double?
   }
   struct Context: Decodable {
     let scopes: Set<String>
@@ -46,10 +52,15 @@ struct OAuthWireTests {
         case "discovery": _ = try JSONDecoder().decode(OAuthWire.Discovery.self, from: data)
         case "error": _ = try JSONDecoder().decode(OAuthWire.Failure.self, from: data)
         default:
-          _ = try JSONDecoder().decode(OAuthWire.Success.self, from: data)
+          let tokens = try JSONDecoder().decode(OAuthWire.Success.self, from: data)
             .tokens(
               scopes: fixture.context.scopes, now: Date(timeIntervalSince1970: fixture.context.clockMillis / 1000)
             )
+          let expected = try #require(fixture.tokens)
+          #expect(tokens.accessToken == expected.accessToken)
+          #expect(tokens.refreshToken == expected.refreshToken)
+          #expect(tokens.expiresAt?.timeIntervalSince1970 == expected.expiresAtMillis.map { $0 / 1000 })
+
         }
       }
       switch accepted {

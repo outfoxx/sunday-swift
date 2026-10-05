@@ -307,7 +307,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "token-null",
@@ -713,7 +718,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "error-valid",
@@ -881,7 +891,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": null
+      }
     },
     {
       "id": "token-absent-refresh_token",
@@ -895,7 +910,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": null,
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "token-absent-scope",
@@ -909,7 +929,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "token-expiry-fractional",
@@ -937,7 +962,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "token-expiry-string",
@@ -1007,7 +1037,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 9007199254740000
+      }
     },
     {
       "id": "token-scope-tab",
@@ -1063,7 +1098,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     },
     {
       "id": "discovery-methods-absent",
@@ -1245,7 +1285,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://auth0.com/docs/secure/tokens/refresh-tokens/use-refresh-tokens"
+      "reference": "https://auth0.com/docs/secure/tokens/refresh-tokens/use-refresh-tokens",
+      "tokens": {
+        "accessToken": "synthetic-auth0",
+        "refreshToken": null,
+        "expiresAtMillis": 86400000
+      }
     },
     {
       "id": "token-bearer-case",
@@ -1259,7 +1304,12 @@
         "clockMillis": 0
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1",
+      "tokens": {
+        "accessToken": "synthetic",
+        "refreshToken": null,
+        "expiresAtMillis": null
+      }
     },
     {
       "id": "token-expiry-clock-overflow",
@@ -1287,7 +1337,292 @@
         "clockMillis": 1700000000000
       },
       "expected": "accept",
-      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1"
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1",
+      "tokens": {
+        "accessToken": "synthetic",
+        "refreshToken": null,
+        "expiresAtMillis": 1700000060000
+      }
+    },
+    {
+      "id": "discovery-jwks_uri-valid",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"jwks_uri\":\"https://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-jwks_uri-null",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"jwks_uri\":null}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-jwks_uri-wrong-type",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"jwks_uri\":42}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-jwks_uri-empty",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"jwks_uri\":\"\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-jwks_uri-insecure",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"jwks_uri\":\"http://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-registration_endpoint-valid",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"registration_endpoint\":\"https://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-registration_endpoint-null",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"registration_endpoint\":null}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-registration_endpoint-wrong-type",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"registration_endpoint\":42}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-registration_endpoint-empty",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"registration_endpoint\":\"\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-registration_endpoint-insecure",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"registration_endpoint\":\"http://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-revocation_endpoint-valid",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"revocation_endpoint\":\"https://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-revocation_endpoint-null",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"revocation_endpoint\":null}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-revocation_endpoint-wrong-type",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"revocation_endpoint\":42}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-revocation_endpoint-empty",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"revocation_endpoint\":\"\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-revocation_endpoint-insecure",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"revocation_endpoint\":\"http://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-introspection_endpoint-valid",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"introspection_endpoint\":\"https://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-introspection_endpoint-null",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"introspection_endpoint\":null}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-introspection_endpoint-wrong-type",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"introspection_endpoint\":42}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-introspection_endpoint-empty",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"introspection_endpoint\":\"\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "discovery-introspection_endpoint-insecure",
+      "kind": "discovery",
+      "status": 200,
+      "body": "{\"issuer\":\"https://identity.example\",\"introspection_endpoint\":\"http://identity.example/endpoint\"}",
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
     }
   ]
 }

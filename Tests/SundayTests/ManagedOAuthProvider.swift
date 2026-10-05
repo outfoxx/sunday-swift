@@ -32,13 +32,21 @@ actor ManagedOAuthProvider {
   private(set) var issuer = ""
   private var process: Process?
   private var container: String?
+  private let startupTimeout: Duration
+  private let commandOverride: [String]?
   private let session = URLSession(configuration: .ephemeral)
 
-  init(mode: String = ProcessInfo.processInfo.environment["SUNDAY_OAUTH_TEST_MODE"] ?? "replay") throws {
+  init(
+    mode: String = ProcessInfo.processInfo.environment["SUNDAY_OAUTH_TEST_MODE"] ?? "replay",
+    ci ciValue: String? = ProcessInfo.processInfo.environment["CI"],
+    cache: URL? = nil, startupTimeout: Duration = .seconds(120), command: [String]? = nil
+  ) throws {
     self.mode = mode
-    backend = try Self.selectBackend(mode: mode, ci: ProcessInfo.processInfo.environment["CI"], macOS: true)
+    backend = try Self.selectBackend(mode: mode, ci: ciValue, macOS: true)
+    self.startupTimeout = startupTimeout
+    commandOverride = command
     directory = FileManager.default.temporaryDirectory.appendingPathComponent("sunday-oauth-" + UUID().uuidString)
-    cache = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    self.cache = cache ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
       .deletingLastPathComponent().appendingPathComponent(".build/oauth-artifacts")
   }
 
@@ -55,10 +63,14 @@ actor ManagedOAuthProvider {
       let port = try Self.availablePort()
       base = "http://127.0.0.1:\(port)"
       issuer = "\(base)/realms/\(realm)"
-      let command = try await command(port: Int(port))
+      let command: [String]
+      if let commandOverride {
+        command = commandOverride
+      }
+      else { command = try await self.command(port: Int(port)) }
       process = try launch(command, log: "provider.log")
       let readiness = mode == "replay" ? base + "/__admin/mappings" : issuer + "/.well-known/openid-configuration"
-      let deadline = ContinuousClock.now.advanced(by: .seconds(120))
+      let deadline = ContinuousClock.now.advanced(by: startupTimeout)
       while ContinuousClock.now < deadline {
         guard process?.isRunning == true else { throw Failure.process }
         var request = URLRequest(url: URL(string: readiness)!)
@@ -127,7 +139,7 @@ actor ManagedOAuthProvider {
     ]
   }
 
-  private func artifact(_ raw: String, checksum: String) async throws -> URL {
+  func artifact(_ raw: String, checksum: String) async throws -> URL {
     let url = URL(string: raw)!
     try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
     let target = cache.appendingPathComponent(url.lastPathComponent)
@@ -176,6 +188,7 @@ actor ManagedOAuthProvider {
     }
     catch {
       if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+      process.waitUntilExit()
       throw error
     }
   }
@@ -217,6 +230,7 @@ actor ManagedOAuthProvider {
         try? await Task.sleep(for: .milliseconds(100))
       }
       if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+      process.waitUntilExit()
     }
     process = nil
     try? FileManager.default.removeItem(at: directory)
