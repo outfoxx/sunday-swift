@@ -133,6 +133,140 @@ struct URLSessionOAuthTokenProviderTests {
     #expect(captured.withLock { $0[1]["code"] } == nil)
   }
 
+  @Test(arguments: [
+    Optional(#"["private_key_jwt","client_secret_basic","client_secret_post","tls_client_auth","client_secret_jwt"]"#),
+    #"["none"]"#,
+    "[]",
+    nil,
+  ])
+  func publicDiscoverySupportsExchangeAndRefresh(authenticationMethods: String?) async throws {
+    let captured = Mutex<[[String: String]]>([])
+    let tokenEndpoint = Mutex("")
+    let authorizations = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/discovery") {
+        GET { _, res in
+          let methods = authenticationMethods.map { ",\"token_endpoint_auth_methods_supported\":\($0)" } ?? ""
+          res.send(
+            status: .ok,
+            text:
+            "{\"issuer\":\"https://trusted.example\",\"token_endpoint\":\"\(tokenEndpoint.withLock { $0 })\"\(methods)}"
+          )
+        }
+      }
+      Path("/token") {
+        POST { req, res in
+          captured.withLock { $0.append(form(req.body)) }
+          #expect(req.header(for: "Authorization") == nil)
+          #expect(req.header(for: "Cookie") == nil)
+          res.send(
+            status: .ok,
+            text:
+            #"{"access_token":"token","token_type":"Bearer","refresh_token":"refresh","scope":"openid"}"#
+          )
+        }
+      }
+    }
+    let base = try await start(server)
+    defer { server.stop() }
+    tokenEndpoint.withLock { $0 = base.appendingPathComponent("token").absoluteString }
+    let sessionConfiguration = URLSessionConfiguration.ephemeral
+    sessionConfiguration.httpAdditionalHeaders = ["Authorization": "ambient", "Cookie": "session=ambient"]
+    let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+      identity: "application", clientID: "public", clientSecret: "unused-secret", authentication: .none,
+      grantIdentity: "session", issuer: "https://trusted.example",
+      authorize: { _ in
+        authorizations.withLock { $0 += 1 }
+        return AuthorizationGrant(
+          code: "fresh-code", redirectURI: "http://127.0.0.1/callback", codeVerifier: String(repeating: "v", count: 43)
+        )
+      }
+    ), sessionConfiguration: sessionConfiguration)
+    let manager = try TokenManager(providers: ["application": provider])
+    let binding = SecurityBinding(
+      scheme: "identity", provider: "application", flow: .authorizationCode, profile: "external", scopes: ["openid"],
+      endpoints: .init(discoveryURL: base.appendingPathComponent("discovery").absoluteString),
+      transport: .init(location: .header, name: "Authorization", prefix: "Bearer")
+    )
+    let first = try await manager.credentials(for: binding)
+    try await manager.invalidate(first)
+    let renewed = try await manager.credentials(for: binding)
+    await manager.close()
+    #expect(first.tokens.accessToken == "token")
+    #expect(renewed.tokens.refreshToken == "refresh")
+    #expect(authorizations.withLock { $0 } == 1)
+    #expect(captured.withLock { $0 } == [
+      [
+        "grant_type": "authorization_code", "client_id": "public", "code": "fresh-code",
+        "redirect_uri": "http://127.0.0.1/callback", "code_verifier": String(repeating: "v", count: 43),
+        "scope": "openid",
+      ],
+      ["grant_type": "refresh_token", "client_id": "public", "refresh_token": "refresh", "scope": "openid"],
+    ])
+  }
+
+  @Test(arguments: [
+    (
+      URLSessionOAuthTokenProvider.Authentication.none,
+      Optional("https://wrong.example"),
+      Optional(#"["none"]"#),
+      false
+    ),
+    (.none, "https://wrong.example", nil, false),
+    (.none, nil, nil, false),
+    (.clientSecretBasic, "https://trusted.example", #"["client_secret_post"]"#, false),
+    (.clientSecretPost, "https://trusted.example", #"["client_secret_basic"]"#, false),
+    (.clientSecretPost, "https://trusted.example", nil, false),
+    (.clientSecretBasic, "https://trusted.example", nil, true),
+  ])
+  func discoveryPreservesIssuerAndConfidentialAuthenticationChecks(
+    authentication: URLSessionOAuthTokenProvider.Authentication, issuer: String?,
+    authenticationMethods: String?, accepted: Bool
+  ) async throws {
+    let exchanges = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/discovery") {
+        GET { _, res in
+          let methods = authenticationMethods.map { ",\"token_endpoint_auth_methods_supported\":\($0)" } ?? ""
+          res.send(
+            status: .ok,
+            text:
+            "{\"issuer\":\"https://trusted.example\",\"token_endpoint\":\"https://internal.example/token\"\(methods)}"
+          )
+        }
+      }
+      Path("/token") {
+        POST { _, res in
+          exchanges.withLock { $0 += 1 }
+          res.send(status: .ok, text: #"{"access_token":"token","token_type":"Bearer"}"#)
+        }
+      }
+    }
+    let base = try await start(server)
+    defer { server.stop() }
+    let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+      identity: "application", clientID: "client", clientSecret: "secret", authentication: authentication,
+      grantIdentity: "session", issuer: issuer,
+      authorize: { _ in AuthorizationGrant(
+        code: "fresh-code", redirectURI: "app://callback", codeVerifier: String(repeating: "v", count: 43)
+      ) }
+    ))
+    let selected = request(
+      base.appendingPathComponent("token"),
+      flow: authentication == .none ? .authorizationCode : .clientCredentials,
+      discovery: base.appendingPathComponent("discovery").absoluteString
+    )
+    if accepted {
+      _ = try await provider.acquire(selected)
+      _ = try await provider.refresh(selected, refreshToken: "refresh")
+    }
+    else {
+      await #expect(throws: TokenProviderError.self) { try await provider.acquire(selected) }
+      await #expect(throws: TokenProviderError.self) { try await provider.refresh(selected, refreshToken: "refresh") }
+    }
+    #expect(exchanges.withLock { $0 } == (accepted ? 2 : 0))
+  }
+
   @Test func discoveryRequiresIndependentIssuerAndKeepsEndpointOverride() async throws {
     let requests = Mutex<[String]>([])
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {

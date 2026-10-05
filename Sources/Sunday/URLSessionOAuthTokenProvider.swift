@@ -214,9 +214,12 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
       try Self.checkAvailability(http.statusCode)
       guard (200 ..< 300).contains(http.statusCode) else { throw TokenProviderError() }
       let discovery = try JSONDecoder().decode(Discovery.self, from: data)
-      guard discovery.issuer == issuer,
-            (discovery.authenticationMethods ?? [Authentication.clientSecretBasic.rawValue])
-            .contains(configuration.authentication.rawValue) else { throw TokenProviderError() }
+      guard discovery.issuer == issuer else { throw TokenProviderError() }
+      // Public clients do not authenticate, and servers may omit `none` from their advertised methods.
+      if configuration.authentication != .none {
+        guard (discovery.authenticationMethods ?? [Authentication.clientSecretBasic.rawValue])
+          .contains(configuration.authentication.rawValue) else { throw TokenProviderError() }
+      }
       discovered = discovery.tokenEndpoint
     }
     guard let selected = (refreshing ? request.binding.endpoints.refreshURL : nil) ??
