@@ -1,0 +1,1293 @@
+{
+  "formatVersion": 1,
+  "cases": [
+    {
+      "id": "discovery-valid",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-null",
+      "kind": "discovery",
+      "body": "null",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-array",
+      "kind": "discovery",
+      "body": "[]",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-malformed",
+      "kind": "discovery",
+      "body": "{",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-trailing",
+      "kind": "discovery",
+      "body": "{\"issuer\": \"https://issuer.example\", \"token_endpoint\": \"https://issuer.example/token\", \"authorization_endpoint\": \"https://issuer.example/authorize\"} {}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-issuer-null",
+      "kind": "discovery",
+      "body": "{\"issuer\":null,\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-issuer-number",
+      "kind": "discovery",
+      "body": "{\"issuer\":42,\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-issuer-array",
+      "kind": "discovery",
+      "body": "{\"issuer\":[],\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-issuer-boolean",
+      "kind": "discovery",
+      "body": "{\"issuer\":true,\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-issuer-empty",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-token_endpoint-null",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":null,\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-token_endpoint-number",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":42,\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-token_endpoint-array",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":[],\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-token_endpoint-boolean",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":true,\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-token_endpoint-empty",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-authorization_endpoint-null",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":null}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-authorization_endpoint-number",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":42}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-authorization_endpoint-array",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":[]}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-authorization_endpoint-boolean",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":true}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-authorization_endpoint-empty",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-extension",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"vendor_extension\":{\"ignored\":[null,true,42]}}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "token-valid",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-null",
+      "kind": "token",
+      "body": "null",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-array",
+      "kind": "token",
+      "body": "[]",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-malformed",
+      "kind": "token",
+      "body": "{",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-trailing",
+      "kind": "token",
+      "body": "{\"access_token\": \"synthetic-access\", \"token_type\": \"Bearer\", \"expires_in\": 60, \"refresh_token\": \"synthetic-refresh\", \"scope\": \"read\"} {}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-access_token-null",
+      "kind": "token",
+      "body": "{\"access_token\":null,\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-access_token-number",
+      "kind": "token",
+      "body": "{\"access_token\":42,\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-access_token-array",
+      "kind": "token",
+      "body": "{\"access_token\":[],\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-access_token-boolean",
+      "kind": "token",
+      "body": "{\"access_token\":true,\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-access_token-empty",
+      "kind": "token",
+      "body": "{\"access_token\":\"\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-token_type-null",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":null,\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-token_type-number",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":42,\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-token_type-array",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":[],\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-token_type-boolean",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":true,\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-token_type-empty",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expires_in-null",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":null,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expires_in-array",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":[],\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expires_in-boolean",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":true,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expires_in-empty",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":\"\",\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-refresh_token-null",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":null,\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-refresh_token-number",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":42,\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-refresh_token-array",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":[],\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-refresh_token-boolean",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":true,\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-refresh_token-empty",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-null",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":null}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-number",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":42}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-array",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":[]}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-boolean",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":true}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-empty",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-extension",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\",\"vendor_extension\":{\"ignored\":[null,true,42]}}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-valid",
+      "kind": "error",
+      "body": "{\"error\":\"invalid_grant\"}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-null",
+      "kind": "error",
+      "body": "null",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-array",
+      "kind": "error",
+      "body": "[]",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-malformed",
+      "kind": "error",
+      "body": "{",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-trailing",
+      "kind": "error",
+      "body": "{\"error\": \"invalid_grant\"} {}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error-null",
+      "kind": "error",
+      "body": "{\"error\":null}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error-number",
+      "kind": "error",
+      "body": "{\"error\":42}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error-array",
+      "kind": "error",
+      "body": "{\"error\":[]}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error-boolean",
+      "kind": "error",
+      "body": "{\"error\":true}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error-empty",
+      "kind": "error",
+      "body": "{\"error\":\"\"}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-extension",
+      "kind": "error",
+      "body": "{\"error\":\"invalid_grant\",\"vendor_extension\":{\"ignored\":[null,true,42]}}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-absent-expires_in",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-absent-refresh_token",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-absent-scope",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-fractional",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":1.5,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-integral-float",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60.0,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-string",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":\"60\",\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-zero",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":0,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-negative",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":-1,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-overflow",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":9007199254741,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-expiry-max",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":9007199254740,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-tab",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\\twrite\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-double-space",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read  write\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-missing",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"write\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-scope-superset",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read write\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "discovery-methods-absent",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-methods-null",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"token_endpoint_auth_methods_supported\":null}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-methods-empty",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"token_endpoint_auth_methods_supported\":[]}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-methods-keycloak",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"token_endpoint_auth_methods_supported\":[\"private_key_jwt\",\"client_secret_basic\",\"client_secret_post\",\"tls_client_auth\",\"client_secret_jwt\"]}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-methods-mixed",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"token_endpoint_auth_methods_supported\":[\"none\",42]}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-methods-string",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\",\"token_endpoint_auth_methods_supported\":\"none\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-absent-token_endpoint",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-unsafe-token_endpoint",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"http://remote.example/token\",\"authorization_endpoint\":\"https://issuer.example/authorize\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-absent-authorization_endpoint",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "discovery-unsafe-authorization_endpoint",
+      "kind": "discovery",
+      "body": "{\"issuer\":\"https://issuer.example\",\"token_endpoint\":\"https://issuer.example/token\",\"authorization_endpoint\":\"http://remote.example/token\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc8414.html#section-2"
+    },
+    {
+      "id": "error-error_description-null",
+      "kind": "error",
+      "body": "{\"error\":\"invalid_grant\",\"error_description\":null}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "error-error_uri-null",
+      "kind": "error",
+      "body": "{\"error\":\"invalid_grant\",\"error_uri\":null}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5"
+    },
+    {
+      "id": "token-auth0-refresh",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-auth0\",\"token_type\":\"Bearer\",\"expires_in\":86400,\"id_token\":\"synthetic-opaque-id-token\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://auth0.com/docs/secure/tokens/refresh-tokens/use-refresh-tokens"
+    },
+    {
+      "id": "token-bearer-case",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic\",\"token_type\":\"bEaReR\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-7.1"
+    },
+    {
+      "id": "token-expiry-clock-overflow",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic\",\"token_type\":\"Bearer\",\"expires_in\":9007199254740}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 2000
+      },
+      "expected": "unavailable",
+      "reference": "Sunday restriction: computed expiry must fit safe integer milliseconds"
+    },
+    {
+      "id": "token-expiry-positive-clock",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic\",\"token_type\":\"Bearer\",\"expires_in\":60}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 1700000000000
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5.1"
+    }
+  ]
+}

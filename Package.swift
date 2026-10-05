@@ -21,6 +21,7 @@ let package = Package(
     ),
   ],
   dependencies: [
+    .package(url: "https://github.com/openid/AppAuth-iOS.git", exact: "3.0.0"),
     .package(url: "https://github.com/outfoxx/PotentCodables.git", .upToNextMinor(from: "3.5.3")),
     .package(url: "https://github.com/sharplet/Regex.git", .upToNextMinor(from: "2.1.0")),
     .package(url: "https://github.com/SwiftScream/URITemplate.git", .upToNextMinor(from: "4.0.0"))
@@ -29,6 +30,7 @@ let package = Package(
     .target(
       name: "Sunday",
       dependencies: [
+        .product(name: "AppAuthCore", package: "AppAuth-iOS"),
         "Regex",
         "PotentCodables",
         .product(name: "ScreamURITemplate", package: "uritemplate")
@@ -45,7 +47,8 @@ let package = Package(
       dependencies: [
         "Sunday",
         "SundayServer"
-      ]
+      ],
+      resources: [.copy("Resources/oauth-cases.json"), .copy("Resources/oauth-browser")]
     ),
   ]
 )

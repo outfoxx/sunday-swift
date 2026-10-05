@@ -150,7 +150,9 @@ struct URLSessionOAuthTokenProviderTests {
           res.send(
             status: .ok,
             text:
-            "{\"issuer\":\"https://trusted.example\",\"token_endpoint\":\"\(tokenEndpoint.withLock { $0 })\"\(methods)}"
+            "{\"issuer\":\"https://trusted.example\"," +
+              "\"authorization_endpoint\":\"https://trusted.example/authorize\"," +
+              "\"token_endpoint\":\"\(tokenEndpoint.withLock { $0 })\"\(methods)}"
           )
         }
       }
@@ -231,7 +233,9 @@ struct URLSessionOAuthTokenProviderTests {
           res.send(
             status: .ok,
             text:
-            "{\"issuer\":\"https://trusted.example\",\"token_endpoint\":\"https://internal.example/token\"\(methods)}"
+            "{\"issuer\":\"https://trusted.example\"," +
+              "\"authorization_endpoint\":\"https://trusted.example/authorize\"," +
+              "\"token_endpoint\":\"https://internal.example/token\"\(methods)}"
           )
         }
       }
