@@ -33,6 +33,7 @@ struct ClientSettingsPersistenceTests {
   @Test func persistedSessionsRotationIsolationAndLogout() async throws {
     let store = Store()
     let state = State()
+    defer { state.managers.withLock { $0.removeAll() } }
     func settings(
       _ time: TimeInterval,
       session: String = "session",
