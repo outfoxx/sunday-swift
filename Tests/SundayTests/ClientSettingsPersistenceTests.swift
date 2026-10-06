@@ -33,43 +33,14 @@ struct ClientSettingsPersistenceTests {
   @Test func persistedSessionsRotationIsolationAndLogout() async throws {
     let store = Store()
     let state = State()
-    let managers = Mutex<[TokenManager]>([])
     func settings(
       _ time: TimeInterval,
       session: String = "session",
       profile: String = "development",
       direct: Bool = false
     ) throws -> ClientSettings {
-      let provider = Provider(session: session, time: time, state: state)
-      let factory: TokenManagerFactory = { providers in
-        state.counts.withLock { $0.factories += 1 }
-        #expect(Set(providers.keys) == ["resolved-provider"])
-        #expect(providers["resolved-provider"]?.identity == "application")
-        let manager = try TokenManager(
-          providers: providers,
-          store: store,
-          expirySkew: 5,
-          now: { Date(timeIntervalSince1970: time) }
-        )
-        managers.withLock { $0.append(manager) }
-        return manager
-      }
-      let base = try #require(URL(string: "https://api.example"))
-      let credentials: [String: any Credentials] = ["identity": ProviderCredentials(provider: provider)]
-      if direct {
-        return try ClientSettings(
-          baseURL: base,
-          bindings: ["read": [binding(profile)]],
-          credentials: credentials,
-          tokenManagerFactory: factory
-        )
-      }
-      return try ClientSettings.resolve(
-        baseURL: base,
-        alternatives: ["read": [[binding(profile)]], "other": [[binding(profile)]], "public": [[]]],
-        credentials: credentials,
-        tokenManagerFactory: factory
-      )
+      try self.settings(time, store: store, state: state,
+                        session: session, profile: profile, direct: direct)
     }
     func token(_ settings: ClientSettings) async throws -> TokenSet {
       let manager = try #require(settings.tokenManager)
@@ -86,24 +57,7 @@ struct ClientSettingsPersistenceTests {
       #expect(try await token(settings(0, direct: true)).accessToken == "initial")
       #expect(state.counts.withLock { $0.acquisitions == 1 })
       let third = try settings(96)
-      let configured = state.counts.withLock { $0.configurations }
-      try await withThrowingTaskGroup(of: String.self) { group in
-        let manager = try #require(third.tokenManager)
-        let selected = binding()
-        for _ in 0 ..< 20 {
-          group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
-        }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while state.counts.withLock({ $0.configurations < configured + 20 || $0.refreshes.isEmpty }),
-              ContinuousClock.now < deadline {
-          await Task.yield()
-        }
-        #expect(state.counts.withLock { $0.configurations >= configured + 20 && $0.refreshes.count == 1 })
-        await state.refreshGate.open()
-        for try await value in group {
-          #expect(value == "rotated-1")
-        }
-      }
+      try await overlappingRefreshes(third, state: state)
       #expect(state.counts.withLock { $0.refreshes == ["refresh-1"] })
       #expect(try await token(settings(96)).refreshToken == "refresh-2")
       _ = try await token(settings(192))
@@ -118,14 +72,75 @@ struct ClientSettingsPersistenceTests {
       #expect(state.counts.withLock { $0.acquisitions == 4 })
     }
     catch {
-      for manager in managers.withLock({ $0 }) {
+      for manager in state.managers.withLock({ $0 }) {
         await manager.close()
       }
       throw error
     }
-    for manager in managers.withLock({ $0 }) {
+    for manager in state.managers.withLock({ $0 }) {
       await manager.close()
     }
+  }
+
+  private func settings(
+    _ time: TimeInterval,
+    store: Store,
+    state: State,
+    session: String = "session",
+    profile: String = "development",
+    direct: Bool = false
+  ) throws -> ClientSettings {
+    let provider = Provider(session: session, time: time, state: state)
+    let factory: TokenManagerFactory = { providers in
+      state.counts.withLock { $0.factories += 1 }
+      #expect(Set(providers.keys) == ["resolved-provider"])
+      #expect(providers["resolved-provider"]?.identity == "application")
+      let manager = try TokenManager(
+        providers: providers,
+        store: store,
+        expirySkew: 5,
+        now: { Date(timeIntervalSince1970: time) }
+      )
+      state.managers.withLock { $0.append(manager) }
+      return manager
+    }
+    let base = try #require(URL(string: "https://api.example"))
+    let credentials: [String: any Credentials] = ["identity": ProviderCredentials(provider: provider)]
+    if direct {
+      return try ClientSettings(
+        baseURL: base,
+        bindings: ["read": [binding(profile)]],
+        credentials: credentials,
+        tokenManagerFactory: factory
+      )
+    }
+    return try ClientSettings.resolve(
+      baseURL: base,
+      alternatives: ["read": [[binding(profile)]], "other": [[binding(profile)]], "public": [[]]],
+      credentials: credentials,
+      tokenManagerFactory: factory
+    )
+  }
+
+  private func overlappingRefreshes(_ settings: ClientSettings, state: State) async throws {
+  let configured = state.counts.withLock { $0.configurations }
+  try await withThrowingTaskGroup(of: String.self) { group in
+    let manager = try #require(settings.tokenManager)
+    let selected = binding()
+    for _ in 0 ..< 20 {
+      group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
+    }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while state.counts.withLock({ $0.configurations < configured + 20 || $0.refreshes.isEmpty }),
+          ContinuousClock.now < deadline {
+      await Task.yield()
+    }
+    #expect(state.counts.withLock { $0.configurations >= configured + 20 && $0.refreshes.count == 1 })
+    await state.refreshGate.open()
+    for try await value in group {
+      #expect(value == "rotated-1")
+    }
+  }
   }
 
   @Test func publicInvalidAndFailingFactory() throws {
@@ -157,6 +172,7 @@ struct ClientSettingsPersistenceTests {
       var configurations = 0; var refreshes: [String] = []
     }
 
+    let managers = Mutex<[TokenManager]>([])
     let counts = Mutex(Counts())
     let refreshGate = Signal()
   }
