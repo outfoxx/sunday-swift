@@ -195,16 +195,7 @@ actor ManagedOAuthProvider {
 
   func authorize(clientID: String) async throws -> (code: String, verifier: String) {
     if mode == "replay" { return ("synthetic-code", String(repeating: "v", count: 64)) }
-    let browser = cache.appendingPathComponent("browser")
-    if !FileManager.default.fileExists(atPath: browser.appendingPathComponent("node_modules/playwright").path) {
-      try? FileManager.default.removeItem(at: browser)
-      let bundled = Bundle.module.resourceURL!.appendingPathComponent("oauth-browser")
-      try FileManager.default.copyItem(at: bundled, to: browser)
-      try await run(["npm", "ci", "--prefix", browser.path, "--ignore-scripts"], timeout: 180)
-      try await run(["node", browser.appendingPathComponent("node_modules/playwright/cli.js").path,
-                     "install", "chromium",
-    ], timeout: 240)
-    }
+    let browser = try await prepareBrowser()
     let configuration = directory.appendingPathComponent("browser-configuration.json")
     let result = directory.appendingPathComponent("browser-result.json")
     defer { try? FileManager.default.removeItem(at: result) }
@@ -216,6 +207,24 @@ actor ManagedOAuthProvider {
     struct Grant: Decodable { let code: String; let verifier: String }
     let grant = try JSONDecoder().decode(Grant.self, from: Data(contentsOf: result))
     return (grant.code, grant.verifier)
+  }
+
+  // Playwright installation is idempotent and repairs missing or interrupted browser downloads.
+  func prepareBrowser(
+    execute: (@Sendable ([String], Int) async throws -> Void)? = nil
+  ) async throws -> URL {
+    let execute = execute ?? { try await self.run($0, timeout: $1) }
+    let browser = cache.appendingPathComponent("browser")
+    if !FileManager.default.fileExists(atPath: browser.appendingPathComponent("node_modules/playwright").path) {
+      try? FileManager.default.removeItem(at: browser)
+      let bundled = Bundle.module.resourceURL!.appendingPathComponent("oauth-browser")
+      try FileManager.default.copyItem(at: bundled, to: browser)
+      try await execute(["npm", "ci", "--prefix", browser.path, "--ignore-scripts"], 180)
+    }
+    try await execute(["node", browser.appendingPathComponent("node_modules/playwright/cli.js").path,
+                       "install", "chromium",
+    ], 240)
+    return browser
   }
 
   func close() async {

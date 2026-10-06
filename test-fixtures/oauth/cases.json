@@ -1623,6 +1623,175 @@
       },
       "expected": "unavailable",
       "reference": "RFC 8414 section 2; Sunday validates recognized endpoint types and requires HTTPS except loopback before applying contextual endpoint overrides."
+    },
+    {
+      "id": "token-expiry-fraction-rounded",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":1.00000000000000001}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.1 and Appendix A.14; Sunday requires integral lifetimes before numeric rounding."
+    },
+    {
+      "id": "token-expiry-fraction-rounded-large",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":9007199254740.99999}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.1 and Appendix A.14; Sunday requires integral lifetimes before numeric rounding."
+    },
+    {
+      "id": "error-description-empty-compatibility",
+      "kind": "error",
+      "body": "{\"error\":\"invalid_grant\",\"error_description\":\"\"}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "Sunday compatibility exception to RFC 6749 Appendix A.8: empty advisory descriptions do not hide the error code."
+    },
+    {
+      "id": "error-description-type-int",
+      "kind": "error",
+      "body": "{\"error\": \"invalid_grant\", \"error_description\": 42}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.2: error_description must be a string."
+    },
+    {
+      "id": "error-description-type-bool",
+      "kind": "error",
+      "body": "{\"error\": \"invalid_grant\", \"error_description\": false}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.2: error_description must be a string."
+    },
+    {
+      "id": "error-description-type-list",
+      "kind": "error",
+      "body": "{\"error\": \"invalid_grant\", \"error_description\": []}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.2: error_description must be a string."
+    },
+    {
+      "id": "error-description-type-dict",
+      "kind": "error",
+      "body": "{\"error\": \"invalid_grant\", \"error_description\": {}}",
+      "status": 400,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.2: error_description must be a string."
+    },
+    {
+      "id": "token-expiry-fraction-beyond-decimal",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":1.000000000000000000000000000000000000000000000000001}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "unavailable",
+      "reference": "RFC 6749 section 5.1 and Appendix A.14; Sunday requires integral lifetimes before numeric rounding."
+    },
+    {
+      "id": "token-expiry-integral-exponent-positive",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":6e1,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
+    },
+    {
+      "id": "token-expiry-integral-exponent-negative",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":600e-1,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
+    },
+    {
+      "id": "token-expiry-integral-exponent-zero",
+      "kind": "token",
+      "body": "{\"access_token\":\"synthetic-access\",\"token_type\":\"Bearer\",\"expires_in\":60e0,\"refresh_token\":\"synthetic-refresh\",\"scope\":\"read\"}",
+      "status": 200,
+      "context": {
+        "scopes": [
+          "read"
+        ],
+        "clockMillis": 0
+      },
+      "expected": "accept",
+      "reference": "https://www.rfc-editor.org/rfc/rfc6749.html#section-5",
+      "tokens": {
+        "accessToken": "synthetic-access",
+        "refreshToken": "synthetic-refresh",
+        "expiresAtMillis": 60000
+      }
     }
   ]
 }

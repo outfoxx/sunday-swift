@@ -16,13 +16,14 @@
 
 #if os(macOS)
 import Foundation
+import Synchronization
 @testable import SundayServer
 import Testing
 
 struct OAuthInfrastructureTests {
   @Test(arguments: [[], ["/usr/bin/false"], ["/bin/sleep", "60"]])
   func startupFailuresCleanDirectory(command: [String]) async throws {
-    let provider = try ManagedOAuthProvider(startupTimeout: .milliseconds(100), command: command)
+    let provider = try ManagedOAuthProvider(mode: "replay", startupTimeout: .milliseconds(100), command: command)
     do {
       try await provider.start()
       Issue.record("An unready provider must fail")
@@ -51,6 +52,28 @@ struct OAuthInfrastructureTests {
     #expect(try FileManager.default.contentsOfDirectory(atPath: cache.path) == ["keycloak-26.2.5.tar.gz"])
     await provider.close()
   }
+  @Test func interruptedBrowserInstallationIsRetried() async throws {
+    let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: cache) }
+    let module = cache.appendingPathComponent("browser/node_modules/playwright")
+    try FileManager.default.createDirectory(at: module, withIntermediateDirectories: true)
+    let provider = try ManagedOAuthProvider(mode: "live", ci: "true", cache: cache)
+    let commands = Mutex<[[String]]>([])
+    await #expect(throws: ManagedOAuthProvider.Failure.self) {
+      _ = try await provider.prepareBrowser { command, _ in
+        commands.withLock { $0.append(command) }
+        throw ManagedOAuthProvider.Failure.process
+      }
+    }
+    _ = try await provider.prepareBrowser { command, _ in commands.withLock { $0.append(command) } }
+    // A later deletion of the shared Chromium cache is also repaired on the next call.
+    _ = try await provider.prepareBrowser { command, _ in commands.withLock { $0.append(command) } }
+    let attempts = commands.withLock { $0 }
+    #expect(attempts.count == 3)
+    #expect(attempts.allSatisfy { $0.suffix(2) == ["install", "chromium"] })
+    await provider.close()
+  }
+
   @Test func rejectedDownloadDoesNotPopulateCache() async throws {
     let cache = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: cache) }

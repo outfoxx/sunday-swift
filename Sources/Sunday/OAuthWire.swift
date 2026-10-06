@@ -15,9 +15,10 @@
  */
 
 import Foundation
+import PotentJSON
 
 // Wire decoding preserves absence separately from explicit null before applying client policy.
-enum OAuthWire {
+internal enum OAuthWire {
   struct Discovery: Decodable {
     let issuer: String
     let tokenEndpoint: String?
@@ -47,6 +48,27 @@ enum OAuthWire {
     let refreshToken: String?
     let scope: String?
     var description: String { "OAuthTokenResponse()" }
+
+    static func parse(_ data: Data) throws -> Self {
+      // Foundation rejects trailing JSON that PotentJSON 3.5 accepts. Retain its strict document check.
+      let result = try Foundation.JSONDecoder().decode(Self.self, from: data)
+      let tree = try PotentJSON.JSONSerialization.json(from: data)
+      if case .object(let fields) = tree, let lifetime = fields["expires_in"] {
+        guard case .number(let number) = lifetime, integral(number.value) else { throw TokenProviderError() }
+      }
+      return result
+    }
+
+    // Check the original JSON number before conversion; Decimal also rounds beyond its precision.
+    private static func integral(_ raw: String) -> Bool {
+      let parts = raw.lowercased().split(separator: "e")
+      guard let exponent = parts.count == 2 ? Int(parts[1]) : 0,
+            (-10_000 ... 10_000).contains(exponent) else { return false }
+      let coefficient = parts[0].split(separator: ".")
+      let scale = (coefficient.count == 2 ? coefficient[1].count : 0) - exponent
+      let digits = coefficient.joined()
+      return scale <= 0 || digits.reversed().prefix(while: { $0 == "0" }).count >= scale
+    }
 
     init(from decoder: any Decoder) throws {
       let values = try decoder.container(keyedBy: Key.self)
@@ -89,7 +111,10 @@ enum OAuthWire {
     init(from decoder: any Decoder) throws {
       let values = try decoder.container(keyedBy: Key.self)
       code = try values.string("error")
-      _ = try values.optionalString("error_description")
+      // Compatibility: empty advisory descriptions must not hide an invalid grant.
+      if values.contains(Key("error_description")) {
+        _ = try values.decode(String.self, forKey: Key("error_description"))
+      }
       _ = try values.optionalString("error_uri")
     }
   }
@@ -108,7 +133,7 @@ enum OAuthWire {
     var intValue: Int? { nil }
     init(_ value: String) { stringValue = value }
     init?(stringValue: String) { self.init(stringValue) }
-    init?(intValue: Int) { return nil }
+    init?(intValue _: Int) { return nil }
   }
 }
 

@@ -130,7 +130,7 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   public func refresh(_ request: TokenRequest, refreshToken: String) async throws -> TokenSet {
     do {
       guard !refreshToken.isEmpty else { throw TokenProviderError() }
-      let request = try await resolved(request)
+      let request = try await resolved(request, refreshing: true)
       var form = parameters(request)
       form["grant_type"] = "refresh_token"
       form["refresh_token"] = refreshToken
@@ -161,8 +161,9 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
     // The authorization endpoint is unused by a token request; the selected token URL
     // also supports direct-token configurations that do not have discovery metadata.
     let service = OIDServiceConfiguration(authorizationEndpoint: endpoint, tokenEndpoint: endpoint)
+    guard let grantType = form["grant_type"] else { throw TokenProviderError() }
     let protocolRequest = OIDTokenRequest(
-      configuration: service, grantType: form["grant_type"]!, authorizationCode: form["code"],
+      configuration: service, grantType: grantType, authorizationCode: form["code"],
       redirectURL: form["redirect_uri"].flatMap(URL.init(string:)), clientID: configuration.clientID,
       clientSecret: configuration.authentication == .clientSecretBasic ? configuration.clientSecret : nil,
       scope: form["scope"], refreshToken: form["refresh_token"], codeVerifier: form["code_verifier"],
@@ -186,10 +187,10 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   }
 
   private func decodeToken(_ data: Data, scopes: Set<String>) throws -> TokenSet {
-    try JSONDecoder().decode(OAuthWire.Success.self, from: data).tokens(scopes: scopes, now: now())
+    try OAuthWire.Success.parse(data).tokens(scopes: scopes, now: now())
   }
 
-  private func resolved(_ request: TokenRequest) async throws -> TokenRequest {
+  private func resolved(_ request: TokenRequest, refreshing: Bool = false) async throws -> TokenRequest {
     try Task.checkCancellation()
     try validateClient()
     var endpoints = request.binding.endpoints
@@ -207,9 +208,11 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
         .overridden(by: endpoints)
       if request.binding.flow == .authorizationCode, endpoints.authorizationURL == nil { throw TokenProviderError() }
     }
-    guard let tokenURL = endpoints.tokenURL else { throw TokenProviderError() }
-    _ = try OAuthWire.endpoint(tokenURL)
-    for value in [endpoints.authorizationURL, endpoints.refreshURL].compactMap({ $0 }) {
+    guard let selected = (refreshing ? endpoints.refreshURL : nil) ?? endpoints.tokenURL else {
+      throw TokenProviderError()
+    }
+    _ = try OAuthWire.endpoint(selected)
+    for value in [endpoints.tokenURL, endpoints.authorizationURL, endpoints.refreshURL].compactMap({ $0 }) {
       _ = try OAuthWire.endpoint(value)
     }
     return TokenRequest(

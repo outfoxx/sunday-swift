@@ -296,6 +296,24 @@
       },
       "expected": "temporary",
       "reference": "Sunday single-use credential policy: transport recovery must not replay authorization codes or rotating refresh tokens."
+    },
+    {
+      "id": "invalid_grant-empty-description",
+      "target": "token",
+      "status": 400,
+      "body": "{\"error\": \"invalid_grant\", \"error_description\": \"\"}",
+      "expected": "invalid_grant",
+      "reference": "Sunday compatibility exception to RFC 6749 Appendix A.8: classify errors with an empty advisory description.",
+      "headers": {}
+    },
+    {
+      "id": "temporarily_unavailable-empty-description",
+      "target": "token",
+      "status": 400,
+      "body": "{\"error\": \"temporarily_unavailable\", \"error_description\": \"\"}",
+      "expected": "temporary",
+      "reference": "Sunday compatibility exception to RFC 6749 Appendix A.8: classify errors with an empty advisory description.",
+      "headers": {}
     }
   ]
 }

@@ -94,6 +94,32 @@ struct URLSessionOAuthTokenProviderTests {
     }
   }
 
+  @Test func refreshOnlyEndpointRemainsSupported() async throws {
+    let count = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/refresh") {
+        POST { _, res in
+          count.withLock { $0 += 1 }
+          res.send(status: .ok, text: #"{"access_token":"renewed","token_type":"Bearer"}"#)
+        }
+      }
+    }
+    let url = try await start(server).appendingPathComponent("refresh")
+    defer { server.stop() }
+    let provider = try URLSessionOAuthTokenProvider(configuration: .init(
+      identity: "application", clientID: "client", clientSecret: "secret", authentication: .clientSecretPost
+    ))
+    let refreshRequest = TokenRequest(binding: SecurityBinding(
+      scheme: "identity", provider: "application", flow: .clientCredentials, profile: "external", scopes: [],
+      endpoints: .init(refreshURL: url.absoluteString),
+      transport: .init(location: .header, name: "Authorization", prefix: "Bearer")
+    ), clientIdentity: "client", grantIdentity: "session")
+    let tokens = try await provider.refresh(refreshRequest, refreshToken: "stored")
+    #expect(tokens.accessToken == "renewed")
+    await #expect(throws: TokenProviderError.self) { try await provider.acquire(refreshRequest) }
+    #expect(count.withLock { $0 } == 1)
+  }
+
   @Test func applicationPKCECodesAreOneUseAcrossCacheKeys() async throws {
     let captured = Mutex<[[String: String]]>([])
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
@@ -102,7 +128,7 @@ struct URLSessionOAuthTokenProviderTests {
           let values = form(req.body)
           captured.withLock { $0.append(values) }
           if values["grant_type"] == "refresh_token" {
-            res.send(status: .badRequest, text: #"{"error":"invalid_grant"}"#)
+            res.send(status: .badRequest, text: #"{"error":"invalid_grant","error_description":""}"#)
           }
           else {
             res.send(status: .ok, text: #"{"access_token":"token","token_type":"Bearer","refresh_token":"refresh"}"#)

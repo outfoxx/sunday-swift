@@ -52,7 +52,7 @@ struct OAuthWireTests {
         case "discovery": _ = try JSONDecoder().decode(OAuthWire.Discovery.self, from: data)
         case "error": _ = try JSONDecoder().decode(OAuthWire.Failure.self, from: data)
         default:
-          let tokens = try JSONDecoder().decode(OAuthWire.Success.self, from: data)
+          let tokens = try OAuthWire.Success.parse(data)
             .tokens(
               scopes: fixture.context.scopes, now: Date(timeIntervalSince1970: fixture.context.clockMillis / 1000)
             )
