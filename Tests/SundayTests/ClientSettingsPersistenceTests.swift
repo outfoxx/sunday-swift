@@ -82,15 +82,24 @@ struct ClientSettingsPersistenceTests {
       let manager = try #require(first.tokenManager)
       let lease = try await manager.credentials(for: binding())
       #expect(lease.tokens.accessToken == "initial")
+      await manager.close()
       #expect(try await token(settings(0, direct: true)).accessToken == "initial")
       #expect(state.counts.withLock { $0.acquisitions == 1 })
       let third = try settings(96)
+      let configured = state.counts.withLock { $0.configurations }
       try await withThrowingTaskGroup(of: String.self) { group in
         let manager = try #require(third.tokenManager)
         let selected = binding()
         for _ in 0 ..< 20 {
           group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
         }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while state.counts.withLock({ $0.configurations < configured + 20 || $0.refreshes.isEmpty }),
+              ContinuousClock.now < deadline {
+          await Task.yield()
+        }
+        #expect(state.counts.withLock { $0.configurations >= configured + 20 && $0.refreshes.count == 1 })
+        await state.refreshGate.open()
         for try await value in group {
           #expect(value == "rotated-1")
         }
@@ -144,8 +153,12 @@ struct ClientSettingsPersistenceTests {
 
   private struct Failure: Error {}
   private final class State: Sendable {
-    struct Counts { var acquisitions = 0; var factories = 0; var refreshes: [String] = [] }
+    struct Counts { var acquisitions = 0; var factories = 0
+      var configurations = 0; var refreshes: [String] = []
+    }
+
     let counts = Mutex(Counts())
+    let refreshGate = Signal()
   }
 
   private struct Provider: RefreshingTokenProvider {
@@ -153,7 +166,11 @@ struct ClientSettingsPersistenceTests {
     let session: String
     let time: TimeInterval
     let state: State
-    func configure(_: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: "client", grantIdentity: session) }
+    func configure(_: SecurityBinding) -> TokenConfiguration {
+      state.counts.withLock { $0.configurations += 1 }
+      return .init(clientIdentity: "client", grantIdentity: session)
+    }
+
     func acquire(_: TokenRequest) async throws -> TokenSet {
       state.counts.withLock { $0.acquisitions += 1 }
       return .init(accessToken: "initial", expiresAt: Date(timeIntervalSince1970: 100), refreshToken: "refresh-1")
@@ -161,11 +178,29 @@ struct ClientSettingsPersistenceTests {
 
     func refresh(_: TokenRequest, refreshToken: String) async throws -> TokenSet {
       let count = state.counts.withLock { $0.refreshes.append(refreshToken); return $0.refreshes.count }
+      if count == 1 { await state.refreshGate.wait() }
       return .init(
         accessToken: "rotated-\(count)",
         expiresAt: Date(timeIntervalSince1970: time + 100),
         refreshToken: "refresh-\(count + 1)"
       )
+    }
+  }
+
+  private actor Signal {
+    private var opened = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func wait() async {
+      if opened { return }
+      await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func open() {
+      opened = true
+      for waiter in waiters {
+        waiter.resume()
+      }
+      waiters.removeAll()
     }
   }
 
