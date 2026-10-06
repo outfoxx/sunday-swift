@@ -29,7 +29,8 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
     bindings: [String: [SecurityBinding]] = [:],
     credentials: [String: any Credentials] = [:]
   ) throws {
-    guard ["http", "https"].contains(baseURL.scheme?.lowercased() ?? ""), baseURL.host != nil else {
+    guard ["http", "https"].contains(baseURL.scheme?.lowercased() ?? ""), baseURL.host != nil,
+          baseURL.user == nil, baseURL.password == nil, baseURL.query == nil, baseURL.fragment == nil else {
       throw TokenProviderError()
     }
     self.baseURL = baseURL
@@ -107,13 +108,18 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
   }
 
   /// Selects complete operation alternatives without acquiring credentials or constructing a transport.
+  /// `alternativeSelection` chooses a zero-based candidate index, including scopes and endpoint metadata.
   public static func resolve(
     baseURL: URL, alternatives: [String: [[SecurityBinding]]], credentials: [String: any Credentials],
-    selection: [String: Set<String>] = [:]
+    selection: [String: Set<String>] = [:], alternativeSelection: [String: Int] = [:]
   ) throws -> ClientSettings {
+    guard Set(selection.keys).union(alternativeSelection.keys).allSatisfy({ alternatives[$0] != nil }) else {
+      throw TokenProviderError()
+    }
     var bindings: [String: [SecurityBinding]] = [:]
     for (operation, candidates) in alternatives {
-      let usable = candidates.filter { candidate in
+      let usable = candidates.enumerated().filter { index, candidate in
+        if let selected = alternativeSelection[operation], selected != index { return false }
         if let selected = selection[operation], selected != Set(candidate.map(\.scheme)) { return false }
         return candidate.allSatisfy { binding in
           guard let credential = credentials[binding.scheme] else { return false }
@@ -127,7 +133,7 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
         }
       }
       guard usable.count == 1 else { throw TokenProviderError() }
-      bindings[operation] = usable[0]
+      bindings[operation] = usable[0].element
     }
     return try ClientSettings(baseURL: baseURL, bindings: bindings, credentials: credentials)
   }

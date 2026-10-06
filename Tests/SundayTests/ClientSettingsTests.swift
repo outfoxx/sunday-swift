@@ -25,6 +25,42 @@ struct ClientSettingsTests {
     transport: .init(location: .header, name: "Authorization", prefix: "Bearer")
   )
 
+  @Test func directSettingsRejectInvalidEndpoints() throws {
+    for value in ["https://user:secret@api.example/v1", "https://api.example/v1?x=1", "https://api.example/v1#part"] {
+      let url = try #require(URL(string: value))
+      #expect(throws: TokenProviderError.self) { try ClientSettings(baseURL: url) }
+    }
+  }
+
+  @Test func completeSelectionDistinguishesScopes() throws {
+    let read = SecurityBinding(
+      scheme: "identity", provider: "identity", flow: .static, scopes: ["read"], transport: binding.transport
+    )
+    let write = SecurityBinding(
+      scheme: "identity", provider: "identity", flow: .static, scopes: ["write"], transport: binding.transport
+    )
+    let alternatives = ["list": [[read], [write]]]
+    let credentials: [String: any Credentials] = ["identity": BearerCredentials(token: "token")]
+    let base = try #require(URL(string: "https://api.example"))
+    #expect(throws: TokenProviderError.self) {
+      try ClientSettings.resolve(baseURL: base, alternatives: alternatives, credentials: credentials)
+    }
+    let settings = try ClientSettings.resolve(
+      baseURL: base, alternatives: alternatives, credentials: credentials, alternativeSelection: ["list": 1]
+    )
+    #expect(settings.bindings["list"]?.first?.scopes == ["write"])
+    #expect(throws: TokenProviderError.self) {
+      try ClientSettings.resolve(
+        baseURL: base, alternatives: alternatives, credentials: credentials, alternativeSelection: ["list": 2]
+      )
+    }
+    #expect(throws: TokenProviderError.self) {
+      try ClientSettings.resolve(
+        baseURL: base, alternatives: alternatives, credentials: credentials, alternativeSelection: ["typo": 0]
+      )
+    }
+  }
+
   @Test func staticCredentialsRemainPrivate() async throws {
     let settings = try ClientSettings(
       baseURL: URL(string: "https://api.example")!,
