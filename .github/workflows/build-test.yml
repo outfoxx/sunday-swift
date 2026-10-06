@@ -96,7 +96,8 @@ jobs:
     - name: Prepare simulator
       id: simulator
       if: matrix.platform != 'macos'
-      timeout-minutes: 8
+      # Allow first-launch setup, three inventory attempts, creation, and the bounded boot wait.
+      timeout-minutes: 12
       run: |
         sudo xcodebuild -runFirstLaunch
         xcodebuild -version

@@ -95,11 +95,23 @@ def run_command(arguments, timeout=60):
     return result.stdout.strip()
 
 
+def simulator_inventory(run=run_command):
+    """Retry read-only discovery while CoreSimulator starts, within three bounded attempts."""
+    arguments = ["xcrun", "simctl", "list", "--json"]
+    for attempt in range(1, 4):
+        try:
+            return json.loads(run(arguments, timeout=60))
+        except subprocess.TimeoutExpired as error:
+            print(f"Simulator inventory attempt {attempt}/3 timed out after 60 seconds", file=sys.stderr)
+            if attempt == 3:
+                raise RuntimeError("Simulator inventory unavailable after three 60-second attempts") from error
+
+
 def prepare_simulator(platform, run=run_command):
     """Reuse or create a compatible device and wait until it has finished booting."""
     name, sdk, _, _ = PLATFORMS[platform]
     sdk_version = run(["xcrun", "--sdk", sdk, "--show-sdk-version"])
-    inventory = json.loads(run(["xcrun", "simctl", "list", "--json"]))
+    inventory = simulator_inventory(run)
     runtime, device_type, device = select_device(inventory, platform, sdk_version)
     if device:
         udid = device["udid"]
