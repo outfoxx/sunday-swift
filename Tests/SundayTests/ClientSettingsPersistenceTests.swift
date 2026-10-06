@@ -123,24 +123,24 @@ struct ClientSettingsPersistenceTests {
   }
 
   private func overlappingRefreshes(_ settings: ClientSettings, state: State) async throws {
-  let configured = state.counts.withLock { $0.configurations }
-  try await withThrowingTaskGroup(of: String.self) { group in
-    let manager = try #require(settings.tokenManager)
-    let selected = binding()
-    for _ in 0 ..< 20 {
-      group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
+    let configured = state.counts.withLock { $0.configurations }
+    try await withThrowingTaskGroup(of: String.self) { group in
+      let manager = try #require(settings.tokenManager)
+      let selected = binding()
+      for _ in 0 ..< 20 {
+        group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
+      }
+      let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+      while state.counts.withLock({ $0.configurations < configured + 20 || $0.refreshes.isEmpty }),
+            ContinuousClock.now < deadline {
+        await Task.yield()
+      }
+      #expect(state.counts.withLock { $0.configurations >= configured + 20 && $0.refreshes.count == 1 })
+      await state.refreshGate.open()
+      for try await value in group {
+        #expect(value == "rotated-1")
+      }
     }
-    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-    while state.counts.withLock({ $0.configurations < configured + 20 || $0.refreshes.isEmpty }),
-          ContinuousClock.now < deadline {
-      await Task.yield()
-    }
-    #expect(state.counts.withLock { $0.configurations >= configured + 20 && $0.refreshes.count == 1 })
-    await state.refreshGate.open()
-    for try await value in group {
-      #expect(value == "rotated-1")
-    }
-  }
   }
 
   @Test func publicInvalidAndFailingFactory() throws {
