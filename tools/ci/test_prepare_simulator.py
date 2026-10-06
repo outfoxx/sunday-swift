@@ -9,7 +9,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import prepare_simulator as simulator
 
@@ -63,6 +63,44 @@ class SimulatorTests(unittest.TestCase):
         self.assertEqual(destination, f"platform=watchOS Simulator,id={EXISTING}")
         self.assertEqual(calls[-1], (["xcrun", "simctl", "bootstatus", EXISTING, "-b"], {"timeout": 300}))
         self.assertFalse(any("create" in command for command, _ in calls))
+
+    def test_inventory_recovers_after_timeout(self):
+        run = Mock(side_effect=[
+            subprocess.TimeoutExpired("simctl list", 60), json.dumps(inventory()),
+        ])
+        self.assertEqual(simulator.simulator_inventory(run), inventory())
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertEqual(call.args, (["xcrun", "simctl", "list", "--json"],))
+            self.assertEqual(call.kwargs, {"timeout": 60})
+
+    def test_inventory_timeout_budget_is_bounded(self):
+        run = Mock(side_effect=subprocess.TimeoutExpired("simctl list", 60))
+        with self.assertRaisesRegex(RuntimeError, "three 60-second attempts"):
+            simulator.simulator_inventory(run)
+        self.assertEqual(run.call_count, 3)
+
+    def test_inventory_does_not_retry_other_errors(self):
+        for error in (subprocess.CalledProcessError(1, "simctl list"), ValueError("malformed JSON")):
+            with self.subTest(error=error):
+                run = Mock(side_effect=error)
+                with self.assertRaises(type(error)):
+                    simulator.simulator_inventory(run)
+                run.assert_called_once()
+
+    def test_inventory_failure_does_not_create_or_boot_devices(self):
+        calls = []
+
+        def run(arguments, **kwargs):
+            calls.append(arguments)
+            if "--show-sdk-version" in arguments:
+                return "26.0"
+            raise subprocess.TimeoutExpired(arguments, kwargs["timeout"])
+
+        with self.assertRaisesRegex(RuntimeError, "three 60-second attempts"):
+            simulator.prepare_simulator("tvos", run)
+        self.assertEqual(len(calls), 4)
+        self.assertTrue(all("list" in arguments for arguments in calls[1:]))
 
     def test_creates_missing_device_from_runtime_supported_types(self):
         calls = []
@@ -141,8 +179,12 @@ class SimulatorTests(unittest.TestCase):
             with self.subTest(platform=platform), self.assertRaises(RuntimeError):
                 simulator.select_device(inventory(), platform, "26.0")
 
-    def test_boot_failure_does_not_write_a_destination(self):
-        for error in (subprocess.CalledProcessError(1, "bootstatus"), subprocess.TimeoutExpired("bootstatus", 300)):
+    def test_setup_failure_does_not_write_a_destination(self):
+        for error in (
+            subprocess.CalledProcessError(1, "bootstatus"),
+            subprocess.TimeoutExpired("bootstatus", 300),
+            RuntimeError("Simulator inventory unavailable after three 60-second attempts"),
+        ):
             with tempfile.TemporaryDirectory() as directory:
                 output = Path(directory) / "output"
                 with patch("sys.argv", ["prepare_simulator", "watchos", "--github-output", str(output)]), patch.object(

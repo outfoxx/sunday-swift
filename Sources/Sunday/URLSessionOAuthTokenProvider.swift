@@ -15,6 +15,7 @@
  */
 
 import CryptoKit
+import AppAuthCore
 import Foundation
 
 /// OAuth acquisition using a dedicated URLSession without ambient credentials, cookies, or redirect replay.
@@ -93,6 +94,7 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
 
   public func acquire(_ request: TokenRequest) async throws -> TokenSet {
     do {
+      let request = try await resolved(request)
       var form = parameters(request)
       switch request.binding.flow {
       case .clientCredentials:
@@ -128,6 +130,7 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   public func refresh(_ request: TokenRequest, refreshToken: String) async throws -> TokenSet {
     do {
       guard !refreshToken.isEmpty else { throw TokenProviderError() }
+      let request = try await resolved(request, refreshing: true)
       var form = parameters(request)
       form["grant_type"] = "refresh_token"
       form["refresh_token"] = refreshToken
@@ -146,36 +149,33 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
 
   private func exchange(_ request: TokenRequest, form: [String: String], refreshing: Bool) async throws -> TokenSet {
     try Task.checkCancellation()
-    let endpoint = try await tokenEndpoint(request, refreshing: refreshing)
-    var native = URLRequest(url: endpoint)
-    native.httpMethod = "POST"
-    native.setValue("application/json", forHTTPHeaderField: "Accept")
-    native.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-    var form = form
-    guard !configuration.clientID.isEmpty else { throw TokenProviderError() }
-    switch configuration.authentication {
-    case .none:
-      form["client_id"] = configuration.clientID
-    case .clientSecretBasic, .clientSecretPost:
-      guard let secret = configuration.clientSecret, !secret.isEmpty else { throw TokenProviderError() }
-      if configuration.authentication == .clientSecretBasic {
-        let encoded = Self.encode(configuration.clientID) + ":" + Self.encode(secret)
-        native.setValue("Basic " + Data(encoded.utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
-      }
-      else {
-        form["client_id"] = configuration.clientID
-        form["client_secret"] = secret
-      }
+    guard let selected = (refreshing ? request.binding.endpoints.refreshURL : nil) ??
+      request.binding.endpoints.tokenURL else { throw TokenProviderError() }
+    let endpoint = try OAuthWire.endpoint(selected)
+    try validateClient()
+    let standardFields = ["grant_type", "code", "redirect_uri", "scope", "refresh_token", "code_verifier"]
+    var extras = form.filter { !standardFields.contains($0.key) }
+    if configuration.authentication == .clientSecretPost {
+      extras["client_secret"] = configuration.clientSecret
     }
-    native.httpBody = Data(
-      form.keys.sorted().map { Self.encode($0) + "=" + Self.encode(form[$0]!) }
-        .joined(separator: "&").utf8
+    // The authorization endpoint is unused by a token request; the selected token URL
+    // also supports direct-token configurations that do not have discovery metadata.
+    let service = OIDServiceConfiguration(authorizationEndpoint: endpoint, tokenEndpoint: endpoint)
+    guard let grantType = form["grant_type"] else { throw TokenProviderError() }
+    let protocolRequest = OIDTokenRequest(
+      configuration: service, grantType: grantType, authorizationCode: form["code"],
+      redirectURL: form["redirect_uri"].flatMap(URL.init(string:)), clientID: configuration.clientID,
+      clientSecret: configuration.authentication == .clientSecretBasic ? configuration.clientSecret : nil,
+      scope: form["scope"], refreshToken: form["refresh_token"], codeVerifier: form["code_verifier"],
+      additionalParameters: extras
     )
+    var native = protocolRequest.urlRequest()
+    native.setValue("application/json", forHTTPHeaderField: "Accept")
     let (data, response) = try await session.data(for: native)
     guard let http = response as? HTTPURLResponse else { throw TokenProviderError() }
     try Self.checkAvailability(http.statusCode)
-    guard (200 ..< 300).contains(http.statusCode) else {
-      let code = try? JSONDecoder().decode(ErrorResponse.self, from: data).error
+    guard http.statusCode == 200 else {
+      let code = try? JSONDecoder().decode(OAuthWire.Failure.self, from: data).code
       if code == "invalid_grant" {
         if request.binding.flow == .authorizationCode { throw AuthorizationRequiredError() }
         throw TokenProviderError(reason: .invalidGrant)
@@ -187,64 +187,58 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   }
 
   private func decodeToken(_ data: Data, scopes: Set<String>) throws -> TokenSet {
-    let token = try JSONDecoder().decode(TokenResponse.self, from: data)
-    guard !token.accessToken.isEmpty, token.tokenType.lowercased() == "bearer",
-          token.refreshToken.map({ !$0.isEmpty }) ?? true else { throw TokenProviderError() }
-    if let scope = token.scope,
-       !scopes.isSubset(of: Set(scope.split(separator: " ").map(String.init))) {
-      throw TokenProviderError()
-    }
-    var expiresAt: Date?
-    if let seconds = token.expiresIn {
-      let expiry = now().addingTimeInterval(seconds)
-      guard seconds.isFinite, seconds > 0, expiry.timeIntervalSince1970.isFinite else { throw TokenProviderError() }
-      expiresAt = expiry
-    }
-    return TokenSet(accessToken: token.accessToken, expiresAt: expiresAt, refreshToken: token.refreshToken)
+    try OAuthWire.Success.parse(data).tokens(scopes: scopes, now: now())
   }
 
-  private func tokenEndpoint(_ request: TokenRequest, refreshing: Bool) async throws -> URL {
-    var discovered: String?
-    if let discoveryURL = request.binding.endpoints.discoveryURL {
+  private func resolved(_ request: TokenRequest, refreshing: Bool = false) async throws -> TokenRequest {
+    try Task.checkCancellation()
+    try validateClient()
+    var endpoints = request.binding.endpoints
+    if let discoveryURL = endpoints.discoveryURL {
       guard let issuer = configuration.issuer, !issuer.isEmpty else { throw TokenProviderError() }
-      var native = try URLRequest(url: Self.endpoint(discoveryURL))
-      native.setValue("application/json", forHTTPHeaderField: "Accept")
-      let (data, response) = try await session.data(for: native)
-      guard let http = response as? HTTPURLResponse else { throw TokenProviderError() }
-      try Self.checkAvailability(http.statusCode)
-      guard (200 ..< 300).contains(http.statusCode) else { throw TokenProviderError() }
-      let discovery = try JSONDecoder().decode(Discovery.self, from: data)
+      let discovery = try await discover(discoveryURL)
       guard discovery.issuer == issuer else { throw TokenProviderError() }
-      // Public clients do not authenticate, and servers may omit `none` from their advertised methods.
-      if configuration.authentication != .none {
+      if configuration.authentication != .none || request.binding.flow != .authorizationCode {
         guard (discovery.authenticationMethods ?? [Authentication.clientSecretBasic.rawValue])
           .contains(configuration.authentication.rawValue) else { throw TokenProviderError() }
       }
-      discovered = discovery.tokenEndpoint
+      endpoints = SecurityEndpoints(
+        authorizationURL: discovery.authorizationEndpoint, tokenURL: discovery.tokenEndpoint
+      )
+        .overridden(by: endpoints)
+      if request.binding.flow == .authorizationCode, endpoints.authorizationURL == nil { throw TokenProviderError() }
     }
-    guard let selected = (refreshing ? request.binding.endpoints.refreshURL : nil) ??
-      request.binding.endpoints.tokenURL ?? discovered else { throw TokenProviderError() }
-    return try Self.endpoint(selected)
+    guard let selected = (refreshing ? endpoints.refreshURL : nil) ?? endpoints.tokenURL else {
+      throw TokenProviderError()
+    }
+    _ = try OAuthWire.endpoint(selected)
+    for value in [endpoints.tokenURL, endpoints.authorizationURL, endpoints.refreshURL].compactMap({ $0 }) {
+      _ = try OAuthWire.endpoint(value)
+    }
+    return TokenRequest(
+      binding: request.binding.overridingEndpoints(endpoints), clientIdentity: request.clientIdentity,
+      grantIdentity: request.grantIdentity
+    )
   }
 
-  private static func endpoint(_ raw: String) throws -> URL {
-    guard let parts = URLComponents(string: raw), let host = parts.host, !host.isEmpty,
-          parts.user == nil, parts.password == nil, parts.fragment == nil,
-          parts
-          .scheme == "https" || (parts.scheme == "http" && ["localhost", "127.0.0.1", "[::1]", "::1"].contains(host)),
-          let url = parts.url else { throw TokenProviderError() }
-    return url
+  private func validateClient() throws {
+    guard !configuration.clientID.isEmpty else { throw TokenProviderError() }
+    if configuration.authentication != .none {
+      guard let secret = configuration.clientSecret, !secret.isEmpty else { throw TokenProviderError() }
+    }
+  }
+
+  private func discover(_ url: String) async throws -> OAuthWire.Discovery {
+    var native = try URLRequest(url: OAuthWire.endpoint(url))
+    native.setValue("application/json", forHTTPHeaderField: "Accept")
+    let (data, response) = try await session.data(for: native)
+    guard let http = response as? HTTPURLResponse else { throw TokenProviderError() }
+    try Self.checkAvailability(http.statusCode)
+    guard http.statusCode == 200 else { throw TokenProviderError() }
+    return try JSONDecoder().decode(OAuthWire.Discovery.self, from: data)
   }
 
   private static let verifierCharacters = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~".utf8)
-
-  private static func encode(_ value: String) -> String {
-    value.utf8.map { byte in
-      if verifierCharacters.contains(byte), byte != 126 { return String(UnicodeScalar(byte)) }
-      if byte == 32 { return "+" }
-      return String(format: "%%%02X", byte)
-    }.joined()
-  }
 
   private static func checkAvailability(_ status: Int) throws {
     if status == 408 || status == 429 || (500 ... 599).contains(status) { throw TokenProviderError(reason: .temporary) }
@@ -263,28 +257,7 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
     return TokenProviderError()
   }
 
-  private struct ErrorResponse: Decodable { let error: String }
 
-  private struct TokenResponse: Decodable {
-    let accessToken: String
-    let tokenType: String
-    let expiresIn: Double?
-    let refreshToken: String?
-    let scope: String?
-    enum CodingKeys: String, CodingKey {
-      case accessToken = "access_token", tokenType = "token_type", expiresIn = "expires_in"
-      case refreshToken = "refresh_token", scope
-    }
-  }
-
-  private struct Discovery: Decodable {
-    let issuer: String
-    let tokenEndpoint: String
-    let authenticationMethods: [String]?
-    enum CodingKeys: String, CodingKey {
-      case issuer, tokenEndpoint = "token_endpoint", authenticationMethods = "token_endpoint_auth_methods_supported"
-    }
-  }
 }
 
 private final class OAuthSessionDelegate: NSObject, URLSessionTaskDelegate {
