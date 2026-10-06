@@ -172,7 +172,7 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
   private struct StaticProvider: TokenProvider {
     let identity = UUID().uuidString
     let token: String
-    func configure(_ binding: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: identity) }
-    func acquire(_ request: TokenRequest) async throws -> TokenSet { .init(accessToken: token) }
+    func configure(_: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: identity) }
+    func acquire(_: TokenRequest) async throws -> TokenSet { .init(accessToken: token) }
   }
 }

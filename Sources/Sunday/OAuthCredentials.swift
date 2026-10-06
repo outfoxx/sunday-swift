@@ -39,30 +39,34 @@ public enum OAuthCredentials: OAuthCredential, CustomStringConvertible, CustomDe
   func makeProvider(baseURL: URL) throws -> any TokenProvider {
     switch self {
     case .clientCredentials(let value, let factory), .authorizationCode(let value, let factory):
-      func endpoint(_ value: String?) throws -> String? {
-        guard let value else { return nil }
-        guard !value.contains("{"), !value.contains("}"), let url = URL(string: value, relativeTo: baseURL) else {
-          throw TokenProviderError()
-        }
-        return url.absoluteURL.absoluteString
-      }
-      let endpoints = try SecurityEndpoints(
-        discoveryURL: endpoint(value.endpoints.discoveryURL),
-        authorizationURL: endpoint(value.endpoints.authorizationURL),
-        tokenURL: endpoint(value.endpoints.tokenURL),
-        refreshURL: endpoint(value.endpoints.refreshURL)
-      )
-      return try factory(.init(
-        identity: value.identity,
-        clientID: value.clientID,
-        clientSecret: value.clientSecret,
-        authentication: value.authentication,
-        grantIdentity: value.grantIdentity,
-        endpoints: endpoints,
-        issuer: value.issuer,
-        authorize: value.authorize
-      ))
+      return try factory(resolvedConfiguration(value, baseURL: baseURL))
     }
+  }
+
+  private func resolvedConfiguration(_ value: OAuthConfiguration, baseURL: URL) throws -> OAuthConfiguration {
+    func endpoint(_ value: String?) throws -> String? {
+      guard let value else { return nil }
+      guard !value.contains("{"), !value.contains("}"), let url = URL(string: value, relativeTo: baseURL) else {
+        throw TokenProviderError()
+      }
+      return url.absoluteURL.absoluteString
+    }
+    let endpoints = try SecurityEndpoints(
+      discoveryURL: endpoint(value.endpoints.discoveryURL),
+      authorizationURL: endpoint(value.endpoints.authorizationURL),
+      tokenURL: endpoint(value.endpoints.tokenURL),
+      refreshURL: endpoint(value.endpoints.refreshURL)
+    )
+    return .init(
+      identity: value.identity,
+      clientID: value.clientID,
+      clientSecret: value.clientSecret,
+      authentication: value.authentication,
+      grantIdentity: value.grantIdentity,
+      endpoints: endpoints,
+      issuer: value.issuer,
+      authorize: value.authorize
+    )
   }
 
   var flow: SecurityBinding.Flow {
