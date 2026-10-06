@@ -20,43 +20,10 @@ import Foundation
 
 /// OAuth acquisition using a dedicated URLSession without ambient credentials, cookies, or redirect replay.
 public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
-  /// Explicit client authentication. Public clients use `none` with application-managed PKCE.
-  public enum Authentication: String, Sendable {
-    case none
-    case clientSecretBasic = "client_secret_basic"
-    case clientSecretPost = "client_secret_post"
-  }
-
-  /// Secret application configuration; none of these credentials belong in generated metadata.
-  public struct Configuration: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
-    public let identity: String
-    public let clientID: String
-    public let clientSecret: String?
-    public let authentication: Authentication
-    public let grantIdentity: String?
-    public let endpoints: SecurityEndpoints
-    public let issuer: String?
-    public let authorize: (@Sendable (TokenRequest) async throws -> AuthorizationGrant)?
-
-    /// Configures a client and, for discovery, an independently trusted exact issuer.
-    public init(
-      identity: String, clientID: String, clientSecret: String? = nil, authentication: Authentication = .none,
-      grantIdentity: String? = nil, endpoints: SecurityEndpoints = .init(), issuer: String? = nil,
-      authorize: (@Sendable (TokenRequest) async throws -> AuthorizationGrant)? = nil
-    ) {
-      self.identity = identity
-      self.clientID = clientID
-      self.clientSecret = clientSecret
-      self.authentication = authentication
-      self.grantIdentity = grantIdentity
-      self.endpoints = endpoints
-      self.issuer = issuer
-      self.authorize = authorize
-    }
-
-    public var description: String { "OAuthConfiguration()" }
-    public var debugDescription: String { description }
-  }
+  /// Backwards-compatible name for transport-independent OAuth authentication.
+  public typealias Authentication = OAuthAuthentication
+  /// Backwards-compatible name for transport-independent OAuth client configuration.
+  public typealias Configuration = OAuthConfiguration
 
   public nonisolated var identity: String { configuration.identity }
   private nonisolated let configuration: Configuration
