@@ -27,7 +27,8 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
   public init(
     baseURL: URL,
     bindings: [String: [SecurityBinding]] = [:],
-    credentials: [String: any Credentials] = [:]
+    credentials: [String: any Credentials] = [:],
+    tokenManagerFactory: TokenManagerFactory? = nil
   ) throws {
     guard ["http", "https"].contains(baseURL.scheme?.lowercased() ?? ""), baseURL.host != nil,
           baseURL.user == nil, baseURL.password == nil, baseURL.query == nil, baseURL.fragment == nil else {
@@ -54,13 +55,16 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       guard let credential = credentials[binding.scheme] else { throw TokenProviderError() }
       try Self.validate(credential, binding: binding)
     }
-    tokenManager = try Self.prepareTokenManager(baseURL: baseURL, bindings: self.bindings, credentials: credentials)
+    tokenManager = try Self.prepareTokenManager(
+      baseURL: baseURL, bindings: self.bindings, credentials: credentials, factory: tokenManagerFactory
+    )
   }
 
   private static func prepareTokenManager(
     baseURL: URL,
     bindings: [String: [SecurityBinding]],
-    credentials: [String: any Credentials]
+    credentials: [String: any Credentials],
+    factory: TokenManagerFactory?
   ) throws -> TokenManager? {
     var owners: [String: String] = [:]
     var providers: [String: any TokenProvider] = [:]
@@ -84,7 +88,8 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       default: throw TokenProviderError()
       }
     }
-    return providers.isEmpty ? nil : try TokenManager(providers: providers)
+    guard !providers.isEmpty else { return nil }
+    return try factory.map { try $0(providers) } ?? TokenManager(providers: providers)
   }
 
   /// Expands variables once and resolves relative servers against their document location.
@@ -111,7 +116,8 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
   /// `alternativeSelection` chooses a zero-based candidate index, including scopes and endpoint metadata.
   public static func resolve(
     baseURL: URL, alternatives: [String: [[SecurityBinding]]], credentials: [String: any Credentials],
-    selection: [String: Set<String>] = [:], alternativeSelection: [String: Int] = [:]
+    selection: [String: Set<String>] = [:], alternativeSelection: [String: Int] = [:],
+    tokenManagerFactory: TokenManagerFactory? = nil
   ) throws -> ClientSettings {
     guard Set(selection.keys).union(alternativeSelection.keys).allSatisfy({ alternatives[$0] != nil }) else {
       throw TokenProviderError()
@@ -135,7 +141,9 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       guard usable.count == 1 else { throw TokenProviderError() }
       bindings[operation] = usable[0].element
     }
-    return try ClientSettings(baseURL: baseURL, bindings: bindings, credentials: credentials)
+    return try ClientSettings(
+      baseURL: baseURL, bindings: bindings, credentials: credentials, tokenManagerFactory: tokenManagerFactory
+    )
   }
 
   public var description: String { "ClientSettings()" }

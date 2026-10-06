@@ -149,3 +149,36 @@ to template expressions in both the base URI and the operation path.
 URI-template expansion does not enforce API-required inputs. Callers must validate
 any values their API requires before constructing a request. For example, omitting
 `env` from `https://{env}example.com` produces `https://example.com`.
+
+## Application-owned token persistence
+
+```swift
+let settings = try ClientSettings.resolve(
+  baseURL: baseURL, alternatives: alternatives, credentials: credentials,
+  tokenManagerFactory: { providers in
+    try TokenManager(providers: providers, store: applicationStore, expirySkew: 30,
+                     now: applicationClock)
+  }
+)
+```
+
+The same optional `tokenManagerFactory: TokenManagerFactory?` is available on the settings initializer.
+The factory is a synchronous throwing `@Sendable` closure; captured stores/clocks must be Sendable.
+The application calls `await settings.tokenManager?.close()` when all clients sharing it are done.
+Transport closure does not own the shared actor or erase the store. Allow any pending rotation commit
+to settle before removing storage.
+
+The hook is invoked once with the resolved provider map, after security validation, and is skipped
+when no providers are selected. It must only construct a manager: do not acquire tokens or read
+storage in the hook. Omitting it keeps the existing in-memory default. Settings retain the returned
+manager, not the factory. All operations on those settings share it; generated aggregate children
+therefore retain the same cache and single-flight renewal. Independently created managers do not
+coordinate concurrent refreshes, even if their stores are the same. Reuse a client/aggregate within
+an active session; use successive managers to reopen saved sessions.
+
+The application owns persistence, encryption, store access and session boundaries. Provider/client,
+grant, profile and endpoint identities must distinguish environments and users; the API base URL
+alone is not an implicit store namespace. Use a new grant identity for a fresh authorization session.
+For logout, stop requests and wait for pending refresh/persistence to finish before removing the
+session's store entries, then construct fresh settings. `invalidate` expires an access token for
+renewal; it is not logout and deliberately retains refresh state. No disk storage is enabled automatically.
