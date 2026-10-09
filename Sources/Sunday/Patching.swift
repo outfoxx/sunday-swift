@@ -38,6 +38,8 @@ public protocol AnyPatchOp: Codable, Sendable {
 ///
 /// Use a non-optional `Value`. Omitted members decode as ``unchanged``.
 ///
+/// Operations are equatable or hashable when `Value` supports the corresponding conformance.
+///
 /// - SeeAlso ``PatchOp``
 ///
 public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
@@ -124,6 +126,9 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 /// A full patch operation supporting setting/merging, deleting or leaving the target property unchanged.
 ///
 /// Use a non-optional `Value`. Omitted members decode as ``unchanged``.
+///
+/// Operations are equatable or hashable when `Value` supports the corresponding conformance.
+///
 /// - SeeAlso ``UpdateOp``
 ///
 public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
@@ -229,6 +234,8 @@ extension UpdateOp {
 
 extension UpdateOp: Equatable where Value: Equatable {}
 
+extension UpdateOp: Hashable where Value: Hashable {}
+
 extension UpdateOp: CustomStringConvertible {
 
   /// A description preserving the operation state.
@@ -252,6 +259,8 @@ extension PatchOp {
 }
 
 extension PatchOp: Equatable where Value: Equatable {}
+
+extension PatchOp: Hashable where Value: Hashable {}
 
 extension PatchOp: CustomStringConvertible {
 
