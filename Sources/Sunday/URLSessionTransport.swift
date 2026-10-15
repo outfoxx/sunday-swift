@@ -278,6 +278,9 @@ public final class URLSessionTransport: Transport, Sendable {
     try await dataResponse(spec: spec).1
   }
 
+  /// Decodes a previously validated response, preserving top-level `Data` results as raw bytes.
+  /// Raw bytes do not require a `Content-Type`; structured values use the registered media type decoders.
+  /// Empty bodies still fail, and bodyless statuses require an `Empty` result.
   public func parse<D: Decodable>(dataResponse: (Data?, HTTPURLResponse)) throws -> D {
     let (responseData, response) = dataResponse
 
@@ -293,6 +296,12 @@ public final class URLSessionTransport: Transport, Sendable {
 
     guard let data = responseData, !data.isEmpty else {
       throw SundayError.responseDecodingFailed(reason: .noData)
+    }
+
+    if D.self == Data.self {
+      // A binary operation can download any media type, including structured documents, without decoding it.
+      // swiftlint:disable:next force_cast
+      return data as! D
     }
 
     guard
