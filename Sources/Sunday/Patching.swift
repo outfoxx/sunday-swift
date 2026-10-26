@@ -19,9 +19,9 @@ import Foundation
 
 /// JSON Merge Patch Operation
 ///
-public protocol AnyPatchOp: Codable, Sendable {
+public protocol AnyPatchOp: Sendable {
   /// The non-optional value supplied by a set or merge operation.
-  associatedtype Value: Codable & Sendable
+  associatedtype Value: Sendable
 
   /// Whether this operation leaves its containing member untouched.
   var isUnchanged: Bool { get }
@@ -38,11 +38,12 @@ public protocol AnyPatchOp: Codable, Sendable {
 ///
 /// Use a non-optional `Value`. Omitted members decode as ``unchanged``.
 ///
-/// Operations are equatable or hashable when `Value` supports the corresponding conformance.
+/// Encoding, decoding, equality and hashing are available when `Value` supports the corresponding conformance.
+/// Protocol-valued payloads can use ``map(_:)`` to adapt concrete coding representations.
 ///
 /// - SeeAlso ``PatchOp``
 ///
-public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
+public enum UpdateOp<Value: Sendable>: AnyPatchOp {
 
   /// Leave the target property unchanged.
   case unchanged
@@ -86,7 +87,9 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
     }
   }
 
-  // MARK: Codable Conformance
+}
+
+extension UpdateOp: Decodable where Value: Decodable {
 
   /// Decodes a present operation; omission is handled by the keyed container.
   public init(from decoder: Decoder) throws {
@@ -98,6 +101,10 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
     }
     self = .set(try container.decode(Value.self))
   }
+
+}
+
+extension UpdateOp: Encodable where Value: Encodable {
 
   /// Encodes a present operation. Unchanged has no standalone JSON representation.
   public func encode(to encoder: Encoder) throws {
@@ -127,11 +134,12 @@ public enum UpdateOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 ///
 /// Use a non-optional `Value`. Omitted members decode as ``unchanged``.
 ///
-/// Operations are equatable or hashable when `Value` supports the corresponding conformance.
+/// Encoding, decoding, equality and hashing are available when `Value` supports the corresponding conformance.
+/// Protocol-valued payloads can use ``map(_:)`` to adapt concrete coding representations.
 ///
 /// - SeeAlso ``UpdateOp``
 ///
-public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
+public enum PatchOp<Value: Sendable>: AnyPatchOp {
 
   /// Leave the target property unchanged.
   case unchanged
@@ -186,7 +194,9 @@ public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
     }
   }
 
-  // MARK: Codable Conformance
+}
+
+extension PatchOp: Decodable where Value: Decodable {
 
   /// Decodes a present operation; omission is handled by the keyed container.
   public init(from decoder: Decoder) throws {
@@ -198,6 +208,10 @@ public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
       self = .set(try container.decode(Value.self))
     }
   }
+
+}
+
+extension PatchOp: Encodable where Value: Encodable {
 
   /// Encodes a present operation. Unchanged has no standalone JSON representation.
   public func encode(to encoder: Encoder) throws {
@@ -227,8 +241,16 @@ public enum PatchOp<Value: Codable & Sendable>: AnyPatchOp, Codable {
 
 extension UpdateOp {
 
+  /// Transforms a supplied value while preserving unchanged operations.
+  public func map<NewValue: Sendable>(_ transform: (Value) throws -> NewValue) rethrows -> UpdateOp<NewValue> {
+    switch self {
+    case .unchanged: return .unchanged
+    case .set(let value): return .set(try transform(value))
+    }
+  }
+
   /// Creates an operation that sets or merges the supplied value.
-  public static func merge<NewValue: Codable & Sendable>(_ value: NewValue) -> UpdateOp<NewValue> { .set(value) }
+  public static func merge<NewValue: Sendable>(_ value: NewValue) -> UpdateOp<NewValue> { .set(value) }
 
 }
 
@@ -253,8 +275,17 @@ extension UpdateOp: CustomStringConvertible {
 
 extension PatchOp {
 
+  /// Transforms a supplied value while preserving unchanged and deletion operations.
+  public func map<NewValue: Sendable>(_ transform: (Value) throws -> NewValue) rethrows -> PatchOp<NewValue> {
+    switch self {
+    case .unchanged: return .unchanged
+    case .set(let value): return .set(try transform(value))
+    case .delete: return .delete
+    }
+  }
+
   /// Creates an operation that sets or merges the supplied value.
-  public static func merge<NewValue: Codable & Sendable>(_ value: NewValue) -> PatchOp<NewValue> { .set(value) }
+  public static func merge<NewValue: Sendable>(_ value: NewValue) -> PatchOp<NewValue> { .set(value) }
 
 }
 
@@ -281,19 +312,22 @@ extension PatchOp: CustomStringConvertible {
 extension KeyedDecodingContainer {
 
   /// Decodes a non-optional update field, leaving an omitted member unchanged.
-  public func decode<Value>(_ type: UpdateOp<Value>.Type, forKey key: Key) throws -> UpdateOp<Value> {
+  public func decode<Value: Decodable>(_ type: UpdateOp<Value>.Type, forKey key: Key) throws -> UpdateOp<Value> {
     guard contains(key) else { return .unchanged }
     return try UpdateOp(from: superDecoder(forKey: key))
   }
 
   /// Decodes a non-optional patch field, preserving omission and explicit deletion.
-  public func decode<Value>(_ type: PatchOp<Value>.Type, forKey key: Key) throws -> PatchOp<Value> {
+  public func decode<Value: Decodable>(_ type: PatchOp<Value>.Type, forKey key: Key) throws -> PatchOp<Value> {
     guard contains(key) else { return .unchanged }
     return try PatchOp(from: superDecoder(forKey: key))
   }
 
   /// Decodes a patch field, preserving omission as `nil` and explicit null as `.delete`.
-  public func decodeIfExists<Value: Codable & Sendable>(_ type: Value.Type, forKey key: Key) throws -> PatchOp<Value>? {
+  public func decodeIfExists<Value: Decodable & Sendable>(
+    _ type: Value.Type,
+    forKey key: Key
+  ) throws -> PatchOp<Value>? {
     guard contains(key) else {
       return nil
     }
@@ -303,7 +337,7 @@ extension KeyedDecodingContainer {
   /// Decodes an update field, preserving omission as `nil` and validating every present value.
   ///
   /// Explicit null always fails; an update cannot delete its target member.
-  public func decodeIfExists<Value: Codable & Sendable>(
+  public func decodeIfExists<Value: Decodable & Sendable>(
     _ type: Value.Type,
     forKey key: Key
   ) throws -> UpdateOp<Value>? {
@@ -321,20 +355,20 @@ extension KeyedDecodingContainer {
 extension KeyedEncodingContainer {
 
   /// Omits an unchanged update field, including with synthesized Codable conformance.
-  public mutating func encode<Value>(_ value: UpdateOp<Value>, forKey key: Key) throws {
+  public mutating func encode<Value: Encodable>(_ value: UpdateOp<Value>, forKey key: Key) throws {
     guard !value.isUnchanged else { return }
     try value.encode(to: superEncoder(forKey: key))
   }
 
   /// Omits an unchanged patch field, including with synthesized Codable conformance.
-  public mutating func encode<Value>(_ value: PatchOp<Value>, forKey key: Key) throws {
+  public mutating func encode<Value: Encodable>(_ value: PatchOp<Value>, forKey key: Key) throws {
     guard !value.isUnchanged else { return }
     try value.encode(to: superEncoder(forKey: key))
   }
 
   /// Encodes a present legacy optional operation while omitting nil and unchanged states.
 
-  public mutating func encodeIfExists<Value: Sendable, P: AnyPatchOp>(
+  public mutating func encodeIfExists<Value: Sendable, P: AnyPatchOp & Encodable>(
     _ value: P?,
     forKey key: Key
   ) throws where P.Value == Value {
