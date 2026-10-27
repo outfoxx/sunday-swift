@@ -27,20 +27,20 @@ class ProblemTests: XCTestCase {
 
     static let typeURL = URL(string: "http://example.com/test")!
 
-    let type: URL
-    let title: String
-    let status: Int
+    let type: String
+    let title: String?
+    let status: Int?
     let detail: String?
-    let instance: URL?
+    let instance: String?
     let parameters: [String: AnyValue]?
     let extra: String
 
     init(extra: String, instance: URL? = nil) {
-      self.type = Self.typeURL
+      self.type = Self.typeURL.absoluteString
       self.title = "Test Problem"
       self.status = 200
       self.detail = "A Test Problem"
-      self.instance = instance
+      self.instance = instance?.absoluteString
       self.parameters = nil
       self.extra = extra
     }
@@ -78,7 +78,7 @@ class ProblemTests: XCTestCase {
   func testInitFromStatus() throws {
 
     let problem1 = HTTP.StatusProblem(statusCode: 404)
-    XCTAssertEqual(problem1.type, URL(string: "about:blank"))
+    XCTAssertEqual(problem1.type, "about:blank")
     XCTAssertEqual(problem1.status, 404)
     XCTAssertEqual(problem1.statusCode, .notFound)
     XCTAssertEqual(problem1.title, HTTP.statusText[.notFound])
@@ -87,7 +87,7 @@ class ProblemTests: XCTestCase {
     XCTAssertNil(problem1.parameters)
 
     let problem2 = HTTP.StatusProblem(statusCode: .notFound)
-    XCTAssertEqual(problem2.type, URL(string: "about:blank"))
+    XCTAssertEqual(problem2.type, "about:blank")
     XCTAssertEqual(problem2.status, 404)
     XCTAssertEqual(problem2.statusCode, .notFound)
     XCTAssertEqual(problem2.title, HTTP.statusText[.notFound])
@@ -109,34 +109,34 @@ class ProblemTests: XCTestCase {
   func testInitFromTree() throws {
 
     let problem1 =
-      GenericProblem(statusCode: 400, data: [
+      try GenericProblem(statusCode: 400, data: [
         "type": "http://example.com/test",
         "title": "Test",
         "detail": "Some Details",
         "instance": "id:12345",
         "extra": "test",
       ])
-    XCTAssertEqual(problem1.type, URL(string: "http://example.com/test"))
+    XCTAssertEqual(problem1.type, "http://example.com/test")
     XCTAssertEqual(problem1.status, 400)
     XCTAssertEqual(problem1.statusCode, .badRequest)
     XCTAssertEqual(problem1.title, "Test")
     XCTAssertEqual(problem1.detail, "Some Details")
-    XCTAssertEqual(problem1.instance, URL(string: "id:12345"))
+    XCTAssertEqual(problem1.instance, "id:12345")
     XCTAssertEqual(problem1.parameters, ["extra": "test"])
 
-    let problem2 = GenericProblem(statusCode: .badRequest, data: [
+    let problem2 = try GenericProblem(statusCode: .badRequest, data: [
       "type": "http://example.com/test",
       "title": "Test",
       "detail": "Some Details",
       "instance": "id:12345",
       "extra": "test",
     ])
-    XCTAssertEqual(problem2.type, URL(string: "http://example.com/test"))
+    XCTAssertEqual(problem2.type, "http://example.com/test")
     XCTAssertEqual(problem2.status, 400)
     XCTAssertEqual(problem2.statusCode, .badRequest)
     XCTAssertEqual(problem2.title, "Test")
     XCTAssertEqual(problem2.detail, "Some Details")
-    XCTAssertEqual(problem2.instance, URL(string: "id:12345"))
+    XCTAssertEqual(problem2.instance, "id:12345")
     XCTAssertEqual(problem2.parameters, ["extra": "test"])
 
   }
@@ -251,58 +251,13 @@ class ProblemTests: XCTestCase {
     XCTAssertEqual(customProblem.extra, decodedProblem.extra)
   }
 
-  func testDecodingFailsWhenProblemMissingType() throws {
-
-    let problemJSON =
-      """
-      {
-        "title": "Bad Request",
-        "status": 400
-      }
-      """
-
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
-      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
-        return XCTFail("Wrong Error")
-      }
-      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
-    }
-  }
-
-  func testDecodingFailsWhenProblemMissingTitle() throws {
-
-    let problemJSON =
-      """
-      {
-        "type": "http://example.com/docs/bad-request",
-        "status": 400
-      }
-      """
-
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
-      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
-        return XCTFail("Wrong Error")
-      }
-      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
-    }
-  }
-
-  func testDecodingFailsWhenProblemMissingStatus() throws {
-
-    let problemJSON =
-      """
-      {
-        "type": "http://example.com/docs/bad-request",
-        "title": "Bad Request"
-      }
-      """
-
-    XCTAssertThrowsError(try JSON.Decoder.default.decode(GenericProblem.self, from: problemJSON)) { error in
-      guard case DecodingError.dataCorrupted(let errorCtx) = error else {
-        return XCTFail("Wrong Error")
-      }
-      XCTAssertEqual(errorCtx.debugDescription, "Required Value Missing")
-    }
+  func testMissingStandardMembersRemainAbsent() throws {
+    let problem = try JSON.Decoder.default.decode(GenericProblem.self, from: "{}")
+    XCTAssertEqual(problem.type, "about:blank")
+    XCTAssertNil(problem.title)
+    XCTAssertNil(problem.status)
+    XCTAssertNil(problem.detail)
+    XCTAssertNil(problem.instance)
   }
 
 }
