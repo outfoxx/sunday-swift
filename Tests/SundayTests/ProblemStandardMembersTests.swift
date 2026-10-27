@@ -66,8 +66,14 @@ final class ProblemStandardMembersTests: XCTestCase {
       ] {
         XCTAssertEqual(value.type, reference)
         XCTAssertEqual(value.instance, reference)
-        XCTAssertEqual(value.typeURI, URL(string: reference))
-        XCTAssertEqual(value.instanceURI, URL(string: reference))
+        if reference.isEmpty {
+          XCTAssertNil(value.typeURI)
+          XCTAssertNil(value.instanceURI)
+        }
+        else {
+          XCTAssertEqual(value.typeURI?.absoluteString, reference)
+          XCTAssertEqual(value.instanceURI?.absoluteString, reference)
+        }
         let encoded = try PotentJSON.JSONSerialization.json(from: PotentJSON.JSONEncoder().encode(value))
         XCTAssertEqual(encoded.type, .string(reference))
         XCTAssertEqual(encoded.instance, .string(reference))
