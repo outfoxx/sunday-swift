@@ -141,4 +141,67 @@ final class ProblemStandardMembersTests: XCTestCase {
     XCTAssertEqual(tree.nested?.detail, .null)
     XCTAssertEqual(source, Data(original.utf8))
   }
+  func testNormalizedDecoderPreservesConfiguredExtensionsAndPresence() throws {
+    let decoder = Foundation.JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+    decoder.dataDecodingStrategy = .base64
+    decoder.userInfo[.init(rawValue: "trace")!] = "configured"
+    let input = Data((#"{"detail":42,"date":100,"data":"AQI=","nested":{"detail":42},"# +
+      #""values":[1,2],"number":7,"flag":true}"#).utf8)
+    let value = try decoder.decode(DecoderProbe.self, from: input)
+    XCTAssertEqual(value.date, Date(timeIntervalSince1970: 100))
+    XCTAssertEqual(value.data, Data([1, 2]))
+    XCTAssertEqual(value.type, "about:blank")
+    XCTAssertEqual(value.tree["type"], .string("about:blank"))
+    XCTAssertNil(value.tree["detail"])
+    XCTAssertEqual(value.tree["nested"]?["detail"], 42)
+  }
+
+  private struct DecoderProbe: Decodable {
+    let type: String
+    let date: Date
+    let data: Data
+    let tree: AnyValue
+
+    init(from decoder: Decoder) throws {
+      let normalized = try ProblemDecoding.normalized(decoder)
+      XCTAssertEqual(normalized.userInfo[.init(rawValue: "trace")!] as? String, "configured")
+      XCTAssertTrue(normalized.codingPath.isEmpty)
+      tree = try AnyValue(from: normalized)
+      let container = try normalized.container(keyedBy: AnyCodingKey.self)
+      XCTAssertEqual(Set(container.allKeys.map(\.stringValue)),
+        Set(["type", "date", "data", "nested", "values", "number", "flag"]))
+      XCTAssertFalse(container.contains("detail"))
+      XCTAssertThrowsError(try container.decode(String.self, forKey: "detail"))
+      XCTAssertThrowsError(try container.decodeNil(forKey: "detail"))
+      XCTAssertFalse(try container.decodeNil(forKey: "type"))
+      type = try container.decode(String.self, forKey: "type")
+      date = try container.decode(Date.self, forKey: "date")
+      data = try container.decode(Data.self, forKey: "data")
+      XCTAssertTrue(try container.decode(Bool.self, forKey: "flag"))
+      XCTAssertEqual(try container.decode(Double.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Float.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Int.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Int8.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Int16.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Int32.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(Int64.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(UInt.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(UInt8.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(UInt16.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(UInt32.self, forKey: "number"), 7)
+      XCTAssertEqual(try container.decode(UInt64.self, forKey: "number"), 7)
+      let nested = try container.nestedContainer(keyedBy: AnyCodingKey.self, forKey: "nested")
+      XCTAssertEqual(try nested.decode(Int.self, forKey: "detail"), 42)
+      var values = try container.nestedUnkeyedContainer(forKey: "values")
+      XCTAssertEqual(try values.decode(Int.self), 1)
+      XCTAssertEqual(try values.decode(Int.self), 2)
+      XCTAssertTrue(values.isAtEnd)
+      XCTAssertEqual(try AnyValue(from: container.superDecoder(forKey: "type")), .string("about:blank"))
+      XCTAssertEqual(try AnyValue(from: container.superDecoder(forKey: "nested"))["detail"], 42)
+      XCTAssertThrowsError(try normalized.unkeyedContainer())
+      XCTAssertThrowsError(try normalized.singleValueContainer().decode(String.self))
+    }
+  }
+
 }

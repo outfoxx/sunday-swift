@@ -60,20 +60,25 @@ public enum ProblemDecoding {
         case .int8, .int16, .int32, .int64, .uint8, .uint16, .uint32, .uint64,
              .integer, .unsignedInteger, .float16, .float, .double, .decimal:
           // Numeric category is valid; fractional or out-of-range values remain errors.
-          let decimal = try container.decode(Decimal.self, forKey: key)
-          var input = decimal
-          var rounded = Decimal()
-          NSDecimalRound(&rounded, &input, 0, .plain)
-          guard rounded == decimal else {
-            throw DecodingError.dataCorruptedError(forKey: key, in: container,
-              debugDescription: "Problem status must be an integer")
-          }
+          try validateIntegralStatus(forKey: key, in: container)
         default: ignored.insert(name)
         }
       }
       else if value.stringValue == nil { ignored.insert(name) }
     }
     return NormalizedDecoder(base: decoder, ignored: ignored)
+  }
+
+  private static func validateIntegralStatus(forKey key: AnyCodingKey,
+                                             in container: KeyedDecodingContainer<AnyCodingKey>) throws {
+    let decimal = try container.decode(Decimal.self, forKey: key)
+    var input = decimal
+    var rounded = Decimal()
+    NSDecimalRound(&rounded, &input, 0, .plain)
+    guard rounded == decimal else {
+      throw DecodingError.dataCorruptedError(forKey: key, in: container,
+        debugDescription: "Problem status must be an integer")
+    }
   }
 
   private static func validateReference(_ value: String, forKey key: AnyCodingKey,
@@ -104,8 +109,8 @@ public enum ProblemDecoding {
     let type = fields["type"]?.stringValue ?? "about:blank"
     fields["type"] = .string(type)
     if fields["status"] == nil { fields["status"] = .number(.init(status)) }
-    if type == "about:blank", fields["title"] == nil {
-      let effective = try PotentJSON.JSONDecoder().decodeTree(Int.self, from: fields["status"]!)
+    if type == "about:blank", fields["title"] == nil, let bodyStatus = fields["status"] {
+      let effective = try PotentJSON.JSONDecoder().decodeTree(Int.self, from: bodyStatus)
       fields["title"] = .string(GenericProblem.statusTitle(statusCode: effective))
     }
     return (try PotentJSON.JSONSerialization.data(from: .object(fields)), type)
@@ -244,13 +249,13 @@ public enum ProblemDecoding {
     func mismatch<T>(_ type: T.Type) -> DecodingError {
       .typeMismatch(type, .init(codingPath: codingPath, debugDescription: "Expected a string"))
     }
-    func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {
+    func container<Key: CodingKey>(keyedBy _: Key.Type) throws -> KeyedDecodingContainer<Key> {
       throw mismatch([String: String].self)
     }
     func unkeyedContainer() throws -> UnkeyedDecodingContainer { throw mismatch([String].self) }
     func singleValueContainer() throws -> SingleValueDecodingContainer { self }
     func decodeNil() -> Bool { false }
-    func decode(_ type: String.Type) -> String { "about:blank" }
+    func decode(_: String.Type) -> String { "about:blank" }
     func decode(_ type: Bool.Type) throws -> Bool { throw mismatch(type) }
     func decode(_ type: Double.Type) throws -> Double { throw mismatch(type) }
     func decode(_ type: Float.Type) throws -> Float { throw mismatch(type) }
@@ -264,7 +269,7 @@ public enum ProblemDecoding {
     func decode(_ type: UInt16.Type) throws -> UInt16 { throw mismatch(type) }
     func decode(_ type: UInt32.Type) throws -> UInt32 { throw mismatch(type) }
     func decode(_ type: UInt64.Type) throws -> UInt64 { throw mismatch(type) }
-    func decode<T: Decodable>(_ type: T.Type) throws -> T { try T(from: self) }
+    func decode<T: Decodable>(_: T.Type) throws -> T { try T(from: self) }
   }
 
 }
