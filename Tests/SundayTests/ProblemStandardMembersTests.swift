@@ -90,6 +90,8 @@ final class ProblemStandardMembersTests: XCTestCase {
           data: try JSONSerialization.data(withJSONObject: raw)))
         return try XCTUnwrap(transport.parse(error: error) as? any Problem)
       }
+      let encoder = Foundation.JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
       let baseline: [String: Any] = ["type": "urn:custom", "status": 409, "title": "", "detail": "",
                                       "instance": "", "extra": "required", "trace": NSNull(),
       ]
@@ -103,8 +105,7 @@ final class ProblemStandardMembersTests: XCTestCase {
           input[member] = value
           let actual = try decode(input)
           XCTAssertEqual(String(describing: type(of: actual)), String(describing: type(of: expected)))
-          XCTAssertEqual(try PotentJSON.JSONEncoder().encodeTree(actual),
-                         try PotentJSON.JSONEncoder().encodeTree(expected))
+          XCTAssertEqual(try encoder.encode(actual), try encoder.encode(expected))
         }
       }
       let empty = try decode(["type": "", "instance": "", "extra": "required"])
