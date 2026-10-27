@@ -91,7 +91,8 @@ final class ProblemStandardMembersTests: XCTestCase {
         return try XCTUnwrap(transport.parse(error: error) as? any Problem)
       }
       let baseline: [String: Any] = ["type": "urn:custom", "status": 409, "title": "", "detail": "",
-                                      "instance": "", "extra": "required", "trace": NSNull(),]
+                                      "instance": "", "extra": "required", "trace": NSNull(),
+      ]
       for member in ["type", "title", "status", "detail", "instance"] {
         var missing = baseline
         missing.removeValue(forKey: member)
