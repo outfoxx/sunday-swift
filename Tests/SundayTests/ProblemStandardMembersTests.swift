@@ -157,6 +157,32 @@ final class ProblemStandardMembersTests: XCTestCase {
     XCTAssertEqual(value.tree["nested"]?["detail"], 42)
   }
 
+  func testGenericTransportPreservesRawExtensionKeys() throws {
+    let decoder = PotentJSON.JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    let transport = URLSessionTransport(baseURL: "https://example.com",
+      mediaTypeDecoders: MediaTypeDecoders.Builder().registerJSON(decoder: decoder).build())
+    defer { transport.close() }
+    let response = HTTPURLResponse(url: URL(string: "https://example.com")!, statusCode: 404,
+      httpVersion: nil, headerFields: ["Content-Type": "application/problem+json"])!
+    let source = #"{"trace_id":"raw","traceId":"camel","nested":{"detail":42},"trace":null}"#
+    let error = SundayError.responseValidationFailed(reason: .unacceptableStatusCode(response: response,
+      data: Data(source.utf8)))
+    let problem = try XCTUnwrap(transport.parse(error: error) as? GenericProblem)
+    XCTAssertEqual(problem.parameters?["trace_id"], .string("raw"))
+    XCTAssertEqual(problem.parameters?["traceId"], .string("camel"))
+    XCTAssertEqual(problem.parameters?["trace"], .nil)
+    XCTAssertEqual(problem.parameters?["nested"]?["detail"], 42)
+    struct KeyProbe: Decodable { let traceId: String }
+    XCTAssertEqual(try decoder.decode(KeyProbe.self, from: #"{"trace_id":"still configured"}"#).traceId,
+      "still configured")
+    for status in ["401.5", "401.00000000000001"] {
+      let invalid = SundayError.responseValidationFailed(reason: .unacceptableStatusCode(response: response,
+        data: Data("{\"type\":\"urn:custom\",\"status\":\(status)}".utf8)))
+      XCTAssertTrue(transport.parse(error: invalid) is SundayError)
+    }
+  }
+
   private struct DecoderProbe: Decodable {
     let type: String
     let date: Date

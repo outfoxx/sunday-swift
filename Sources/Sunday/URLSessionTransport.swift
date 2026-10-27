@@ -363,7 +363,9 @@ public final class URLSessionTransport: Transport, Sendable {
       if let registeredProblem = problemTypes.withLock({ $0[type] }) {
         return try registeredProblem.decode(mediaTypeDecoder, normalized)
       }
-      return try mediaTypeDecoder.decode(GenericProblem.self, from: normalized)
+      // Dictionary decoding preserves extension keys under custom key-decoding strategies.
+      let fields = try mediaTypeDecoder.decode([String: AnyValue].self, from: normalized)
+      return try GenericProblem(statusCode: response.statusCode, data: fields)
     }
     catch {
       return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))

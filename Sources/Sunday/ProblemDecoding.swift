@@ -106,6 +106,16 @@ public enum ProblemDecoding {
       default: fields.removeValue(forKey: key)
       }
     }
+    if let bodyStatus = fields["status"] {
+      // Validate before a generic dictionary can round a near-integer JSON number to Double.
+      var value = try PotentJSON.JSONDecoder().decodeTree(Decimal.self, from: bodyStatus)
+      var rounded = Decimal()
+      NSDecimalRound(&rounded, &value, 0, .plain)
+      guard value == rounded else {
+        throw DecodingError.dataCorrupted(.init(codingPath: [AnyCodingKey("status")],
+          debugDescription: "Problem status must be an integer"))
+      }
+    }
     let type = fields["type"]?.stringValue ?? "about:blank"
     fields["type"] = .string(type)
     if fields["status"] == nil { fields["status"] = .number(.init(status)) }
