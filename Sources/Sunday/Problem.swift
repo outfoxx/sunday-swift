@@ -21,20 +21,20 @@ import PotentCodables
 /**
  * Problem details for HTTP APIs
  *
- * Swift `Error` compatible protocol for RFC 7807 with the
+ * Swift `Error` compatible protocol for RFC 9457 with the
  * media type `application/problem+json`.
  */
 public protocol Problem: Error, Codable, CustomStringConvertible, Sendable {
 
-  var type: URL { get }
+  var type: String { get }
 
-  var title: String { get }
+  var title: String? { get }
 
-  var status: Int { get }
+  var status: Int? { get }
 
   var detail: String? { get }
 
-  var instance: URL? { get }
+  var instance: String? { get }
 
   var parameters: [String: AnyValue]? { get }
 
@@ -43,11 +43,17 @@ public protocol Problem: Error, Codable, CustomStringConvertible, Sendable {
 
 public extension Problem {
 
+  /// Foundation URL representation, when the type reference is representable as a URL.
+  var typeURI: URL? { URL(string: type) }
+
+  /// Foundation URL representation, when the instance reference is representable as a URL.
+  var instanceURI: URL? { instance.flatMap(URL.init(string:)) }
+
   /**
    * HTTP status code matching the problem status.
    */
   var statusCode: HTTP.StatusCode? {
-    HTTP.StatusCode(rawValue: status)
+    status.flatMap(HTTP.StatusCode.init(rawValue:))
   }
 
   /**
@@ -75,25 +81,23 @@ public extension Problem {
 
 
 /**
- * Generic RFC 7807 problem details value.
+ * Generic RFC 9457 problem details value.
  */
 public struct GenericProblem: Problem {
 
-  static let requiredValueMissingDescription = "Required Value Missing"
-
-  public let type: URL
-  public let title: String
-  public let status: Int
+  public let type: String
+  public let title: String?
+  public let status: Int?
   public let detail: String?
-  public let instance: URL?
+  public let instance: String?
   public let parameters: [String: AnyValue]?
 
   public init(
-    type: URL,
-    title: String,
-    status: Int,
+    type: String,
+    title: String? = nil,
+    status: Int? = nil,
     detail: String? = nil,
-    instance: URL? = nil,
+    instance: String? = nil,
     parameters: [String: AnyValue]? = nil
   ) {
     self.type = type
@@ -105,11 +109,11 @@ public struct GenericProblem: Problem {
   }
 
   public init(
-    type: URL,
+    type: String,
     title: String,
     statusCode: HTTP.StatusCode,
     detail: String? = nil,
-    instance: URL? = nil,
+    instance: String? = nil,
     parameters: [String: AnyValue]? = nil
   ) {
     self.init(
@@ -122,6 +126,19 @@ public struct GenericProblem: Problem {
     )
   }
 
+  /// Creates a Problem from Foundation URLs while retaining strings as its wire representation.
+  public init(
+    type: URL,
+    title: String? = nil,
+    status: Int? = nil,
+    detail: String? = nil,
+    instance: URL? = nil,
+    parameters: [String: AnyValue]? = nil
+  ) {
+    self.init(type: type.absoluteString, title: title, status: status, detail: detail,
+      instance: instance?.absoluteString, parameters: parameters)
+  }
+
   public init(statusCode: Int) {
     self.init(type: Self.stdType, title: Self.statusTitle(statusCode: statusCode), status: statusCode)
   }
@@ -130,34 +147,36 @@ public struct GenericProblem: Problem {
     self.init(statusCode: statusCode.rawValue)
   }
 
-  public init(statusCode: Int, data: [String: AnyValue]) {
-    var data = data
-    let type = data.removeValue(forKey: "type")?.stringValue.flatMap { URL(string: $0) } ?? Self.stdType
-    let title = data.removeValue(forKey: "title")?.stringValue ?? Self.statusTitle(statusCode: statusCode)
-    let detail = data.removeValue(forKey: "detail")?.stringValue
-    let instance = data.removeValue(forKey: "instance")?.stringValue.flatMap { URL(string: $0) }
-    let parameters = data.isEmpty ? nil : data
-    self.init(type: type, title: title, status: statusCode, detail: detail, instance: instance, parameters: parameters)
+  /// Decodes standard members with the same rules as Codable, then applies HTTP defaults.
+  public init(statusCode: Int, data: [String: AnyValue]) throws {
+    let tree = AnyValue.dictionary(.init(uniqueKeysWithValues: data.map { (.string($0.key), $0.value) }))
+    let problem = try AnyValueDecoder().decode(GenericProblem.self, from: tree)
+    let status = problem.status ?? statusCode
+    self.init(type: problem.type,
+      title: problem.title ?? (problem.type == Self.stdType ? Self.statusTitle(statusCode: status) : nil),
+      status: status, detail: problem.detail, instance: problem.instance, parameters: problem.parameters)
   }
 
-  public init(statusCode: HTTP.StatusCode, data: [String: AnyValue]) {
-    self.init(statusCode: statusCode.rawValue, data: data)
+  /// Decodes a Problem with HTTP context, retaining a valid body status.
+  public init(statusCode: HTTP.StatusCode, data: [String: AnyValue]) throws {
+    try self.init(statusCode: statusCode.rawValue, data: data)
   }
 
   public init(from decoder: Decoder) throws {
+    let decoder = try ProblemDecoding.normalized(decoder)
     let container = try decoder.container(keyedBy: AnyCodingKey.self)
 
-    var decodedType: URL?
+    var decodedType: String?
     var decodedTitle: String?
     var decodedStatus: Int?
     var detail: String?
-    var instance: URL?
+    var instance: String?
     var parameters: [String: AnyValue] = [:]
 
     for key in container.allKeys {
       switch key {
       case CodingKeys.type:
-        decodedType = try container.decode(URL.self, forKey: key)
+        decodedType = try container.decode(String.self, forKey: key)
 
       case CodingKeys.title:
         decodedTitle = try container.decode(String.self, forKey: key)
@@ -169,7 +188,7 @@ public struct GenericProblem: Problem {
         detail = try container.decodeIfPresent(String.self, forKey: key)
 
       case CodingKeys.instance:
-        instance = try container.decodeIfPresent(URL.self, forKey: key)
+        instance = try container.decodeIfPresent(String.self, forKey: key)
 
       default:
         parameters[key.stringValue] = try container.decode(AnyValue.self, forKey: key)
@@ -177,9 +196,9 @@ public struct GenericProblem: Problem {
     }
 
     self.init(
-      type: try Self.required(decodedType, forKey: CodingKeys.type, in: container),
-      title: try Self.required(decodedTitle, forKey: CodingKeys.title, in: container),
-      status: try Self.required(decodedStatus, forKey: CodingKeys.status, in: container),
+      type: decodedType ?? Self.stdType,
+      title: decodedTitle,
+      status: decodedStatus,
       detail: detail,
       instance: instance,
       parameters: parameters.isEmpty ? nil : parameters
@@ -189,8 +208,8 @@ public struct GenericProblem: Problem {
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: AnyCodingKey.self)
     try container.encode(type, forKey: CodingKeys.type)
-    try container.encode(title, forKey: CodingKeys.title)
-    try container.encode(status, forKey: CodingKeys.status)
+    try container.encodeIfPresent(title, forKey: CodingKeys.title)
+    try container.encodeIfPresent(status, forKey: CodingKeys.status)
     try container.encodeIfPresent(detail, forKey: CodingKeys.detail)
     try container.encodeIfPresent(instance, forKey: CodingKeys.instance)
     try parameters?.forEach { key, value in
@@ -210,22 +229,8 @@ public struct GenericProblem: Problem {
     static let instance = AnyCodingKey("instance")
   }
 
-  private static let stdType = URL(string: "about:blank")!
+  private static let stdType = "about:blank"
 
-  private static func required<Value>(
-    _ value: Value?,
-    forKey key: AnyCodingKey,
-    in container: KeyedDecodingContainer<AnyCodingKey>
-  ) throws -> Value {
-    guard let value = value else {
-      throw DecodingError.dataCorruptedError(
-        forKey: key,
-        in: container,
-        debugDescription: Self.requiredValueMissingDescription
-      )
-    }
-    return value
-  }
 
 }
 

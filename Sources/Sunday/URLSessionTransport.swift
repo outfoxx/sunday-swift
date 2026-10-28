@@ -358,27 +358,14 @@ public final class URLSessionTransport: Transport, Sendable {
       return error
     }
 
-    // Parse data to dictionary
-    var problemData: [String: AnyValue]
     do {
-      problemData = try mediaTypeDecoder.decode([String: AnyValue].self, from: data)
-    }
-    catch {
-      return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
-    }
-
-    // Find registered problem type
-    guard
-      let type = problemData["type"]?.stringValue,
-      let registeredProblem = problemTypes.withLock({ $0[type] })
-    else {
-      // Return generic problem
-      return GenericProblem(statusCode: response.statusCode, data: problemData)
-    }
-
-    // Parse registered problem type
-    do {
-      return try registeredProblem.decode(mediaTypeDecoder, data)
+      let (normalized, type) = try ProblemDecoding.contextualJSON(data, status: response.statusCode)
+      if let registeredProblem = problemTypes.withLock({ $0[type] }) {
+        return try registeredProblem.decode(mediaTypeDecoder, normalized)
+      }
+      // Dictionary decoding preserves extension keys under custom key-decoding strategies.
+      let fields = try mediaTypeDecoder.decode([String: AnyValue].self, from: normalized)
+      return try GenericProblem(statusCode: response.statusCode, data: fields)
     }
     catch {
       return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))

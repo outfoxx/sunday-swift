@@ -512,20 +512,20 @@ class URLSessionTransportTests: XCTestCase {
     static let typeURL = URL(string: "http://example.com/test")!
     static let statusCode = HTTP.StatusCode.badRequest
 
-    let type: URL
-    let title: String
-    let status: Int
+    let type: String
+    let title: String?
+    let status: Int?
     let detail: String?
-    let instance: URL?
+    let instance: String?
     let parameters: [String: AnyValue]?
     let extra: String
 
     init(extra: String, instance: URL? = nil) {
-      self.type = Self.typeURL
+      self.type = Self.typeURL.absoluteString
       self.title = "Test Problem"
       self.status = Self.statusCode.rawValue
       self.detail = "A Test Problem"
-      self.instance = instance
+      self.instance = instance?.absoluteString
       self.parameters = nil
       self.extra = extra
     }
@@ -696,7 +696,7 @@ class URLSessionTransportTests: XCTestCase {
     catch {
       XCTAssertTrue(type(of: error) == HTTP.StatusProblem.self, "\(error) is not a StatusProblem")
       if let problem = error as? HTTP.StatusProblem {
-        XCTAssertEqual(problem.type, URL(string: "about:blank"))
+        XCTAssertEqual(problem.type, "about:blank")
         XCTAssertEqual(problem.title, HTTP.statusText[.badRequest])
         XCTAssertEqual(problem.status, HTTP.StatusCode.badRequest.rawValue)
         XCTAssertNil(problem.detail)
@@ -743,7 +743,7 @@ class URLSessionTransportTests: XCTestCase {
     catch {
       XCTAssertTrue(type(of: error) == HTTP.StatusProblem.self, "\(error) is not a StatusProblem")
       if let problem = error as? HTTP.StatusProblem {
-        XCTAssertEqual(problem.type, URL(string: "about:blank"))
+        XCTAssertEqual(problem.type, "about:blank")
         XCTAssertEqual(problem.title, HTTP.statusText[.badRequest])
         XCTAssertEqual(problem.status, HTTP.StatusCode.badRequest.rawValue)
         XCTAssertNil(problem.detail)

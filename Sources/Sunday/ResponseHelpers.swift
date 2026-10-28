@@ -37,7 +37,7 @@ public func nilifyResponse<R>(
     // Statuses and problem types are OR-combined: either match is enough to nilify the response.
     guard
       let problem = error as? any Problem,
-      statuses.contains(problem.status) || problemTypes.contains(where: { $0 == type(of: problem) })
+      problem.status.map(statuses.contains) == true || problemTypes.contains(where: { $0 == type(of: problem) })
     else {
       throw error
     }
