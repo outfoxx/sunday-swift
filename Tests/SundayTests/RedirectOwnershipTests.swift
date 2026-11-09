@@ -43,6 +43,56 @@ struct RedirectOwnershipTests {
     }
   }
 
+  @Test(arguments: [false, true])
+  func forwardedRedirectRunsOnSessionDelegateQueue(mainQueue: Bool) async throws {
+    let queue = mainQueue ? OperationQueue.main : OperationQueue()
+    queue.maxConcurrentOperationCount = 1
+    let called = Mutex(false)
+    let delegate = Delegate { request in
+      #expect(OperationQueue.current === queue)
+      if mainQueue { #expect(Thread.isMainThread) }
+      called.withLock { $0 = true }
+      return request.setting(header: "X-Delegate", value: "accepted")
+    }
+    let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: queue)
+    let request = URLRequest(url: URL(string: "https://example.test/start")!)
+    let task = session.dataTask(with: request)
+    defer { task.cancel(); session.invalidateAndCancel() }
+    let attempt = URLSessionRequestAttempt(request: request, delegate: delegate)
+    attempt.attach(task: task)
+    let response = HTTPURLResponse(url: request.url!, statusCode: 307, httpVersion: nil, headerFields: nil)!
+    let accepted = try await attempt.redirect(in: session, response: response, proposed: request)
+    #expect(accepted?.value(forHTTPHeaderField: "X-Delegate") == "accepted")
+    #expect(called.withLock { $0 })
+  }
+
+  private final class PendingDelegate: NSObject, URLSessionTaskDelegate {
+    let callback = NativeTaskResult<@Sendable (URLRequest?) -> Void>()
+    func urlSession(
+      _ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+      newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void
+    ) {
+      #expect(OperationQueue.current === session.delegateQueue)
+      callback.complete(.success(completionHandler))
+    }
+  }
+
+  @Test func cancellingRedirectIgnoresLateDelegateCompletion() async throws {
+    let delegate = PendingDelegate()
+    let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: OperationQueue())
+    let request = URLRequest(url: URL(string: "https://example.test/start")!)
+    let nativeTask = session.dataTask(with: request)
+    defer { nativeTask.cancel(); session.invalidateAndCancel() }
+    let attempt = URLSessionRequestAttempt(request: request, delegate: delegate)
+    attempt.attach(task: nativeTask)
+    let response = HTTPURLResponse(url: request.url!, statusCode: 307, httpVersion: nil, headerFields: nil)!
+    let task = Task { try await attempt.redirect(in: session, response: response, proposed: request) }
+    let complete = try await delegate.callback.value()
+    task.cancel()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    complete(request)
+  }
+
   @Test func redirectUsesTheWholeDelegateRequestIncludingBodyAndNativeSettings() async throws {
     let sent = Mutex(false)
     let replacement = Data("delegate supplied body".utf8)

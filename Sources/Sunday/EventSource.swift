@@ -346,10 +346,6 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       )
     }
     catch {
-      guard !Task.isCancelled || isRequestCancellation(error) else {
-        return
-      }
-
       await eventSource?.receivedError(error: error)
     }
   }
@@ -577,7 +573,8 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
   private func receivedError(error: Swift.Error) {
 
-    if readyState == .closed {
+    // Check after the actor hop: a superseded connection may finish while its replacement is already connecting.
+    if Task.isCancelled || readyState == .closed {
       return
     }
 

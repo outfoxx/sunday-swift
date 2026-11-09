@@ -216,8 +216,20 @@ struct AdapterCompositionTests {
     ])
   }
 
-  @Test(arguments: [false, true])
-  func replacementStreamingFactoryReplaysOnlyReplacementBody(exported: Bool) async throws {
+  @Test func replacementStreamingFactoryReplaysOnlyReplacementBody() async throws {
+    try await checkReplacementStreamingReplay(exported: false)
+  }
+
+  #if os(watchOS)
+  @Test(.disabled("watchOS URLSession does not request replacement streams for native redirected uploads"))
+  #else
+  @Test
+  #endif
+  func exportedReplacementStreamingFactoryReplaysOnlyReplacementBody() async throws {
+    try await checkReplacementStreamingReplay(exported: true)
+  }
+
+  private func checkReplacementStreamingReplay(exported: Bool) async throws {
     let bodies = Mutex<[Data]>([])
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/redirect") { POST { request, response in

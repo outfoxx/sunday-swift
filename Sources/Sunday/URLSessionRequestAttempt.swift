@@ -149,11 +149,17 @@ final class URLSessionRequestAttempt: NSObject, URLSessionDataDelegate {
   func redirect(in session: URLSession, response: HTTPURLResponse, proposed: URLRequest) async throws -> URLRequest? {
     guard let task = state.withLock({ $0.task }) else { throw URLError(.cancelled) }
     let result = NativeTaskResult<URLRequest?>()
+    let callback = BlockOperation {
+      self.forwardRedirect(session, task: task, response: response, request: proposed) { result.complete(.success($0)) }
+    }
     return try await withTaskCancellationHandler {
       try Task.checkCancellation()
-      forwardRedirect(session, task: task, response: response, request: proposed) { result.complete(.success($0)) }
+      session.delegateQueue.addOperation(callback)
       return try await result.value()
-    } onCancel: { result.complete(.failure(CancellationError())) }
+    } onCancel: {
+      callback.cancel()
+      result.complete(.failure(CancellationError()))
+    }
   }
 
   private func forwardRedirect(
