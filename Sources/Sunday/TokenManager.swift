@@ -17,7 +17,9 @@
 import Foundation
 
 /// Shared credential cache with coalesced renewal and cancellation of unneeded acquisition.
-public actor TokenManager {
+public actor TokenManager: TokenProvider {
+  private let provider: (any TokenProvider)?
+  public nonisolated let identity: String
   private let providers: [String: any TokenProvider]
   private let store: any TokenStore
   private let expirySkew: TimeInterval
@@ -33,10 +35,39 @@ public actor TokenManager {
     now: @escaping @Sendable () -> Date = { Date() }
   ) throws {
     guard expirySkew.isFinite, expirySkew >= 0 else { throw TokenProviderError() }
+    self.provider = nil
+    self.identity = UUID().uuidString
     self.providers = providers
     self.store = store ?? MemoryTokenStore()
     self.expirySkew = expirySkew
     self.now = now
+  }
+
+  /// Explicitly decorates one provider with Sunday's cache and refresh lifecycle.
+  public init(
+    provider: any TokenProvider,
+    store: (any TokenStore)? = nil,
+    expirySkew: TimeInterval = 30,
+    now: @escaping @Sendable () -> Date = { Date() }
+  ) throws {
+    guard expirySkew.isFinite, expirySkew >= 0 else { throw TokenProviderError() }
+    self.provider = provider
+    self.identity = provider.identity
+    self.providers = [:]
+    self.store = store ?? MemoryTokenStore()
+    self.expirySkew = expirySkew
+    self.now = now
+  }
+
+  /// Forwards configuration to the explicitly managed provider.
+  public nonisolated func configure(_ binding: SecurityBinding) throws -> TokenConfiguration {
+    guard let selected = provider ?? providers[binding.provider] else { throw TokenProviderError() }
+    return try selected.configure(binding)
+  }
+
+  /// Returns managed credentials; transports use the receipt API to retain the original cache identity.
+  public func acquire(_ request: TokenRequest) async throws -> TokenSet {
+    try await credentials(for: request.binding).tokens
   }
 
   /// Returns current credentials, renewing once for all callers with the same cache identity.
@@ -47,7 +78,11 @@ public actor TokenManager {
     let key = resolved.key
     let entry = entries[key] ?? TokenCacheEntry(key: key, store: store, expirySkew: expirySkew, now: now)
     entries[key] = entry
-    return try await entry.credentials(provider: resolved.provider, request: resolved.request)
+    let lease = try await entry.credentials(provider: resolved.provider, request: resolved.request)
+    return TokenLease(key: lease.key, tokens: lease.tokens) {
+      try await self.invalidate(lease)
+      return true
+    }
   }
 
   /// Expires only the rejected credential while retaining refresh state and concurrent replacements.
@@ -66,7 +101,7 @@ public actor TokenManager {
 
   private func resolve(_ binding: SecurityBinding) throws -> Resolved {
     do {
-      guard let provider = providers[binding.provider] else { throw TokenProviderError() }
+      guard let provider = provider ?? providers[binding.provider] else { throw TokenProviderError() }
       let config = try provider.configure(binding)
       guard !provider.identity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             !config.clientIdentity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -96,7 +131,7 @@ public actor TokenManager {
       guard let encoded = String(data: try encoder.encode(key), encoding: .utf8) else { throw TokenProviderError() }
       return Resolved(key: encoded, provider: provider, request: request)
     }
-    catch is CancellationError { throw CancellationError() }
+    catch let error where isRequestCancellation(error) { throw error }
  catch { throw TokenProviderError() }
   }
 

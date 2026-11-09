@@ -21,7 +21,8 @@ public extension URLSessionTransport {
   /// The application owns the returned transport and its lifecycle.
   convenience init(
     settings: ClientSettings,
-    adapter: RequestAdapter? = nil,
+    requestAdapter: (any RequestAdapter)? = nil,
+    responseAdapter: (any ResponseAdapter)? = nil,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
     sessionConfiguration: URLSessionConfiguration = .rest(),
     requestQueue: DispatchQueue = .global(qos: .utility),
@@ -30,13 +31,14 @@ public extension URLSessionTransport {
   ) {
     self.init(
       baseURL: .init(format: settings.baseURL.absoluteString),
-      adapter: adapter,
+      requestAdapter: requestAdapter,
+      responseAdapter: responseAdapter,
       serverTrustPolicyManager: serverTrustPolicyManager,
       sessionConfiguration: sessionConfiguration,
       requestQueue: requestQueue,
       mediaTypeEncoders: mediaTypeEncoders,
       mediaTypeDecoders: mediaTypeDecoders,
-      tokenManager: settings.tokenManager
+      tokenProviders: settings.tokenProviders
     )
   }
 }

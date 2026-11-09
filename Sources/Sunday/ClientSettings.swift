@@ -20,15 +20,14 @@ import Foundation
 public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
   public let baseURL: URL
   public let bindings: [String: [SecurityBinding]]
-  /// Prepared manager shared by this configuration's operations, without acquiring tokens.
-  public let tokenManager: TokenManager?
+  /// Application providers shared by operations without adding a cache.
+  public let tokenProviders: [String: any TokenProvider]
 
   /// Validates endpoint and credential compatibility without performing network I/O.
   public init(
     baseURL: URL,
     bindings: [String: [SecurityBinding]] = [:],
-    credentials: [String: any Credentials] = [:],
-    tokenManagerFactory: TokenManagerFactory? = nil
+    credentials: [String: any Credentials] = [:]
   ) throws {
     guard ["http", "https"].contains(baseURL.scheme?.lowercased() ?? ""), baseURL.host != nil,
           baseURL.user == nil, baseURL.password == nil, baseURL.query == nil, baseURL.fragment == nil else {
@@ -55,17 +54,16 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       guard let credential = credentials[binding.scheme] else { throw TokenProviderError() }
       try Self.validate(credential, binding: binding)
     }
-    tokenManager = try Self.prepareTokenManager(
-      baseURL: baseURL, bindings: self.bindings, credentials: credentials, factory: tokenManagerFactory
+    tokenProviders = try Self.prepareTokenProviders(
+      baseURL: baseURL, bindings: self.bindings, credentials: credentials
     )
   }
 
-  private static func prepareTokenManager(
+  private static func prepareTokenProviders(
     baseURL: URL,
     bindings: [String: [SecurityBinding]],
-    credentials: [String: any Credentials],
-    factory: TokenManagerFactory?
-  ) throws -> TokenManager? {
+    credentials: [String: any Credentials]
+  ) throws -> [String: any TokenProvider] {
     var owners: [String: String] = [:]
     var providers: [String: any TokenProvider] = [:]
     for binding in bindings.values.flatMap({ $0 }) {
@@ -88,8 +86,7 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       default: throw TokenProviderError()
       }
     }
-    guard !providers.isEmpty else { return nil }
-    return try factory.map { try $0(providers) } ?? TokenManager(providers: providers)
+    return providers
   }
 
   /// Expands variables once and resolves relative servers against their document location.
@@ -116,8 +113,7 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
   /// `alternativeSelection` chooses a zero-based candidate index, including scopes and endpoint metadata.
   public static func resolve(
     baseURL: URL, alternatives: [String: [[SecurityBinding]]], credentials: [String: any Credentials],
-    selection: [String: Set<String>] = [:], alternativeSelection: [String: Int] = [:],
-    tokenManagerFactory: TokenManagerFactory? = nil
+    selection: [String: Set<String>] = [:], alternativeSelection: [String: Int] = [:]
   ) throws -> ClientSettings {
     guard Set(selection.keys).union(alternativeSelection.keys).allSatisfy({ alternatives[$0] != nil }) else {
       throw TokenProviderError()
@@ -142,7 +138,7 @@ public struct ClientSettings: Sendable, CustomStringConvertible, CustomDebugStri
       bindings[operation] = usable[0].element
     }
     return try ClientSettings(
-      baseURL: baseURL, bindings: bindings, credentials: credentials, tokenManagerFactory: tokenManagerFactory
+      baseURL: baseURL, bindings: bindings, credentials: credentials
     )
   }
 

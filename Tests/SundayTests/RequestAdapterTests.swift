@@ -31,14 +31,12 @@ class RequestAdapterTests: XCTestCase {
     let adapter = HostMatchingAdapter(hostname: "example.com", adapter: marker)
 
     let matched = try await adapter.adapt(
-      transport: Self.transport,
-      urlRequest: URLRequest(url: Self.exampleURL)
+      request: URLRequest(url: Self.exampleURL)
     )
     XCTAssertTrue(matched.isMarked)
 
     let unmatched = try await adapter.adapt(
-      transport: Self.transport,
-      urlRequest: URLRequest(url: URL(string: "http://other.com")!)
+      request: URLRequest(url: URL(string: "http://other.com")!)
     )
     XCTAssertFalse(unmatched.isMarked)
 
@@ -47,15 +45,13 @@ class RequestAdapterTests: XCTestCase {
 
     let setMatched =
       try await setAdapter.adapt(
-        transport: Self.transport,
-        urlRequest: URLRequest(url: URL(string: "http://api.example.com")!)
+        request: URLRequest(url: URL(string: "http://api.example.com")!)
       )
     XCTAssertTrue(setMatched.isMarked)
 
     let setUnmatched =
       try await adapter.adapt(
-        transport: Self.transport,
-        urlRequest: URLRequest(url: URL(string: "http://other.example.com")!)
+        request: URLRequest(url: URL(string: "http://other.example.com")!)
       )
     XCTAssertFalse(setUnmatched.isMarked)
   }
@@ -65,7 +61,7 @@ class RequestAdapterTests: XCTestCase {
     let adapter = HeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", token: "12345")
 
     let request =
-      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     XCTAssertEqual(request.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 12345")
   }
@@ -74,7 +70,7 @@ class RequestAdapterTests: XCTestCase {
 
     let count = Mutex(0)
 
-    let refresher: @Sendable (any Transport) -> TokenAuthorization = { _ in
+    let refresher: @Sendable () -> TokenAuthorization = {
 
       let value = count.withLock { count in
         count += 1
@@ -87,15 +83,15 @@ class RequestAdapterTests: XCTestCase {
     let adapter = RefreshingHeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", refresh: refresher)
 
     let request1 =
-      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     let request2 =
-      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     try await Task.sleep(nanoseconds: UInt64(0.25 * 1_000_000_000))
 
     let request3 =
-      try await adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      try await adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     XCTAssertEqual(request1.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
     XCTAssertEqual(request2.value(forHTTPHeaderField: HTTP.StdHeaders.authorization), "Bearer 1")
@@ -106,7 +102,7 @@ class RequestAdapterTests: XCTestCase {
 
     let count = Mutex(0)
 
-    let refresher: @Sendable (any Transport) async throws -> TokenAuthorization = { _ in
+    let refresher: @Sendable () async throws -> TokenAuthorization = {
 
       try await Task.sleep(for: .milliseconds(100))
 
@@ -121,10 +117,10 @@ class RequestAdapterTests: XCTestCase {
     let adapter = RefreshingHeaderTokenAuthorizingAdapter(tokenHeaderType: "Bearer", refresh: refresher)
 
     async let request1 =
-      adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     async let request2 =
-      adapter.adapt(transport: Self.transport, urlRequest: URLRequest(url: Self.exampleURL))
+      adapter.adapt(request: URLRequest(url: Self.exampleURL))
 
     let requests = try await [request1, request2]
 
@@ -144,7 +140,7 @@ extension URLRequest {
 
 struct MarkingAdapter: RequestAdapter {
 
-  func adapt(transport: some Transport, urlRequest: URLRequest) -> URLRequest {
+  func adapt(request urlRequest: URLRequest) -> URLRequest {
     return urlRequest.adding(httpHeaders: ["x-marked": ["true"]])
   }
 }

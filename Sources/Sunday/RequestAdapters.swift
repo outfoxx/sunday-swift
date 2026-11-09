@@ -19,7 +19,7 @@ import Foundation
 
 /// Composing request adapter that applies another request adapter
 /// only if the request's hostname is in a set of matching hostnames.
-public final class HostMatchingAdapter: RequestAdapter {
+public final class HostMatchingAdapter: RequestAdapter, ResponseAdapter {
 
   private let hostnames: Set<String>
   private let adapter: RequestAdapter
@@ -33,18 +33,26 @@ public final class HostMatchingAdapter: RequestAdapter {
     self.adapter = adapter
   }
 
-  public func adapt(transport: some Transport, urlRequest: URLRequest) async throws -> URLRequest {
+  public func adapt(request urlRequest: URLRequest) async throws -> URLRequest {
     guard hostnames.contains(urlRequest.url?.host ?? "") else {
       return urlRequest
     }
-    return try await adapter.adapt(transport: transport, urlRequest: urlRequest)
+    return try await adapter.adapt(request: urlRequest)
+  }
+
+  /// Applies response feedback only for requests matched by this adapter.
+  public func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse {
+    guard hostnames.contains(request.url?.host ?? ""), let adapter = adapter as? any ResponseAdapter else {
+      return response
+    }
+    return try await adapter.adapt(response: response, for: request)
   }
 
 }
 
 
 /// Request adapter that adds a static token authorization header.
-public final class HeaderTokenAuthorizingAdapter: RequestAdapter {
+public final class HeaderTokenAuthorizingAdapter: RequestAdapter, ResponseAdapter {
 
   private let header: String
   private let tokenHeaderType: String
@@ -59,9 +67,19 @@ public final class HeaderTokenAuthorizingAdapter: RequestAdapter {
 
   // MARK: RequestAdapter
 
-  public func adapt(transport: some Transport, urlRequest: URLRequest) async throws -> URLRequest {
+  public func adapt(request urlRequest: URLRequest) async throws -> URLRequest {
 
     return urlRequest.adding(httpHeaders: [header: ["\(tokenHeaderType) \(token)"]])
+  }
+
+  /// Static rejected credentials cannot be repaired by replaying the request.
+  public func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse {
+    if response.statusCode == 401, tokenHeaderType.lowercased() == "bearer",
+       BearerChallenge.token(in: request.value(forHTTPHeaderField: header)) == token,
+       BearerChallenge.isInvalidToken(response.value(forHTTPHeaderField: "WWW-Authenticate") ?? "") {
+      throw TokenRejectedError(response: response)
+    }
+    return response
   }
 
 }
@@ -80,7 +98,7 @@ public struct TokenAuthorization: Sendable {
 }
 
 /// Request adapter that adds a refreshed token authorization header.
-public final class RefreshingHeaderTokenAuthorizingAdapter: RequestAdapter {
+public final class RefreshingHeaderTokenAuthorizingAdapter: RequestAdapter, ResponseAdapter {
 
   private let header: String
   private let tokenHeaderType: String
@@ -89,7 +107,7 @@ public final class RefreshingHeaderTokenAuthorizingAdapter: RequestAdapter {
   public init(
     tokenHeaderType: String,
     header: String = HTTP.StdHeaders.authorization,
-    refresh: @escaping @Sendable (any Transport) async throws -> TokenAuthorization
+    refresh: @escaping @Sendable () async throws -> TokenAuthorization
   ) {
     self.header = header
     self.tokenHeaderType = tokenHeaderType
@@ -103,8 +121,18 @@ public final class RefreshingHeaderTokenAuthorizingAdapter: RequestAdapter {
 
   // MARK: RequestAdapter
 
-  public func adapt(transport: some Transport, urlRequest: URLRequest) async throws -> URLRequest {
-    return update(urlRequest: urlRequest, accessToken: try await store.authorization(transport: transport).token)
+  public func adapt(request urlRequest: URLRequest) async throws -> URLRequest {
+    return update(urlRequest: urlRequest, accessToken: try await store.authorization().token)
+  }
+
+  /// Expires only the rejected authorization, even if this request cannot be retried.
+  public func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse {
+    if response.statusCode == 401, tokenHeaderType.lowercased() == "bearer",
+       let rejected = request.value(forHTTPHeaderField: header),
+       BearerChallenge.isInvalidToken(response.value(forHTTPHeaderField: "WWW-Authenticate") ?? "") {
+      await store.invalidate(token: BearerChallenge.token(in: rejected))
+    }
+    return response
   }
 
 }
@@ -113,13 +141,17 @@ private actor AuthorizationStore {
 
   private var authorization: TokenAuthorization?
   private var refreshTask: Task<TokenAuthorization, any Error>?
-  private let refresh: @Sendable (any Transport) async throws -> TokenAuthorization
+  private let refresh: @Sendable () async throws -> TokenAuthorization
 
-  init(refresh: @escaping @Sendable (any Transport) async throws -> TokenAuthorization) {
+  init(refresh: @escaping @Sendable () async throws -> TokenAuthorization) {
     self.refresh = refresh
   }
 
-  func authorization(transport: some Transport) async throws -> TokenAuthorization {
+  func invalidate(token: String?) {
+    if let authorization, token == authorization.token { self.authorization = nil }
+  }
+
+  func authorization() async throws -> TokenAuthorization {
     if let authorization, authorization.expires > Date() {
       return authorization
     }
@@ -129,7 +161,7 @@ private actor AuthorizationStore {
     }
 
     let refreshTask = Task {
-      try await refresh(transport)
+      try await refresh()
     }
     self.refreshTask = refreshTask
 

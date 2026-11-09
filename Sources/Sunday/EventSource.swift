@@ -346,7 +346,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       )
     }
     catch {
-      guard !Task.isCancelled else {
+      guard !Task.isCancelled || isRequestCancellation(error) else {
         return
       }
 
@@ -614,7 +614,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
   private func isCancellationError(error: Swift.Error) -> Bool {
     switch error {
     case let urlError as URLError where urlError.code == .cancelled: return true
-    case is CancellationError: return true
+    case is CancellationError, is any RequestCancellationError: return true
     default: return false
     }
   }

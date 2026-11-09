@@ -78,7 +78,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
 
     let transport = URLSessionTransport(
       baseURL: .init(format: serverURL.absoluteString),
-      adapter: RebuildingRequestAdapter()
+      requestAdapter: RebuildingRequestAdapter()
     )
     let operation: StreamingOperation<Void, URLSessionTransport> =
       Operation(
@@ -434,7 +434,7 @@ class URLSessionStreamingBodyTests: XCTestCase {
 
     let transport = URLSessionTransport(
       baseURL: .init(format: serverURL.absoluteString),
-      adapter: RebuildingRequestAdapter()
+      requestAdapter: RebuildingRequestAdapter()
     )
     let request = try await transport.transportRequest(
       spec: .streaming(
@@ -461,10 +461,12 @@ private enum StreamingBodyTestError: Error {
 
 private struct RebuildingRequestAdapter: RequestAdapter {
 
-  func adapt(transport: some Transport, urlRequest: URLRequest) -> URLRequest {
+  func adapt(request urlRequest: URLRequest) -> URLRequest {
     var request = URLRequest(url: urlRequest.url!)
     request.httpMethod = urlRequest.httpMethod
     request.allHTTPHeaderFields = urlRequest.allHTTPHeaderFields
+    request.httpBody = urlRequest.httpBody
+    request.httpBodyStream = urlRequest.httpBodyStream
     request.setValue("true", forHTTPHeaderField: "x-adapted")
     return request
   }

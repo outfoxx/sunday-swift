@@ -956,7 +956,7 @@ class URLSessionTransportTests: XCTestCase {
           acceptTypes: [.json],
           headers: nil,
           decoder: { _, _, _, _, _ in "unexpected" }
-        ) as AsyncStream<String>
+        ) as AsyncThrowingStream<String, any Error>
     }
 
     XCTAssertNil(weakTransport)
@@ -978,11 +978,11 @@ class URLSessionTransportTests: XCTestCase {
           requestX.fulfill()
           return nil
         }
-      ) as AsyncStream<String>
+      ) as AsyncThrowingStream<String, any Error>
 
     let consumeTask = Task {
       var iterator = eventStream.makeAsyncIterator()
-      _ = await iterator.next()
+      _ = try await iterator.next()
     }
 
     consumeTask.cancel()
@@ -1007,11 +1007,11 @@ class URLSessionTransportTests: XCTestCase {
           requestX.fulfill()
           return nil
         }
-      ) as AsyncStream<String>
+      ) as AsyncThrowingStream<String, any Error>
 
     let consumeTask = Task {
       var iterator = eventStream.makeAsyncIterator()
-      _ = await iterator.next()
+      _ = try await iterator.next()
       consumeX.fulfill()
     }
 
@@ -1034,7 +1034,7 @@ class URLSessionTransportTests: XCTestCase {
       }
 
     let eventStream =
-      AsyncStream(String.self) { continuation in
+      AsyncThrowingStream(String.self) { continuation in
         let setupTask =
           setup.start(
             eventSource: eventSource,
@@ -1052,7 +1052,7 @@ class URLSessionTransportTests: XCTestCase {
       }
 
     var iterator = eventStream.makeAsyncIterator()
-    let result = await iterator.next()
+    let result = try await iterator.next()
 
     XCTAssertNil(result)
     let readyState = await eventSource.readyState
@@ -1182,20 +1182,20 @@ class URLSessionTransportTests: XCTestCase {
             return nil
           }
         }
-      ) as AsyncStream<TestEvent>
+      ) as AsyncThrowingStream<TestEvent, any Error>
 
     let result = try await withThrowingTaskGroup(of: [TestEvent].self) { group in
       group.addTask {
         var iterator = eventStream.makeAsyncIterator()
         var events: [TestEvent] = []
-        if let event = await iterator.next() {
+        if let event = try await iterator.next() {
           events.append(event)
         }
 
         // Ensure closing transport is gracefully handled by spawned EventSource
         transport.close()
 
-        if let event = await iterator.next() {
+        if let event = try await iterator.next() {
           events.append(event)
         }
         return events
@@ -1214,7 +1214,7 @@ class URLSessionTransportTests: XCTestCase {
     XCTAssertEqual(result.first?.some, "test data")
   }
 
-  func testEventStreamFinishesWhenEventSourceCloses() async throws {
+  func testEventStreamPropagatesTerminalEventSourceError() async throws {
 
     enum Timeout: Error {
       case expired
@@ -1227,24 +1227,29 @@ class URLSessionTransportTests: XCTestCase {
       transport.eventStream(
         decoder: { _, _, _, _, _ in "unexpected" },
         from: { nil }
-      ) as AsyncStream<String>
+      ) as AsyncThrowingStream<String, any Error>
 
-    let result = try await withThrowingTaskGroup(of: String?.self) { group in
-      group.addTask {
-        var iterator = eventStream.makeAsyncIterator()
-        return await iterator.next()
-      }
-      group.addTask {
-        try await Task.sleep(for: .seconds(30))
-        throw Timeout.expired
+    do {
+      _ = try await withThrowingTaskGroup(of: String?.self) { group in
+        group.addTask {
+          var iterator = eventStream.makeAsyncIterator()
+          return try await iterator.next()
+        }
+        group.addTask {
+          try await Task.sleep(for: .seconds(30))
+          throw Timeout.expired
+        }
+
+        let result = try await group.next()!
+        group.cancelAll()
+        return result
       }
 
-      let result = try await group.next()!
-      group.cancelAll()
-      return result
+      XCTFail("Expected the original event-source error")
     }
-
-    XCTAssertNil(result)
+    catch EventSource.Error.requestStreamEmpty {
+      // Terminal event-source failures reach the stream consumer unchanged.
+    }
   }
 
 }

@@ -49,14 +49,15 @@ public final class URLSessionTransport: Transport, Sendable {
   public let baseURL: URI.Template
   public let session: URLSession
   public let eventSession: URLSession
-  public let adapter: RequestAdapter?
+  /// Adapter run immediately before each managed send, and once for request export.
+  public let requestAdapter: (any RequestAdapter)?
+  /// Adapter run on every managed response before normal response handling.
+  public let responseAdapter: (any ResponseAdapter)?
   public let requestQueue: DispatchQueue
   public let mediaTypeEncoders: MediaTypeEncoders
   public let mediaTypeDecoders: MediaTypeDecoders
   public let pathEncoders: PathEncoders
   public let eventRequestTimeoutInterval: TimeInterval
-  /// Shared application credential providers and token cache.
-  public let tokenManager: TokenManager?
   private let problemTypes = Mutex<[String: RegisteredProblem]>([:])
   private let state = Mutex(URLSessionTransportState())
 
@@ -71,7 +72,9 @@ public final class URLSessionTransport: Transport, Sendable {
   ///     must use the same delegate or session behavior. Pass a session created with
   ///     `.sunday(configuration: .events(...))` or an equivalent configuration when SSE-specific
   ///     timeout and resource settings are required.
-  ///   - adapter: Optional adapter applied to generated requests.
+  ///   - requestAdapter: Optional adapter applied before each send.
+  ///   - responseAdapter: Optional independent response adapter.
+  ///     No response behavior is inferred from the request adapter.
   ///   - requestQueue: Queue used to schedule request preparation work.
   ///   - mediaTypeEncoders: Encoders used to serialize request bodies.
   ///   - mediaTypeDecoders: Decoders used to deserialize response bodies.
@@ -81,44 +84,54 @@ public final class URLSessionTransport: Transport, Sendable {
     baseURL: URI.Template,
     session: URLSession,
     eventSession: URLSession,
-    adapter: RequestAdapter? = nil,
+    requestAdapter: (any RequestAdapter)? = nil,
+    responseAdapter: (any ResponseAdapter)? = nil,
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default,
     eventRequestTimeoutInterval: TimeInterval = URLSessionTransport.eventRequestTimeoutInterval,
     pathEncoders: PathEncoders = .default,
-    tokenManager: TokenManager? = nil
+    tokenProviders: [String: any TokenProvider]? = nil
   ) {
     self.baseURL = baseURL
     self.session = session
     self.eventSession = eventSession
-    self.adapter = adapter
+    if let tokenProviders {
+      let authentication = AuthenticationAdapter(providers: tokenProviders)
+      self.requestAdapter = RequestAdapters([authentication] + (requestAdapter.map { [$0] } ?? []))
+      self.responseAdapter = ResponseAdapters([authentication] + (responseAdapter.map { [$0] } ?? []))
+    }
+    else {
+      self.requestAdapter = requestAdapter
+      self.responseAdapter = responseAdapter
+    }
     self.requestQueue = requestQueue
     self.mediaTypeEncoders = mediaTypeEncoders
     self.mediaTypeDecoders = mediaTypeDecoders
     self.pathEncoders = pathEncoders
-    self.tokenManager = tokenManager
     self.eventRequestTimeoutInterval = eventRequestTimeoutInterval
   }
 
   public convenience init(
-    baseURL: URI.Template, adapter: RequestAdapter? = nil,
+    baseURL: URI.Template, requestAdapter: (any RequestAdapter)? = nil,
+    responseAdapter: (any ResponseAdapter)? = nil,
     serverTrustPolicyManager: ServerTrustPolicyManager? = nil,
     sessionConfiguration: URLSessionConfiguration = .rest(),
     requestQueue: DispatchQueue = .global(qos: .utility),
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default,
-    tokenManager: TokenManager? = nil
+    tokenProviders: [String: any TokenProvider]? = nil
   ) {
     self.init(
       baseURL: baseURL,
       session: .sunday(configuration: sessionConfiguration, serverTrustPolicyManager: serverTrustPolicyManager),
       eventSession: .sunday(configuration: .events(), serverTrustPolicyManager: serverTrustPolicyManager),
-      adapter: adapter,
+      requestAdapter: requestAdapter,
+      responseAdapter: responseAdapter,
       requestQueue: requestQueue,
       mediaTypeEncoders: mediaTypeEncoders,
       mediaTypeDecoders: mediaTypeDecoders,
-      tokenManager: tokenManager
+      tokenProviders: tokenProviders
     )
   }
 
@@ -138,11 +151,19 @@ public final class URLSessionTransport: Transport, Sendable {
     problemTypes.withLock { $0[type] = RegisteredProblem.erase(problemType) }
   }
 
+  /// Materializes an optionally authorized native request. Its execution and lifecycle belong to the caller.
   public func transportRequest<RequestBody: Sendable>(
     spec: OperationSpec<RequestBody>
   ) async throws -> URLRequest {
+    let request = try await prepareRequest(spec: spec)
+    let adapted = try await adaptRequest(request, using: requestAdapter)
+    return try adapted.withoutSecurity()
+  }
+
+  private func prepareRequest<RequestBody: Sendable>(spec: OperationSpec<RequestBody>) async throws -> URLRequest {
 
     try spec.validateParameters()
+    guard spec.security?.isEmpty != false || requestAdapter != nil else { throw TokenProviderError() }
 
     var url =
       try baseURL.complete(
@@ -177,16 +198,15 @@ public final class URLSessionTransport: Transport, Sendable {
       break
     }
 
-    urlRequest = try await adapter?.adapt(transport: self, urlRequest: urlRequest) ?? urlRequest
-
     switch preparedBody {
     case .stream(let streamingBody, _):
-      urlRequest = try attachStreamingBody(streamingBody, to: urlRequest)
+      urlRequest = try urlRequest.with(streamingBody: streamingBody)
     case .data, nil:
       break
     }
 
-    return try await urlRequest.withSecurity(spec.security ?? [], manager: tokenManager)
+    if let security = spec.security, !security.isEmpty { return try urlRequest.withSecurity(security) }
+    return urlRequest
   }
 
   private func appendQueryParameters(_ queryParameters: Parameters?, to url: URL) throws -> URL {
@@ -237,24 +257,6 @@ public final class URLSessionTransport: Transport, Sendable {
     urlRequest.setValue(accept, forHTTPHeaderField: HTTP.StdHeaders.accept)
   }
 
-  private func attachStreamingBody(_ streamingBody: StreamingBody, to request: URLRequest) throws -> URLRequest {
-
-    var request = request
-    request.httpBodyStream = try streamingBody.makeInputStream()
-
-    let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest
-    guard let mutableRequest else {
-      throw SundayError.requestEncodingFailed(reason: .streamCreationFailed)
-    }
-    URLProtocol.setProperty(
-      StreamingBodyRequestProperty(body: streamingBody),
-      forKey: streamingBodyRequestPropertyKey,
-      in: mutableRequest
-    )
-
-    return mutableRequest as URLRequest
-  }
-
   private func dataResponse(request: URLRequest) async throws -> (Data?, HTTPURLResponse) {
 
     return try await session.validatedData(for: request)
@@ -264,8 +266,10 @@ public final class URLSessionTransport: Transport, Sendable {
     spec: OperationSpec<RequestBody>
   ) async throws -> (Data?, HTTPURLResponse) {
 
-    let request = try await transportRequest(spec: spec)
-    return try await dataResponse(request: request)
+    let request = try await prepareRequest(spec: spec)
+    return try await session.validatedData(
+      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter
+    )
   }
 
   public func transportResponse(request: URLRequest) async throws -> HTTPURLResponse {
@@ -320,11 +324,13 @@ public final class URLSessionTransport: Transport, Sendable {
 
     }
     catch {
+      if isRequestCancellation(error) { throw error }
       throw SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: contentType, error: error))
     }
   }
 
   public func parse(error: Error) -> Error {
+    if isRequestCancellation(error) { return error }
 
     // Check if this is an HTTP error response
     guard
@@ -368,6 +374,7 @@ public final class URLSessionTransport: Transport, Sendable {
       return try GenericProblem(statusCode: response.statusCode, data: fields)
     }
     catch {
+      if isRequestCancellation(error) { return error }
       return SundayError.responseDecodingFailed(reason: .deserializationFailed(contentType: .problem, error: error))
     }
   }
@@ -476,7 +483,7 @@ public final class URLSessionTransport: Transport, Sendable {
     eventSource(from: { @Sendable [weak self] in
       guard let self else { return nil }
 
-      return try await self.transportRequest(spec: spec)
+      return try await self.prepareRequest(spec: spec)
     })
   }
 
@@ -496,21 +503,24 @@ public final class URLSessionTransport: Transport, Sendable {
         request
           .adding(httpHeaders: headers)
           .with(timeoutInterval: self.eventRequestTimeoutInterval)
-      return self.eventSession.dataEventStream(for: updatedRequest, securityBudget: budget)
+      return self.eventSession.dataEventStream(
+        for: updatedRequest, requestAdapter: self.requestAdapter, responseAdapter: self.responseAdapter,
+        securityBudget: budget
+      )
     }
   }
 
   public func eventStream<RequestBody: Sendable, D>(
     spec: OperationSpec<RequestBody>,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
-  ) -> AsyncStream<D> {
+  ) -> AsyncThrowingStream<D, any Error> {
 
     eventStream(
       decoder: decoder,
       from: { @Sendable [weak self] in
         guard let self else { return nil }
 
-        return try await self.transportRequest(spec: spec)
+        return try await self.prepareRequest(spec: spec)
       }
     )
   }
@@ -518,13 +528,13 @@ public final class URLSessionTransport: Transport, Sendable {
   public func eventStream<D>(
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?,
     from request: @escaping @Sendable () async throws -> URLRequest?
-  ) -> AsyncStream<D> {
+  ) -> AsyncThrowingStream<D, any Error> {
 
     guard let jsonDecoder = try? mediaTypeDecoders.find(for: .json) as? TextMediaTypeDecoder else {
       fatalError("JSON media-type decoder must conform to TextMediaTypeDecoder")
     }
 
-    return AsyncStream(D.self) { continuation in
+    return AsyncThrowingStream(D.self) { continuation in
 
       let eventSource = makeEventSource(from: request)
       guard let registration = register(eventSource: eventSource) else {

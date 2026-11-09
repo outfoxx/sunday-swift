@@ -68,10 +68,11 @@ public protocol Transport: Sendable {
   func eventSource<RequestBody: Sendable>(spec: OperationSpec<RequestBody>) -> EventSource
 
   /// Creates an event stream for the operation request.
+  /// Terminal failures, including RequestCancellationError, are thrown unchanged to the stream consumer.
   func eventStream<RequestBody: Sendable, D>(
     spec: OperationSpec<RequestBody>,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
-  ) -> AsyncStream<D>
+  ) -> AsyncThrowingStream<D, any Error>
 
   /// Closes any transport resources.
   func close(cancelOutstandingRequests: Bool)
@@ -243,6 +244,7 @@ public extension Transport {
   }
 
   /// Creates an event stream for the operation request.
+  /// Terminal failures, including RequestCancellationError, are thrown unchanged to the stream consumer.
   func eventStream<B: Encodable & Sendable, D>(
     method: HTTP.Method, pathTemplate: String,
     pathParameters: Parameters? = nil, queryParameters: Parameters? = nil, body: B?,
@@ -251,7 +253,7 @@ public extension Transport {
     parameterValidation: (@Sendable () throws -> Void)? = nil,
     requestValidation: (@Sendable (B) throws -> Void)? = nil,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
-  ) -> AsyncStream<D> {
+  ) -> AsyncThrowingStream<D, any Error> {
     eventStream(
       spec: OperationSpec(
         method: method,

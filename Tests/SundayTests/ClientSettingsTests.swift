@@ -67,14 +67,14 @@ struct ClientSettingsTests {
       bindings: ["list": [binding]],
       credentials: ["identity": BearerCredentials(token: "private-token")]
     )
-    let manager = try #require(settings.tokenManager)
+    let manager = try #require(settings.tokenProviders["identity"])
     let lease = try await manager.credentials(for: binding)
     #expect(lease.tokens.accessToken == "private-token")
     #expect(!String(reflecting: settings).contains("private-token"))
     #expect(!String(reflecting: BearerCredentials(token: "private-token")).contains("private-token"))
   }
 
-  @Test func configurationsIsolateTokenManagers() async throws {
+  @Test func configurationsIsolateStaticProviders() async throws {
     let first = try ClientSettings(
       baseURL: URL(string: "https://one.example")!,
       bindings: ["list": [binding]],
@@ -85,8 +85,8 @@ struct ClientSettingsTests {
       bindings: ["list": [binding]],
       credentials: ["identity": BearerCredentials(token: "two")]
     )
-    let firstManager = try #require(first.tokenManager)
-    let secondManager = try #require(second.tokenManager)
+    let firstManager = try #require(first.tokenProviders["identity"])
+    let secondManager = try #require(second.tokenProviders["identity"])
     #expect(try await firstManager.credentials(for: binding).tokens.accessToken == "one")
     #expect(try await secondManager.credentials(for: binding).tokens.accessToken == "two")
   }
@@ -124,7 +124,7 @@ struct ClientSettingsTests {
       alternatives: ["list": [[oauth]], "read": [[oauth]]],
       credentials: ["identity": credential]
     )
-    #expect(settings.tokenManager != nil)
+    #expect(settings.tokenProviders["identity"] != nil)
     #expect(calls.withLock { $0 } == 1)
   }
 

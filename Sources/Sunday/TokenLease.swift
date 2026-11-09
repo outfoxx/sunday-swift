@@ -18,6 +18,31 @@
 public struct TokenLease: Sendable, CustomStringConvertible, CustomDebugStringConvertible {
   let key: String
   public let tokens: TokenSet
+  private let rejection: @Sendable () async throws -> Bool
+
+  init(key: String, tokens: TokenSet, rejection: @escaping @Sendable () async throws -> Bool = { false }) {
+    self.key = key
+    self.tokens = tokens
+    self.rejection = rejection
+  }
+
+  /// Asks the originating provider to reject this credential without disturbing newer credentials.
+  public func invalidate() async throws -> Bool {
+    do {
+      return try await rejection()
+    }
+    catch let error where isRequestCancellation(error) {
+      throw error
+    }
+    catch is AuthorizationRequiredError {
+      throw AuthorizationRequiredError()
+    }
+    catch let error as TokenProviderError {
+      throw error
+    }
+    catch { throw TokenProviderError() }
+  }
+
   public var description: String { "TokenLease()" }
   public var debugDescription: String { description }
 }

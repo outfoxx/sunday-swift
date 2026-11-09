@@ -48,10 +48,125 @@ struct ManagedSecurityTests {
 
   private func transport(_ server: RoutingHTTPServer, manager: TokenManager?) async throws -> URLSessionTransport {
     let base = try await startTestServer(server)
-    return URLSessionTransport(baseURL: .init(format: base.absoluteString), tokenManager: manager)
+    return URLSessionTransport(
+      baseURL: .init(format: base.absoluteString), tokenProviders: manager.map { ["identity": $0] } ?? [:]
+    )
   }
 
-  @Test func nativeRequestReuseRechecksCredentialsAndRecoversOnce() async throws {
+  private actor ExternalProvider: TokenProvider {
+    nonisolated let identity = "external"
+    var token: String? = "first"
+    var acquisitions = 0
+    var rejections = 0
+    nonisolated func configure(_: SecurityBinding) -> TokenConfiguration {
+      .init(clientIdentity: "client", grantIdentity: "session")
+    }
+
+    func acquire(_: TokenRequest) throws -> TokenSet {
+      acquisitions += 1
+      guard let token else { throw AuthorizationRequiredError() }
+      return .init(accessToken: token)
+    }
+
+    func reject(_ request: TokenRequest, rejectedToken: String) -> Bool {
+      rejections += 1
+      if token == rejectedToken { token = "renewed" }
+      return true
+    }
+
+    func replace(_ token: String?) { self.token = token }
+  }
+
+  @Test func directProviderObservesRotationAndLogoutOncePerAttempt() async throws {
+    let values = Mutex<[String]>([])
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/value") { GET { req, res in
+        values.withLock { $0.append(req.header(for: "Authorization") ?? "") }
+        res.send(status: .noContent)
+      } }
+    }
+    let base = try await startTestServer(server)
+    let provider = ExternalProvider()
+    let settings = try ClientSettings(
+      baseURL: base, bindings: ["value": [binding]],
+      credentials: ["identity": ProviderCredentials(provider: provider)]
+    )
+    #expect(settings.tokenProviders["identity"] as? ExternalProvider === provider)
+    let transport = URLSessionTransport(settings: settings)
+    defer { server.stop(); transport.close() }
+    let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/value", security: [binding])
+    #expect(await provider.acquisitions == 0)
+    _ = try await transport.transportResponse(spec: spec)
+    await provider.replace("second")
+    _ = try await transport.transportResponse(spec: spec)
+    await provider.replace(nil)
+    await #expect(throws: AuthorizationRequiredError.self) { try await transport.transportResponse(spec: spec) }
+    #expect(await provider.acquisitions == 3)
+    #expect(values.withLock { $0 } == ["Bearer first", "Bearer second"])
+  }
+
+  @Test func directProviderOwnsRejectionAndExportHasNoManagedLifecycle() async throws {
+    let values = Mutex<[String]>([])
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/value") { GET { req, res in
+        let token = req.header(for: "Authorization") ?? ""
+        values.withLock { $0.append(token) }
+        if token == "Bearer first" {
+          res.send(status: .unauthenticated,
+                   headers: ["WWW-Authenticate": ["Bearer error=invalid_token"]], body: Data())
+        }
+        else { res.send(status: .noContent) }
+      } }
+    }
+    let base = try await startTestServer(server)
+    let provider = ExternalProvider()
+    let transport = URLSessionTransport(
+      baseURL: .init(format: base.absoluteString), tokenProviders: ["identity": provider]
+    )
+    defer { server.stop(); transport.close() }
+    let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/value", security: [binding])
+    let exported = try await transport.transportRequest(spec: spec)
+    #expect(exported.securityProperty == nil)
+    #expect(exported.value(forHTTPHeaderField: "Authorization") == "Bearer first")
+    await #expect(throws: SundayError.self) { try await transport.transportResponse(request: exported) }
+    #expect(await provider.acquisitions == 1)
+    #expect(await provider.rejections == 0)
+    _ = try await transport.transportResponse(spec: spec)
+    #expect(await provider.acquisitions == 3)
+    #expect(await provider.rejections == 1)
+    #expect(values.withLock { $0 } == ["Bearer first", "Bearer first", "Bearer renewed"])
+    let old = try await provider.credentials(for: binding)
+    await provider.replace("new-session-token")
+    #expect(try await old.invalidate())
+    #expect(try await provider.credentials(for: binding).tokens.accessToken == "new-session-token")
+  }
+
+  @Test func providerWithoutRecoveryDoesNotReplay() async throws {
+    let count = Mutex(0)
+    let server = try RoutingHTTPServer(port: .any, localOnly: true) {
+      Path("/value") { GET { _, res in
+        count.withLock { $0 += 1 }
+        res.send(status: .unauthenticated,
+                   headers: ["WWW-Authenticate": ["Bearer error=invalid_token"]], body: Data())
+      } }
+    }
+    let base = try await startTestServer(server)
+    let provider = Provider()
+    let transport = URLSessionTransport(
+      baseURL: .init(format: base.absoluteString), tokenProviders: ["identity": provider]
+    )
+    defer { server.stop(); transport.close() }
+    await #expect(throws: TokenRejectedError.self) {
+      try await transport.transportResponse(spec: OperationSpec<Empty>(
+        method: .get, pathTemplate: "/value", security: [binding]
+      ))
+    }
+    #expect(await provider.acquired == 1)
+    #expect(await provider.refreshed == 0)
+    #expect(count.withLock { $0 } == 1)
+  }
+
+  @Test func operationExecutionRechecksCredentialsAndRecoversOnce() async throws {
     let values = Mutex<[String]>([])
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/value") {
@@ -69,12 +184,10 @@ struct ManagedSecurityTests {
     let manager = try TokenManager(providers: ["identity": provider])
     let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
-    let request = try await transport.transportRequest(spec: OperationSpec<Empty>(
-      method: .get, pathTemplate: "/value", security: [binding]
-    ))
-    #expect(try await transport.transportResponse(request: request).statusCode == 204)
+    let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/value", security: [binding])
+    #expect(try await transport.transportResponse(spec: spec).statusCode == 204)
     try await manager.invalidate(manager.credentials(for: binding))
-    #expect(try await transport.transportResponse(request: request).statusCode == 204)
+    #expect(try await transport.transportResponse(spec: spec).statusCode == 204)
     #expect(values.withLock { $0 } == ["Bearer first-1", "Bearer renewed-1", "Bearer renewed-2"])
     #expect(await provider.acquired == 1)
     #expect(await provider.refreshed == 2)
@@ -166,13 +279,14 @@ struct ManagedSecurityTests {
       flow: .external,
       transport: .init(location: .cookie, name: "session")
     )
-    let request = try await transport.transportRequest(spec: OperationSpec(
+    let spec = OperationSpec(
       method: .post, pathTemplate: "/value", queryParameters: ["unchanged": "a+b"], body: ["value": "same"],
       contentTypes: [.json], security: [binding, key, cookie]
-    ))
+    )
+    let request = try await transport.transportRequest(spec: spec)
     #expect(request.url?.absoluteString.contains("unchanged=a%2Bb") == true)
     #expect(request.url?.absoluteString.contains("key=first-2") == true)
-    let response = try await transport.transportResponse(request: request)
+    let response = try await transport.transportResponse(spec: spec)
     #expect(observed.withLock { $0 })
     #expect(response.url?.absoluteString.contains("first-") == false)
     #expect(response.url?.absoluteString.contains("unchanged=a%2Bb") == true)
