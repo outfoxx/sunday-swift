@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
-/// Creates a manager from resolved providers without acquiring tokens or reading storage.
-/// Supply the native manager's store, expiry skew and clock here. The application owns the
-/// returned actor and calls `await close()` when its clients are no longer used.
-/// Called once for secured settings and never when there are no selected providers.
-public typealias TokenManagerFactory = @Sendable ([String: any TokenProvider]) throws -> TokenManager
+import Foundation
+
+/// Adapts each received HTTP response before validation, decoding, or retry decisions.
+public protocol ResponseAdapter: Sendable {
+  /// Receives the exact adapted request sent for this attempt.
+  /// Native HTTP response metadata is adapted without consuming the response body.
+  /// Throw RequestCancellationError to stop the operation without error translation.
+  func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse
+}

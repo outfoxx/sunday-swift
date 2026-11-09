@@ -79,7 +79,7 @@ actor TokenCacheEntry {
         ))
       }
     }
-    catch is CancellationError { throw CancellationError() }
+    catch let error where isRequestCancellation(error) { throw error }
  catch { throw TokenProviderError() }
   }
 
@@ -105,8 +105,7 @@ actor TokenCacheEntry {
   private func performRenewal(id: UUID, provider: any TokenProvider, request: TokenRequest) async {
     let result: Result<TokenLease, any Error>
     do { result = try .success(await renew(id: id, provider: provider, request: request)) }
- catch is CancellationError { result = .failure(CancellationError()) }
- catch is AuthorizationRequiredError { result = .failure(AuthorizationRequiredError()) }
+ catch let error where isRequestCancellation(error) { result = .failure(error) }
  catch let error as TokenProviderError { result = .failure(error) }
  catch { result = .failure(TokenProviderError()) }
     guard let current = renewal, current.id == id else { return }

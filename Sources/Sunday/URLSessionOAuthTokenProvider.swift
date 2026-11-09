@@ -212,8 +212,8 @@ public actor URLSessionOAuthTokenProvider: RefreshingTokenProvider {
   }
 
   private func safe(_ error: any Error) -> any Error {
-    if error is CancellationError || Task.isCancelled { return CancellationError() }
-    if error is AuthorizationRequiredError { return AuthorizationRequiredError() }
+    if isRequestCancellation(error) { return error }
+    if Task.isCancelled { return CancellationError() }
     if let error = error as? TokenProviderError { return error }
     if let error = error as? URLError,
        [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .dnsLookupFailed,

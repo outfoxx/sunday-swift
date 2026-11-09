@@ -15,7 +15,7 @@
  */
 
 /// A fresh application authorization is required; a consumed authorization code cannot be replayed.
-public struct AuthorizationRequiredError: Error, Sendable, CustomStringConvertible {
+public struct AuthorizationRequiredError: RequestCancellationError, Sendable, CustomStringConvertible {
   public init() {}
   public var description: String { "Fresh application authorization is required" }
 }

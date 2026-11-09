@@ -44,17 +44,17 @@ struct ClientSettingsPersistenceTests {
                         session: session, profile: profile, direct: direct)
     }
     func token(_ settings: ClientSettings) async throws -> TokenSet {
-      let manager = try #require(settings.tokenManager)
+      let manager = try #require(settings.tokenProviders["resolved-provider"])
       return try await manager.credentials(for: #require(settings.bindings["read"]?.first)).tokens
     }
     do {
       let first = try settings(0)
       #expect(await store.reads == 0)
       #expect(state.counts.withLock { $0.factories == 1 && $0.acquisitions == 0 })
-      let manager = try #require(first.tokenManager)
+      let manager = try #require(first.tokenProviders["resolved-provider"])
       let lease = try await manager.credentials(for: binding())
       #expect(lease.tokens.accessToken == "initial")
-      await manager.close()
+      await (manager as? TokenManager)?.close()
       #expect(try await token(settings(0, direct: true)).accessToken == "initial")
       #expect(state.counts.withLock { $0.acquisitions == 1 })
       let third = try settings(96)
@@ -92,41 +92,32 @@ struct ClientSettingsPersistenceTests {
     direct: Bool = false
   ) throws -> ClientSettings {
     let provider = Provider(session: session, time: time, state: state)
-    let factory: TokenManagerFactory = { providers in
-      state.counts.withLock { $0.factories += 1 }
-      #expect(Set(providers.keys) == ["resolved-provider"])
-      #expect(providers["resolved-provider"]?.identity == "application")
-      let manager = try TokenManager(
-        providers: providers,
-        store: store,
-        expirySkew: 5,
-        now: { Date(timeIntervalSince1970: time) }
-      )
-      state.managers.withLock { $0.append(manager) }
-      return manager
-    }
+    state.counts.withLock { $0.factories += 1 }
+    let manager = try TokenManager(
+      provider: provider, store: store, expirySkew: 5,
+      now: { Date(timeIntervalSince1970: time) }
+    )
+    state.managers.withLock { $0.append(manager) }
     let base = try #require(URL(string: "https://api.example"))
-    let credentials: [String: any Credentials] = ["identity": ProviderCredentials(provider: provider)]
+    let credentials: [String: any Credentials] = ["identity": ProviderCredentials(provider: manager)]
     if direct {
       return try ClientSettings(
         baseURL: base,
         bindings: ["read": [binding(profile)]],
-        credentials: credentials,
-        tokenManagerFactory: factory
+        credentials: credentials
       )
     }
     return try ClientSettings.resolve(
       baseURL: base,
       alternatives: ["read": [[binding(profile)]], "other": [[binding(profile)]], "public": [[]]],
-      credentials: credentials,
-      tokenManagerFactory: factory
+      credentials: credentials
     )
   }
 
   private func overlappingRefreshes(_ settings: ClientSettings, state: State) async throws {
     let configured = state.counts.withLock { $0.configurations }
     try await withThrowingTaskGroup(of: String.self) { group in
-      let manager = try #require(settings.tokenManager)
+      let manager = try #require(settings.tokenProviders["resolved-provider"])
       let selected = binding()
       for _ in 0 ..< 20 {
         group.addTask { try await manager.credentials(for: selected).tokens.accessToken }
@@ -144,30 +135,17 @@ struct ClientSettingsPersistenceTests {
     }
   }
 
-  @Test func publicInvalidAndFailingFactory() throws {
-    let factory: TokenManagerFactory = { _ in throw Failure() }
+  @Test func publicSettingsHaveNoProviders() throws {
     let base = try #require(URL(string: "https://api.example"))
-    #expect(try ClientSettings(baseURL: base, tokenManagerFactory: factory).tokenManager == nil)
+    #expect(try ClientSettings(baseURL: base).tokenProviders.isEmpty)
     #expect(try ClientSettings.resolve(
-      baseURL: base,
-      alternatives: ["public": [[]]],
-      credentials: [:],
-      tokenManagerFactory: factory
-    ).tokenManager == nil)
+      baseURL: base, alternatives: ["public": [[]]], credentials: [:]
+    ).tokenProviders.isEmpty)
     #expect(throws: TokenProviderError.self) {
-      try ClientSettings(baseURL: base, bindings: ["read": [binding()]], tokenManagerFactory: factory)
-    }
-    #expect(throws: Failure.self) {
-      try ClientSettings(
-        baseURL: base,
-        bindings: ["read": [binding()]],
-        credentials: ["identity": ProviderCredentials(provider: Provider(session: "session", time: 0, state: State()))],
-        tokenManagerFactory: factory
-      )
+      try ClientSettings(baseURL: base, bindings: ["read": [binding()]])
     }
   }
 
-  private struct Failure: Error {}
   private final class State: Sendable {
     struct Counts { var acquisitions = 0; var factories = 0
       var configurations = 0; var refreshes: [String] = []

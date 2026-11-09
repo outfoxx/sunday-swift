@@ -19,27 +19,26 @@ import Foundation
 /// Resolves a complete credential alternative without changing payload encoding or application models.
 struct RequestSecurity: Sendable {
   let bindings: [SecurityBinding]
-  let manager: TokenManager
+  let providers: [String: any TokenProvider]
 
-  func authorize(_ request: URLRequest, previouslyAuthorized: Bool) async throws -> (URLRequest, [TokenLease]) {
+  func authorize(_ request: URLRequest) async throws -> (URLRequest, [TokenLease]) {
     var targets = Set<String>()
     for binding in bindings {
       let transport = binding.transport
       let name = transport.location == .header ? transport.name.lowercased() : transport.name
       guard targets.insert(transport.location.rawValue + ":" + name).inserted else { throw TokenProviderError() }
-      if !previouslyAuthorized {
-        let conflict: Bool
-        switch transport.location {
-        case .header: conflict = request.value(forHTTPHeaderField: name) != nil
-        case .query: conflict = queryEntries(request.url).contains { $0.name == name }
-        case .cookie: conflict = cookies(request).contains { $0.0 == name }
-        }
-        guard !conflict else { throw TokenProviderError() }
+      let conflict: Bool
+      switch transport.location {
+      case .header: conflict = request.value(forHTTPHeaderField: name) != nil
+      case .query: conflict = queryEntries(request.url).contains { $0.name == name }
+      case .cookie: conflict = cookies(request).contains { $0.0 == name }
       }
+      guard !conflict else { throw TokenProviderError() }
     }
     var leases: [TokenLease] = []
     for binding in bindings {
-      try leases.append(await manager.credentials(for: binding))
+      guard let provider = providers[binding.provider] else { throw TokenProviderError() }
+      try leases.append(await provider.credentials(for: binding))
     }
     var result = request
     result.httpShouldHandleCookies = false
@@ -59,24 +58,20 @@ struct RequestSecurity: Sendable {
     return (result, leases)
   }
 
-  func recover(
-    _ response: HTTPURLResponse,
-    request: URLRequest,
-    leases: [TokenLease],
-    budget: AuthenticationRecoveryBudget
-  ) async throws -> Bool {
-    guard response.statusCode == 401, ["GET", "HEAD", "OPTIONS"].contains(request.httpMethod ?? "GET"),
-          request.httpBody?.isEmpty ?? true, request.httpBodyStream == nil,
-          invalidBearerChallenge(response.value(forHTTPHeaderField: "WWW-Authenticate") ?? "") else { return false }
-    let rejected = zip(bindings, leases).filter { binding, _ in
+  func reject(_ response: HTTPURLResponse, for request: URLRequest, leases: [TokenLease]) async throws {
+    guard response.statusCode == 401,
+          BearerChallenge.isInvalidToken(response.value(forHTTPHeaderField: "WWW-Authenticate") ?? "") else { return }
+    let rejected = zip(bindings, leases).filter { binding, lease in
       binding.transport.location == .header && binding.transport.name.lowercased() == "authorization" &&
-        binding.transport.prefix?.lowercased() == "bearer"
+        binding.transport.prefix?.lowercased() == "bearer" &&
+        BearerChallenge.token(in: request.value(forHTTPHeaderField: binding.transport.name)) == lease.tokens.accessToken
     }.map(\.1)
-    guard !rejected.isEmpty, budget.consume() else { return false }
+    var recoverable = true
     for lease in rejected {
-      try await manager.invalidate(lease)
+      let recovered = try await lease.invalidate()
+      recoverable = recovered && recoverable
     }
-    return true
+    if !recoverable { throw TokenRejectedError(response: try redact(response)) }
   }
 
   func redact(_ response: HTTPURLResponse) throws -> HTTPURLResponse {
@@ -84,15 +79,7 @@ struct RequestSecurity: Sendable {
     for binding in bindings where binding.transport.location == .query {
       url = try settingQuery(url, name: binding.transport.name, value: "[redacted]")
     }
-    guard let url, let result = HTTPURLResponse(
-      url: url,
-      statusCode: response.statusCode,
-      httpVersion: nil,
-      headerFields: response.allHeaderFields.reduce(into: [:]) {
-        $0[String(describing: $1.key)] = String(describing: $1.value)
-      }
-    ) else { throw URLError(.badServerResponse) }
-    return result
+    return try response.clone(url: url)
   }
 
   private func cookies(_ request: URLRequest) -> [(String, String)] {
@@ -130,34 +117,4 @@ struct RequestSecurity: Sendable {
     )) ?? ""
   }
 
-  private func invalidBearerChallenge(_ header: String) -> Bool {
-    var parts: [String] = []
-    var current = ""
-    var quoted = false
-    var escaped = false
-    for character in header {
-      if escaped { escaped = false }
- else if quoted, character == "\\" { escaped = true }
- else if character == "\"" { quoted.toggle() }
- else if !quoted, character == "," {
-        parts.append(current.trimmingCharacters(in: .whitespaces)); current = ""; continue
-      }
-      current.append(character)
-    }
-    guard !quoted, !escaped else { return false }
-    parts.append(current.trimmingCharacters(in: .whitespaces))
-    var bearer = false
-    for var part in parts {
-      if let range = part.range(of: #"^[a-zA-Z][a-zA-Z0-9_-]*\s+(?!\s*=)"#, options: .regularExpression) {
-        bearer = part[range].trimmingCharacters(in: .whitespaces).lowercased() == "bearer"
-        part.removeSubrange(range)
-      }
-      else if part.range(of: #"^[a-zA-Z][a-zA-Z0-9_-]*$"#, options: .regularExpression) != nil { bearer = false }
-      if bearer, part.range(
-        of: #"^(?i:error)\s*=\s*(?:"invalid_token"|invalid_token)$"#,
-        options: .regularExpression
-      ) != nil { return true }
-    }
-    return false
-  }
 }

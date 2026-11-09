@@ -61,7 +61,7 @@ final class URLSessionTransportEventStreamSetup: Sendable {
 
   func start<D>(
     eventSource: EventSource,
-    continuation: AsyncStream<D>.Continuation,
+    continuation: AsyncThrowingStream<D, any Error>.Continuation,
     shouldCancel: @escaping @Sendable () -> Bool,
     jsonDecoder: TextMediaTypeDecoder,
     decoder: @escaping @Sendable (TextMediaTypeDecoder, String?, String?, String, Logger) throws -> D?
@@ -76,9 +76,9 @@ final class URLSessionTransportEventStreamSetup: Sendable {
         return
       }
 
-      await eventSource.setOnStateError { _, readyState in
+      await eventSource.setOnStateError { error, readyState in
         if readyState == .closed {
-          continuation.finish()
+          continuation.finish(throwing: error)
         }
       }
 
@@ -88,7 +88,7 @@ final class URLSessionTransportEventStreamSetup: Sendable {
       }
 
       await eventSource.setOnMessage { event, id, data in
-        guard let data else {
+        guard !self.isTerminated, let data else {
           return
         }
 
@@ -100,6 +100,10 @@ final class URLSessionTransportEventStreamSetup: Sendable {
           continuation.yield(event)
         }
         catch {
+          if isRequestCancellation(error) {
+            continuation.finish(throwing: error)
+            return
+          }
           eventStreamLogger.error("Unable to decode event: \(error.localizedDescription, privacy: .public)")
         }
       }

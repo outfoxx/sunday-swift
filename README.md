@@ -29,7 +29,7 @@ Environment-aware credentials
 -----------------------------
 
 Generated clients select operation security from an explicitly selected profile. Register
-providers under the names in those bindings and pass the manager to `URLSessionTransport`.
+providers under the names in those bindings and pass them to `URLSessionTransport`.
 Secrets, interactive authorization, and token persistence remain application responsibilities.
 
 ```swift
@@ -37,8 +37,8 @@ let provider = try URLSessionOAuthTokenProvider(configuration: .init(
   identity: "external-service", clientID: applicationClientID,
   clientSecret: applicationClientSecret, authentication: .clientSecretBasic
 ))
-let tokens = try TokenManager(providers: ["external": provider])
-let transport = URLSessionTransport(baseURL: "https://api.example.com", tokenManager: tokens)
+let tokens = try TokenManager(provider: provider)
+let transport = URLSessionTransport(baseURL: "https://api.example.com", tokenProviders: ["external": tokens])
 ```
 
 The native provider supports client credentials and application-managed authorization
@@ -55,7 +55,7 @@ other waiters. Canceling the last waiter cancels acquisition. Use `TokenStore` f
 persistence, and call `await tokens.close()` when its application/session ends. Expiry uses
 `Date` values. Endpoint overrides change acquisition without rewriting issuer trust.
 
-Managed requests suppress native redirects and ambient authentication. One recovery is
+Credential-bearing requests suppress native redirects and ambient authentication. One recovery is
 allowed for an explicit Bearer `invalid_token` challenge on a bodyless GET, HEAD, or OPTIONS.
 403 responses and unsafe/body-carrying requests do not replay. Event subscriptions share
 one recovery budget across reconnects, and closing a subscription cancels pending acquisition.
@@ -150,35 +150,173 @@ URI-template expansion does not enforce API-required inputs. Callers must valida
 any values their API requires before constructing a request. For example, omitting
 `env` from `https://{env}example.com` produces `https://example.com`.
 
-## Application-owned token persistence
+## Request and response adapters
+
+Transports adapt each managed attempt in this order:
+
+```text
+Prepare request → adapt(request:) → send → adapt(response:for:) → validation and retry policy
+```
+
+`RequestAdapter` has one requirement:
 
 ```swift
-let settings = try ClientSettings.resolve(
-  baseURL: baseURL, alternatives: alternatives, credentials: credentials,
-  tokenManagerFactory: { providers in
-    try TokenManager(providers: providers, store: applicationStore, expirySkew: 30,
-                     now: applicationClock)
-  }
+func adapt(request: URLRequest) async throws -> URLRequest
+```
+
+`ResponseAdapter` has one requirement:
+
+```swift
+func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse
+```
+
+The response adapter receives the actual adapted request sent for that attempt, including its original
+credential context. The hook runs for every received response, including unsafe-to-retry requests,
+the last permitted attempt, and event-stream handshakes. It transforms native response metadata;
+it does not consume the response body.
+
+Pass independent `requestAdapter:` and `responseAdapter:` values to `URLSessionTransport`.
+Neither slot infers behavior from the other, even when an adapter implements both protocols.
+Use `chain(to:)` to explicitly compose adapters on either side. `RequestAdapters` and
+`ResponseAdapters` also accept ordered arrays or variadic arguments. Compositions flatten existing
+chains, pass each result to the next adapter, and stop on the first thrown error.
+
+```swift
+let authentication = AuthenticationAdapter(providers: ["identity": externalProvider])
+let transport = URLSessionTransport(
+  baseURL: baseURL,
+  requestAdapter: authentication.chain(to: requestHeaders),
+  responseAdapter: authentication.chain(to: responseLogger)
 )
 ```
 
-The same optional `tokenManagerFactory: TokenManagerFactory?` is available on the settings initializer.
-The factory is a synchronous throwing `@Sendable` closure; captured stores/clocks must be Sendable.
-The application calls `await settings.tokenManager?.close()` when all clients sharing it are done.
-Transport closure does not own the shared actor or erase the store. Allow any pending rotation commit
-to settle before removing storage.
+Adapters run again for each retry, followed redirect, and SSE reconnect. Request adaptation starts
+from the prepared request each time, so edits do not accumulate. Execution passes adapters directly;
+requests carry no pipeline or execution configuration. Buffered responses collect native `Data`
+chunks after the response hook accepts the headers, without iterating over individual bytes.
 
-The hook is invoked once with the resolved provider map, after security validation, and is skipped
-when no providers are selected. It must only construct a manager: do not acquire tokens or read
-storage in the hook. Omitting it keeps the existing in-memory default. Settings retain the returned
-manager, not the factory. All operations on those settings share it; generated aggregate children
-therefore retain the same cache and single-flight renewal. Independently created managers do not
-coordinate concurrent refreshes, even if their stores are the same. Reuse a client/aggregate within
-an active session; use successive managers to reopen saved sessions.
+An adapter owns any resources it consumes. It must return a complete request ready to send; if it
+reads a body stream, it must provide a replacement stream or body before returning. Sunday does not
+reconstruct consumed resources on the adapter's behalf. Replacing a stream drops any inherited
+replay factory for the old body. Use `request.with(streamingBody:)` to supply an adapter-owned
+replacement factory when the exported request needs native replay support.
 
-The application owns persistence, encryption, store access and session boundaries. Provider/client,
-grant, profile and endpoint identities must distinguish environments and users; the API base URL
-alone is not an implicit store namespace. Use a new grant identity for a fresh authorization session.
-For logout, stop requests and wait for pending refresh/persistence to finish before removing the
-session's store entries, then construct fresh settings. `invalidate` expires an access token for
-renewal; it is not logout and deliberately retains refresh state. No disk storage is enabled automatically.
+Native copy and mutation helpers preserve fields that an adapter does not change:
+
+```swift
+let outbound = request.clone {
+  $0.timeoutInterval = 123
+  $0.httpBody = replacementData
+}.setting(header: "X-Request-ID", value: requestID)
+
+let inbound = try response.clone(statusCode: 303)
+  .setting(header: "Location", value: "/next")
+```
+
+`URLRequest.clone` copies the complete native request and applies an optional mutation closure.
+`URLResponse.clone()` preserves the concrete native response type; `HTTPURLResponse.clone(url:statusCode:headers:)`
+rebuilds its public HTTP metadata with selected replacements. Both HTTP request and response helpers
+support `setting(header:value:)`, `adding(header:value:)`, and `removing(header:)`. Header names are
+matched case-insensitively; `adding` is for list-valued headers.
+
+Cloning a request does not read or duplicate its body stream. Use `replayingBody()` for an independent
+stream from the installed factory; it throws for a one-shot stream without a factory. Replacing a
+body through `clone`, `with(httpBody:)`, or `with(streamingBody:)` removes obsolete replay metadata.
+The adapter remains responsible for returning a usable body and any other coordinated changes.
+
+The execution loop applies ordinary redirect rules to the adapted response. It does not try to
+validate every possible adapter transformation. A session delegate's accepted redirect request is
+preserved in full and becomes the next prepared request, including its replacement body and native
+settings. Request adapters run again before that request is sent.
+
+An error conforming to `RequestCancellationError` is an unconditional stop signal:
+
+```swift
+struct LoginRequired: RequestCancellationError {}
+```
+
+Sunday closes operation-owned resources, stops retries and reconnections, and propagates the original
+error unchanged. Swift's `CancellationError` has the same stop behavior. Other failures remain subject
+to normal response handling and retry policy; absence of the marker does not authorize a retry.
+
+`AuthenticationAdapter(providers:)` implements both hooks. It acquires credentials once per attempt
+and reports rejected bearer tokens to the original provider before the transport considers retrying.
+A rejected POST invalidates the token without replaying the POST. A rejection after the retry budget
+is exhausted still invalidates the final token. Late responses cannot invalidate a different token
+already installed by the manager. Providers unable to recover produce `TokenRejectedError`, which
+conforms to `RequestCancellationError`.
+
+```swift
+let authentication = AuthenticationAdapter(providers: ["identity": externalProvider])
+let transport = URLSessionTransport(
+  baseURL: baseURL, requestAdapter: authentication, responseAdapter: authentication
+)
+```
+
+Generated operation bindings are exposed through `URLRequest.securityBindings` for adapters.
+Credential receipts and execution state remain private and are never sent on the wire. The
+`tokenProviders:` initializer argument and `URLSessionTransport(settings:)` remain convenience paths
+that explicitly compose an authentication adapter on both sides; they do not create a manager or
+cache. When combined with custom adapters, authentication runs first on both the request and response
+side. Credential-bearing requests suppress native redirects and ambient authentication; adding an
+unrelated adapter does not enable this policy. Other redirects honor the session delegate's decision
+and run through both hooks for each attempt, with a limit of 20 redirects.
+
+Request exports adapt once and return the caller-owned native request without Sunday response or retry
+state. Sending that exported request does not invoke these managed hooks again.
+
+### Swift API migration
+
+- Replace `adapter:` with `requestAdapter:`. If the adapter also handles responses, explicitly pass it
+  as `responseAdapter:` too. Use `chain(to:)` to add request or response processing.
+- Implement `adapt(request:)` instead of `adapt(transport:urlRequest:)`. Capture application
+  dependencies explicitly; refreshing-header adapter callbacks now take no transport argument.
+- `eventStream` now returns `AsyncThrowingStream<Element, any Error>`. Consume it with
+  `for try await`; terminal event errors are no longer silently discarded. Custom `Transport`
+  implementations and generated Swift stream return signatures must adopt this type.
+- Token acquisition remains the `TokenProvider` supporting contract. Authentication-specific behavior
+  is implemented by adapters, keeping the transport's request/response hooks general.
+
+## Application-owned token lifecycle
+
+Transports accept named `TokenProvider` instances directly. Settings preserve supplied providers and
+never add a token cache. Every managed network attempt asks its provider for current credentials.
+An external framework (for example Auth0) remains responsible for storage, renewal and logout.
+Return only its access token and optional expiry; keep its refresh token inside that framework.
+
+For Sunday's caching and refresh lifecycle, explicitly supply a `TokenManager` as the provider:
+
+```swift
+let tokens = try TokenManager(provider: oauthProvider, store: applicationStore,
+                              expirySkew: 30, now: applicationClock)
+let settings = try ClientSettings.resolve(
+  baseURL: baseURL, alternatives: alternatives,
+  credentials: ["identity": ProviderCredentials(provider: tokens)]
+)
+// Supply an external framework's provider directly instead to keep its lifecycle authoritative.
+let transport = URLSessionTransport(settings: settings)
+```
+
+Managers retain expiry skew, coalesced renewal, refresh rotation and application-selected persistence.
+Call `await tokens.close()` after all clients sharing the manager finish.
+Transport closure does not erase the store or close a shared provider. Separate managers do not
+coordinate refreshes merely because they share a store. Reuse the same manager across clients that
+share a credential lifecycle, and distinguish users/environments with provider and grant identities.
+
+Providers can implement `reject` to handle an invalid bearer token. It receives the original request
+context and rejected access token, and returns whether recovery can proceed. Compare the rejected
+credential with the current session before renewing: a late rejection must not invalidate a newer token
+or a new login. Providers without this capability stop with `TokenRejectedError` and do not automatically retry. Acquisition and rejection
+must not start interactive login automatically; return an authorization-required failure to the caller.
+For an Auth0 adapter, retrieve through its credentials manager and force renewal through that same
+manager on rejection, serializing concurrent rejection handling without maintaining a second token cache.
+
+Request export materializes an optionally authorized native request once and hands its lifecycle to
+the consumer. Exported requests retain no Sunday-managed recovery state. Executing an operation through
+Sunday acquires once per attempt and retains the bounded safe-request recovery and SSE reconnect budget.
+
+Migration: replace transport `tokenManager`/`token_manager` arguments with named
+`tokenProviders`/`token_providers` maps. Replace `TokenManagerFactory` hooks with explicitly constructed
+managers supplied through provider credentials. Direct built-in OAuth providers are not implicitly cached;
+wrap them explicitly when Sunday should retain and refresh their tokens. For logout, stop outstanding
+requests and settle refresh commits before clearing the owning framework's or application's storage.

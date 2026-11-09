@@ -20,7 +20,9 @@ import Foundation
 /// Adapts an outbound request before it is executed by a transport.
 public protocol RequestAdapter: Sendable {
 
-  /// Returns an adapted request for execution.
-  func adapt(transport: some Transport, urlRequest: URLRequest) async throws -> URLRequest
+  /// Returns a complete request ready to send. An adapter that consumes a body stream must replace it.
+  /// Called once per attempt, starting from the prepared request, and once for request export.
+  /// Throw RequestCancellationError to stop the logical operation without error translation.
+  func adapt(request: URLRequest) async throws -> URLRequest
 
 }

@@ -97,12 +97,14 @@ struct RequestValidationTests {
     await source.close()
     #expect(body.state.withLock { $0.validations } == 1)
     #expect(body.state.withLock { $0.encodings } == 0)
-    let stream: AsyncStream<String> = transport.eventStream(
+    let stream: AsyncThrowingStream<String, any Error> = transport.eventStream(
       method: .post, pathTemplate: "/events", body: body, contentTypes: [.json],
       requestValidation: { try $0.validate(.request) },
       decoder: { _, _, _, data, _ in data }
     )
-    for await _ in stream { Issue.record("Invalid body must not produce events") }
+    await #expect(throws: SundayError.self) {
+      for try await _ in stream { Issue.record("Invalid body must not produce events") }
+    }
     #expect(body.state.withLock { $0.validations } == 2)
     #expect(body.state.withLock { $0.encodings } == 0)
   }
@@ -151,8 +153,12 @@ struct RequestValidationTests {
     for await _ in closed { break }
     await source.close()
     #expect(parameter.state.withLock { $0.validations } == 2)
-    let stream: AsyncStream<String> = transport.eventStream(spec: spec, decoder: { _, _, _, data, _ in data })
-    for await _ in stream { Issue.record("Invalid parameters must not produce events") }
+    let stream: AsyncThrowingStream<String, any Error> = transport.eventStream(
+      spec: spec, decoder: { _, _, _, data, _ in data }
+    )
+    await #expect(throws: SundayError.self) {
+      for try await _ in stream { Issue.record("Invalid parameters must not produce events") }
+    }
     #expect(parameter.state.withLock { $0.validations } == 3)
     #expect(parameter.state.withLock { $0.encodings } == 0)
   }

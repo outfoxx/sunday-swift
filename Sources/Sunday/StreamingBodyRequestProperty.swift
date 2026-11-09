@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import Foundation
 import Synchronization
 
 
@@ -41,4 +42,42 @@ final class StreamingBodyRequestProperty: Sendable {
     }
   }
 
+}
+
+extension URLRequest {
+  var streamingBodyProperty: StreamingBodyRequestProperty? {
+    URLProtocol.property(forKey: streamingBodyRequestPropertyKey, in: self) as? StreamingBodyRequestProperty
+  }
+
+  func withoutStreamingBodyProperty() -> URLRequest {
+    guard let copy = (self as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
+      preconditionFailure("Foundation URLRequest must bridge to NSMutableURLRequest")
+    }
+    URLProtocol.removeProperty(forKey: streamingBodyRequestPropertyKey, in: copy)
+    return copy as URLRequest
+  }
+}
+
+public extension URLRequest {
+  /// Returns a fresh stream from the body's factory without consuming the current stream.
+  /// Throws when a one-shot stream has no replay factory. Data bodies are copied without work.
+  func replayingBody() throws -> URLRequest {
+    guard httpBodyStream != nil else { return self }
+    guard let property = streamingBodyProperty else { throw URLError(.requestBodyStreamExhausted) }
+    return try with(streamingBody: property.body)
+  }
+
+  /// Replaces the body with an adapter-owned stream factory, including its native replay capability.
+  /// Use this when a transformed streaming body must support redirects or authentication replay.
+  func with(streamingBody: StreamingBody) throws -> URLRequest {
+    var request = self
+    request.httpBody = nil
+    request.httpBodyStream = try streamingBody.makeInputStream()
+    guard let copy = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
+      throw SundayError.requestEncodingFailed(reason: .streamCreationFailed)
+    }
+    URLProtocol.setProperty(StreamingBodyRequestProperty(body: streamingBody),
+                            forKey: streamingBodyRequestPropertyKey, in: copy)
+    return copy as URLRequest
+  }
 }

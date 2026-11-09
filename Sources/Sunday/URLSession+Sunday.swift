@@ -35,16 +35,26 @@ public extension URLSession {
     let responseBody: Data
     let response: URLResponse
     do {
-      (responseBody, response) = try await securedData(for: request)
+      (responseBody, response) = try await data(for: request)
     }
     catch {
-      if let replayError = request.streamingBodyRequestProperty?.recordedReplayError {
+      if isRequestCancellation(error) { throw error }
+      if let replayError = request.streamingBodyProperty?.recordedReplayError {
         throw replayError
       }
       throw error
     }
 
     return try validate(responseBody: responseBody, response: response)
+  }
+
+  internal func validatedData(
+    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?
+  ) async throws -> (Data?, HTTPURLResponse) {
+    let (data, response) = try await adaptedData(
+      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter
+    )
+    return try validate(responseBody: data, response: response)
   }
 
   private func validate(responseBody: Data, response: URLResponse) throws -> (Data?, HTTPURLResponse) {
@@ -75,12 +85,12 @@ public extension URLSession {
     public typealias Failure = Error
 
     private enum Source {
-      case request(URLSession, URLRequest, AuthenticationRecoveryBudget)
+      case request(@Sendable () async throws -> (URLSession.AsyncBytes, URLResponse))
       case events(AsyncThrowingStream<DataEvent, Error>)
     }
 
     private enum IteratorState {
-      case pending(URLSession, URLRequest, AuthenticationRecoveryBudget)
+      case pending(@Sendable () async throws -> (URLSession.AsyncBytes, URLResponse))
       case streaming(URLSession.AsyncBytes.AsyncIterator, DataEventBuffer)
       case events(AsyncThrowingStream<DataEvent, Error>.Iterator)
       case finished
@@ -90,8 +100,8 @@ public extension URLSession {
 
       private var state: IteratorState
 
-      init(session: URLSession, request: URLRequest, budget: AuthenticationRecoveryBudget) {
-        state = .pending(session, request, budget)
+      init(request: @escaping @Sendable () async throws -> (URLSession.AsyncBytes, URLResponse)) {
+        state = .pending(request)
       }
 
       init(events: AsyncThrowingStream<DataEvent, Error>) {
@@ -100,19 +110,21 @@ public extension URLSession {
 
       public mutating func next() async throws -> DataEvent? {
         switch state {
-        case .pending(let session, let request, let budget):
+        case .pending(let request):
           guard !Task.isCancelled else {
             state = .finished
             return nil
           }
 
-          let (bytes, response) = try await session.securedBytes(for: request, budget: budget)
+          let (bytes, response) = try await request()
 
           guard let httpResponse = response as? HTTPURLResponse else {
+            bytes.task.cancel()
             throw SundayError.invalidHTTPResponse
           }
 
           if 400 ..< 600 ~= httpResponse.statusCode {
+            bytes.task.cancel()
             throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
               response: httpResponse,
               data: nil
@@ -161,8 +173,8 @@ public extension URLSession {
 
     private let source: Source
 
-    init(session: URLSession, request: URLRequest, budget: AuthenticationRecoveryBudget = .init()) {
-      self.source = .request(session, request, budget)
+    init(request: @escaping @Sendable () async throws -> (URLSession.AsyncBytes, URLResponse)) {
+      self.source = .request(request)
     }
 
     init(events: AsyncThrowingStream<DataEvent, Error>) {
@@ -171,8 +183,8 @@ public extension URLSession {
 
     public func makeAsyncIterator() -> AsyncIterator {
       switch source {
-      case .request(let session, let request, let budget):
-        AsyncIterator(session: session, request: request, budget: budget)
+      case .request(let request):
+        AsyncIterator(request: request)
       case .events(let events):
         AsyncIterator(events: events)
       }
@@ -181,14 +193,17 @@ public extension URLSession {
   }
 
   func dataEventStream(for request: URLRequest) throws -> DataEventStream {
-    DataEventStream(session: self, request: request)
+    DataEventStream { try await self.bytes(for: request) }
   }
 
   internal func dataEventStream(
-    for request: URLRequest,
+    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?,
     securityBudget: AuthenticationRecoveryBudget
   ) -> DataEventStream {
-    DataEventStream(session: self, request: request, budget: securityBudget)
+    DataEventStream {
+      try await self.adaptedBytes(for: request, requestAdapter: requestAdapter,
+                                 responseAdapter: responseAdapter, budget: securityBudget)
+    }
   }
 
   func close(cancelOutstandingTasks: Bool) {
@@ -294,10 +309,7 @@ private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
   ) {
     guard
       let request = task.currentRequest ?? task.originalRequest,
-      let property = URLProtocol.property(
-        forKey: streamingBodyRequestPropertyKey,
-        in: request
-      ) as? StreamingBodyRequestProperty
+      let property = request.streamingBodyProperty
     else {
       completionHandler(nil)
       return
@@ -334,18 +346,6 @@ private final class SundayURLSessionDelegate: NSObject, URLSessionTaskDelegate {
     }
 
     completionHandler(.cancelAuthenticationChallenge, nil)
-  }
-
-}
-
-
-private extension URLRequest {
-
-  var streamingBodyRequestProperty: StreamingBodyRequestProperty? {
-    URLProtocol.property(
-      forKey: streamingBodyRequestPropertyKey,
-      in: self
-    ) as? StreamingBodyRequestProperty
   }
 
 }

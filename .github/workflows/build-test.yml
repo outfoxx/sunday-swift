@@ -124,3 +124,5 @@ jobs:
       with:
           title: Test Results ${{ matrix.platform }}
           path: ./TestResults/${{ matrix.platform }}.xcresult
+          show-passed-tests: false
+          show-code-coverage: false

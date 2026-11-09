@@ -91,8 +91,8 @@ public struct OperationSpec<RequestBody: Sendable>: Sendable {
     do {
       try parameterValidation?()
     }
-    catch is CancellationError {
-      throw CancellationError()
+    catch let error where isRequestCancellation(error) {
+      throw error
     }
     catch {
       throw SundayError.requestEncodingFailed(reason: .parameterValidationFailed(error: error))
@@ -145,6 +145,7 @@ public extension OperationSpec where RequestBody: Encodable {
         try requestValidation?(body)
       }
       catch {
+        if isRequestCancellation(error) { throw error }
         throw SundayError.requestEncodingFailed(reason: .serializationFailed(contentType: contentType, error: error))
       }
       let data = try mediaTypeEncoders.find(for: contentType).encode(body)
