@@ -91,6 +91,9 @@ struct RequestExecutionTests {
       baseURL: .init(format: base.absoluteString), requestAdapter: adapter, responseAdapter: adapter
     )
     defer { server.stop(); transport.close() }
+    await #expect(throws: (any Error).self) {
+      try await transport.result(spec: OperationSpec<Empty>(method: .get, pathTemplate: "/value"))
+    }
     try await transport.result(spec: OperationSpec<Empty>(method: .get, pathTemplate: "/value"))
     #expect(order.withLock { $0 } == ["adapt-1", "send-1", "response-1", "adapt-2", "send-2", "response-2"])
   }
@@ -139,7 +142,7 @@ struct RequestExecutionTests {
     try await transport.result(spec: OperationSpec<Empty>(method: .get, pathTemplate: "/value"))
   }
 
-  @Test func invalidatesPostAndFinalRetryWithoutReplayingUnsafeRequests() async throws {
+  @Test func invalidatesEachExplicitAttemptWithoutHiddenRetries() async throws {
     let sent = Mutex(0)
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/value") {
@@ -174,10 +177,10 @@ struct RequestExecutionTests {
     let exported = try await transport.transportRequest(spec: get)
     #expect(exported.value(forHTTPHeaderField: "Authorization") == "Bearer renewed-1")
     await #expect(throws: SundayError.self) { try await transport.transportResponse(spec: get) }
-    #expect(sent.withLock { $0 } == 3)
-    #expect(await provider.refreshes == 2)
+    #expect(sent.withLock { $0 } == 2)
+    #expect(await provider.refreshes == 1)
     let next = try await transport.transportRequest(spec: get)
-    #expect(next.value(forHTTPHeaderField: "Authorization") == "Bearer renewed-3")
+    #expect(next.value(forHTTPHeaderField: "Authorization") == "Bearer renewed-2")
     await manager.close()
   }
 

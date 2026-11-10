@@ -279,8 +279,9 @@ state. Sending that exported request does not invoke these managed hooks again.
 
 ## Application-owned token lifecycle
 
-Transports accept named `TokenProvider` instances directly. Settings preserve supplied providers and
-never add a token cache. Every managed network attempt asks its provider for current credentials.
+Transports accept only request and response adapters; they have no token-provider option or authentication retry logic.
+The optional `AuthenticationAdapter` bridges named providers to these contracts. Settings factories compose it explicitly
+without adding a cache. External authentication frameworks can implement the adapters directly.
 An external framework (for example Auth0) remains responsible for storage, renewal and logout.
 Return only its access token and optional expiry; keep its refresh token inside that framework.
 
@@ -313,10 +314,11 @@ manager on rejection, serializing concurrent rejection handling without maintain
 
 Request export materializes an optionally authorized native request once and hands its lifecycle to
 the consumer. Exported requests retain no Sunday-managed recovery state. Executing an operation through
-Sunday acquires once per attempt and retains the bounded safe-request recovery and SSE reconnect budget.
+Sunday invokes the request adapter once per attempt. Authentication responses do not trigger an implicit retry;
+an application may make another request after its credential owner handles the rejection.
 
-Migration: replace transport `tokenManager`/`token_manager` arguments with named
-`tokenProviders`/`token_providers` maps. Replace `TokenManagerFactory` hooks with explicitly constructed
+Migration: replace transport `tokenManager`/`token_manager` and `tokenProviders`/`token_providers` arguments
+with explicit request/response adapters. Replace `TokenManagerFactory` hooks with explicitly constructed
 managers supplied through provider credentials. Direct built-in OAuth providers are not implicitly cached;
 wrap them explicitly when Sunday should retain and refresh their tokens. For logout, stop outstanding
 requests and settle refresh commits before clearing the owning framework's or application's storage.

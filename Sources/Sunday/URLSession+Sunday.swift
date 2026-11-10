@@ -197,12 +197,11 @@ public extension URLSession {
   }
 
   internal func dataEventStream(
-    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?,
-    securityBudget: AuthenticationRecoveryBudget
+    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?
   ) -> DataEventStream {
     DataEventStream {
       try await self.adaptedBytes(for: request, requestAdapter: requestAdapter,
-                                 responseAdapter: responseAdapter, budget: securityBudget)
+                                 responseAdapter: responseAdapter)
     }
   }
 
