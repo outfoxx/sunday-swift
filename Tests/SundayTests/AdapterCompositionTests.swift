@@ -142,6 +142,9 @@ struct AdapterCompositionTests {
       responseAdapter: authentication.chain(to: observer)
     )
     defer { transport.close(); server.stop() }
+    await #expect(throws: (any Error).self) {
+      try await transport.result(spec: OperationSpec<Empty>(method: .get, pathTemplate: "/value"))
+    }
     try await transport.result(spec: OperationSpec<Empty>(method: .get, pathTemplate: "/value"))
     #expect(refreshes.withLock { $0 } == 2)
     #expect(observed.withLock { $0 } == [401, 204])

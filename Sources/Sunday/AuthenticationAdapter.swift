@@ -19,6 +19,10 @@ import Foundation
 /// Applies selected operation credentials and reports rejected tokens to their original owners.
 /// Providers own their lifecycle; explicitly supply TokenManager when Sunday should cache credentials.
 public struct AuthenticationAdapter: RequestAdapter, ResponseAdapter {
+  struct TerminalProviderFailure: RequestCancellationError {
+    let cause: TokenProviderError
+  }
+
   private let providers: [String: any TokenProvider]
 
   /// Creates an authentication adapter without acquiring or caching credentials.
@@ -28,15 +32,25 @@ public struct AuthenticationAdapter: RequestAdapter, ResponseAdapter {
   public func adapt(request: URLRequest) async throws -> URLRequest {
     guard !request.securityBindings.isEmpty else { return request }
     let security = RequestSecurity(bindings: request.securityBindings, providers: providers)
-    let (authorized, leases) = try await security.authorize(request)
-    return try authorized.withSecurity(request.securityBindings, leases: leases)
+    do {
+      let (authorized, leases) = try await security.authorize(request)
+      return try authorized.withSecurity(request.securityBindings, leases: leases)
+    }
+    catch let error as TokenProviderError where error.reason != .temporary {
+      throw TerminalProviderFailure(cause: error)
+    }
   }
 
-  /// Invalidates rejected credentials even when retrying this request is unsafe or the budget is exhausted.
+  /// Invalidates rejected credentials without requesting a transport retry.
   public func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse {
     guard let context = request.securityProperty else { return response }
     let security = RequestSecurity(bindings: context.bindings, providers: providers)
-    try await security.reject(response, for: request, leases: context.leases)
+    do {
+      try await security.reject(response, for: request, leases: context.leases)
+    }
+    catch let error as TokenProviderError where error.reason != .temporary {
+      throw TerminalProviderFailure(cause: error)
+    }
     return try security.redact(response)
   }
 }

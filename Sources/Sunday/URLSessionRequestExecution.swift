@@ -26,8 +26,7 @@ extension URLSession {
     for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?
   ) async throws -> (Data, HTTPURLResponse) {
     let (attempt, response) = try await executeAdapted(
-      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter,
-      budget: AuthenticationRecoveryBudget()
+      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter
     ) { attempt in
       (attempt, try await attempt.receiveHeaders(in: self))
     }
@@ -40,11 +39,10 @@ extension URLSession {
   }
 
   func adaptedBytes(
-    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?,
-    budget: AuthenticationRecoveryBudget
+    for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?
   ) async throws -> (AsyncBytes, URLResponse) {
     let (bytes, response): (AsyncBytes?, HTTPURLResponse) = try await executeAdapted(
-      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter, budget: budget
+      for: request, requestAdapter: requestAdapter, responseAdapter: responseAdapter
     ) { attempt in
       do {
         let (bytes, response) = try await self.bytes(for: attempt.request, delegate: attempt)
@@ -68,7 +66,6 @@ extension URLSession {
 
   private func executeAdapted<Body>(
     for request: URLRequest, requestAdapter: (any RequestAdapter)?, responseAdapter: (any ResponseAdapter)?,
-    budget: AuthenticationRecoveryBudget,
     send: (URLSessionRequestAttempt) async throws -> (Body, URLResponse)
   ) async throws -> (Body, HTTPURLResponse) {
     var prepared = request
@@ -92,10 +89,6 @@ extension URLSession {
           guard let original = original as? HTTPURLResponse else { throw URLError(.badServerResponse) }
           let response = try await responseAdapter?.adapt(response: original, for: finalRequest) ?? original
           try Task.checkCancellation()
-          if budget.shouldRetry(response, for: finalRequest) {
-            attempt.cancel()
-            return .next(try prepared.replayingBody())
-          }
           if !attempt.isolatesCredentials,
              let proposed = redirectedRequest(prepared, sent: finalRequest, response: response),
              let accepted = try await attempt.redirect(in: self, response: response, proposed: proposed) {

@@ -48,8 +48,9 @@ struct ManagedSecurityTests {
 
   private func transport(_ server: RoutingHTTPServer, manager: TokenManager?) async throws -> URLSessionTransport {
     let base = try await startTestServer(server)
+    let adapter = AuthenticationAdapter(providers: manager.map { ["identity": $0] } ?? [:])
     return URLSessionTransport(
-      baseURL: .init(format: base.absoluteString), tokenProviders: manager.map { ["identity": $0] } ?? [:]
+      baseURL: .init(format: base.absoluteString), requestAdapter: adapter, responseAdapter: adapter
     )
   }
 
@@ -120,8 +121,9 @@ struct ManagedSecurityTests {
     }
     let base = try await startTestServer(server)
     let provider = ExternalProvider()
+    let adapter = AuthenticationAdapter(providers: ["identity": provider])
     let transport = URLSessionTransport(
-      baseURL: .init(format: base.absoluteString), tokenProviders: ["identity": provider]
+      baseURL: .init(format: base.absoluteString), requestAdapter: adapter, responseAdapter: adapter
     )
     defer { server.stop(); transport.close() }
     let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/value", security: [binding])
@@ -131,6 +133,7 @@ struct ManagedSecurityTests {
     await #expect(throws: SundayError.self) { try await transport.transportResponse(request: exported) }
     #expect(await provider.acquisitions == 1)
     #expect(await provider.rejections == 0)
+    await #expect(throws: SundayError.self) { try await transport.transportResponse(spec: spec) }
     _ = try await transport.transportResponse(spec: spec)
     #expect(await provider.acquisitions == 3)
     #expect(await provider.rejections == 1)
@@ -152,8 +155,9 @@ struct ManagedSecurityTests {
     }
     let base = try await startTestServer(server)
     let provider = Provider()
+    let adapter = AuthenticationAdapter(providers: ["identity": provider])
     let transport = URLSessionTransport(
-      baseURL: .init(format: base.absoluteString), tokenProviders: ["identity": provider]
+      baseURL: .init(format: base.absoluteString), requestAdapter: adapter, responseAdapter: adapter
     )
     defer { server.stop(); transport.close() }
     await #expect(throws: TokenRejectedError.self) {
@@ -166,7 +170,7 @@ struct ManagedSecurityTests {
     #expect(count.withLock { $0 } == 1)
   }
 
-  @Test func operationExecutionRechecksCredentialsAndRecoversOnce() async throws {
+  @Test func operationExecutionRenewsOnTheNextExplicitCall() async throws {
     let values = Mutex<[String]>([])
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/value") {
@@ -185,6 +189,7 @@ struct ManagedSecurityTests {
     let transport = try await transport(server, manager: manager)
     defer { server.stop(); transport.close() }
     let spec = OperationSpec<Empty>(method: .get, pathTemplate: "/value", security: [binding])
+    await #expect(throws: SundayError.self) { try await transport.transportResponse(spec: spec) }
     #expect(try await transport.transportResponse(spec: spec).statusCode == 204)
     try await manager.invalidate(manager.credentials(for: binding))
     #expect(try await transport.transportResponse(spec: spec).statusCode == 204)
@@ -214,8 +219,8 @@ struct ManagedSecurityTests {
         method: method, pathTemplate: "/value", security: [binding]
       ))
     }
-    #expect(count.withLock { $0 } == (method == .get ? 2 : 1))
-    #expect(await provider.refreshed == (method == .get ? 1 : 0))
+    #expect(count.withLock { $0 } == 1)
+    #expect(await provider.refreshed == 0)
     await manager.close()
   }
 
@@ -310,14 +315,14 @@ struct ManagedSecurityTests {
     #expect(try await transport.transportResponse(spec: OperationSpec<Empty>(
       method: .get, pathTemplate: "/value", security: [binding]
     )).statusCode == 307)
-    await #expect(throws: TokenProviderError.self) {
+    await #expect(throws: AuthenticationAdapter.TerminalProviderFailure.self) {
       try await transport.transportRequest(spec: OperationSpec<Empty>(
         method: .get, pathTemplate: "/value", headers: ["Authorization": "existing"], security: [binding]
       ))
     }
-    let missing = URLSessionTransport(baseURL: transport.baseURL)
+    let missing = URLSessionTransport(baseURL: transport.baseURL, requestAdapter: AuthenticationAdapter(providers: [:]))
     defer { missing.close() }
-    await #expect(throws: TokenProviderError.self) {
+    await #expect(throws: AuthenticationAdapter.TerminalProviderFailure.self) {
       try await missing.transportRequest(spec: OperationSpec<Empty>(
         method: .get,
         pathTemplate: "/value",
@@ -328,7 +333,7 @@ struct ManagedSecurityTests {
     await manager.close()
   }
 
-  @Test func eventConnectionsShareOneRecoveryBudgetAcrossReconnects() async throws {
+  @Test func eventRejectionDoesNotTriggerAnAuthenticationRetry() async throws {
     let count = Mutex(0)
     let server = try RoutingHTTPServer(port: .any, localOnly: true) {
       Path("/events") {
@@ -360,8 +365,8 @@ struct ManagedSecurityTests {
       break
     }
     await source.close()
-    #expect(count.withLock { $0 } == 3)
-    #expect(await provider.refreshed == 1)
+    #expect(count.withLock { $0 } == 1)
+    #expect(await provider.refreshed == 0)
     await manager.close()
   }
   @Test func temporaryCredentialFailureReconnectsEvents() async throws {

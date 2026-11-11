@@ -17,7 +17,8 @@
 import Foundation
 
 public extension URLSessionTransport {
-  /// Creates the application-selected URLSession transport from prepared settings without acquiring tokens.
+  /// Selects standard authentication: attachment, rejection feedback, and cancellation without replay.
+  /// Providers are used unchanged; supply TokenManager explicitly for caching and refresh.
   /// The application owns the returned transport and its lifecycle.
   convenience init(
     settings: ClientSettings,
@@ -29,16 +30,16 @@ public extension URLSessionTransport {
     mediaTypeEncoders: MediaTypeEncoders = .default,
     mediaTypeDecoders: MediaTypeDecoders = .default
   ) {
+    let authentication = StandardAuthenticationAdapter(providers: settings.tokenProviders)
     self.init(
       baseURL: .init(format: settings.baseURL.absoluteString),
-      requestAdapter: requestAdapter,
-      responseAdapter: responseAdapter,
+      requestAdapter: RequestAdapters([authentication] + (requestAdapter.map { [$0] } ?? [])),
+      responseAdapter: ResponseAdapters([authentication] + (responseAdapter.map { [$0] } ?? [])),
       serverTrustPolicyManager: serverTrustPolicyManager,
       sessionConfiguration: sessionConfiguration,
       requestQueue: requestQueue,
       mediaTypeEncoders: mediaTypeEncoders,
-      mediaTypeDecoders: mediaTypeDecoders,
-      tokenProviders: settings.tokenProviders
+      mediaTypeDecoders: mediaTypeDecoders
     )
   }
 }
