@@ -16,7 +16,7 @@
 
 import Foundation
 
-/// A server rejected a credential whose owner cannot recover automatically.
+/// Stops an exchange after credential rejection; the credential owner determines subsequent recovery.
 public struct TokenRejectedError: RequestCancellationError, Sendable {
   /// The rejecting response, with managed query credentials redacted.
   public let response: HTTPURLResponse

@@ -29,7 +29,7 @@ Environment-aware credentials
 -----------------------------
 
 Generated clients select operation security from an explicitly selected profile. Register
-providers under the names in those bindings and pass them to `URLSessionTransport`.
+providers under the names in those bindings and install `AuthenticationAdapter`.
 Secrets, interactive authorization, and token persistence remain application responsibilities.
 
 ```swift
@@ -38,7 +38,10 @@ let provider = try URLSessionOAuthTokenProvider(configuration: .init(
   clientSecret: applicationClientSecret, authentication: .clientSecretBasic
 ))
 let tokens = try TokenManager(provider: provider)
-let transport = URLSessionTransport(baseURL: "https://api.example.com", tokenProviders: ["external": tokens])
+let authentication = AuthenticationAdapter(providers: ["external": tokens])
+let transport = URLSessionTransport(
+  baseURL: "https://api.example.com", requestAdapter: authentication, responseAdapter: authentication
+)
 ```
 
 The native provider supports client credentials and application-managed authorization
@@ -55,10 +58,9 @@ other waiters. Canceling the last waiter cancels acquisition. Use `TokenStore` f
 persistence, and call `await tokens.close()` when its application/session ends. Expiry uses
 `Date` values. Endpoint overrides change acquisition without rewriting issuer trust.
 
-Credential-bearing requests suppress native redirects and ambient authentication. One recovery is
-allowed for an explicit Bearer `invalid_token` challenge on a bodyless GET, HEAD, or OPTIONS.
-403 responses and unsafe/body-carrying requests do not replay. Event subscriptions share
-one recovery budget across reconnects, and closing a subscription cancels pending acquisition.
+Credential-bearing requests suppress native redirects and ambient authentication. Authentication does not
+cause an implicit replay. Closing an event subscription cancels pending acquisition; cancellation-marked
+errors stop reconnection.
 
 Model validation
 ----------------
@@ -240,9 +242,8 @@ error unchanged. Swift's `CancellationError` has the same stop behavior. Other f
 to normal response handling and retry policy; absence of the marker does not authorize a retry.
 
 `AuthenticationAdapter(providers:)` implements both hooks. It acquires credentials once per attempt
-and reports rejected bearer tokens to the original provider before the transport considers retrying.
-A rejected POST invalidates the token without replaying the POST. A rejection after the retry budget
-is exhausted still invalidates the final token. Late responses cannot invalidate a different token
+and reports rejected bearer tokens to the original provider. A rejected POST reports the token without
+replaying the POST. Late responses cannot invalidate a different token
 already installed by the manager. Providers unable to recover produce `TokenRejectedError`, which
 conforms to `RequestCancellationError`.
 
@@ -255,9 +256,9 @@ let transport = URLSessionTransport(
 
 Generated operation bindings are exposed through `URLRequest.securityBindings` for adapters.
 Credential receipts and execution state remain private and are never sent on the wire. The
-`tokenProviders:` initializer argument and `URLSessionTransport(settings:)` remain convenience paths
-that explicitly compose an authentication adapter on both sides; they do not create a manager or
-cache. When combined with custom adapters, authentication runs first on both the request and response
+`URLSessionTransport(settings:)` remains an opt-in provider convenience that composes an authentication
+adapter on both sides; it does not create a manager or cache. Use `URLSessionTransport(baseURL:)` with
+your own adapters to own the exchange entirely. When combined with custom adapters, authentication runs first on both the request and response
 side. Credential-bearing requests suppress native redirects and ambient authentication; adding an
 unrelated adapter does not enable this policy. Other redirects honor the session delegate's decision
 and run through both hooks for each attempt, with a limit of 20 redirects.
@@ -279,11 +280,25 @@ state. Sending that exported request does not invoke these managed hooks again.
 
 ## Application-owned token lifecycle
 
-Transports accept only request and response adapters; they have no token-provider option or authentication retry logic.
-The optional `AuthenticationAdapter` bridges named providers to these contracts. Settings factories compose it explicitly
-without adding a cache. External authentication frameworks can implement the adapters directly.
+Transport constructors perform no authentication or authorization by default. They accept request and response
+adapters, with no token-provider option or authentication retry loop. External authentication frameworks can
+implement these adapters directly, without using Sunday's token or security classes.
+
+The optional `AuthenticationAdapter` acquires credentials for declared bindings, reports missing providers,
+and sends matching rejection feedback to the credential owner. Install it explicitly in each desired slot;
+installing a request adapter alone does not install response behavior. It adds no cache.
+
+`BearerTokenRejectionAdapter` is a separate, opt-in response policy. It throws the cancellation marker when
+an initiating request sent a bearer credential and its response is 401 with an explicit Bearer `invalid_token`
+challenge. It leaves all other responses and all bodies untouched. Compose it after `AuthenticationAdapter`
+when provider feedback should run before cancellation. It has no counter, renewal, or replay behavior.
+The removed `AuthenticationRecoveryBudget` has no implicit replacement: applications choose their own
+recovery policy, and a cancellation-marked error always stops the exchange, retries, and SSE reconnections.
 An external framework (for example Auth0) remains responsible for storage, renewal and logout.
 Return only its access token and optional expiry; keep its refresh token inside that framework.
+
+The provider-settings convenience `URLSessionTransport(settings:)` explicitly installs provider adapters.
+Use the ordinary transport constructor with your own adapters when you want to own the exchange entirely.
 
 For Sunday's caching and refresh lifecycle, explicitly supply a `TokenManager` as the provider:
 
