@@ -127,4 +127,55 @@ struct StandardAuthenticationTests {
     #expect(custom.calls.withLock { $0 } == 1)
     #expect(sent.withLock { $0 } == ["Custom credential", ""])
   }
+
+  private final class Stop: RequestCancellationError, Sendable {}
+
+  private actor FailingProvider: TokenProvider {
+    nonisolated let identity = "failing-feedback"
+    let failure: any Error
+    let failAcquisition: Bool
+    var rejections = 0
+    init(_ failure: any Error, failAcquisition: Bool = false) {
+      self.failure = failure
+      self.failAcquisition = failAcquisition
+    }
+    nonisolated func configure(_: SecurityBinding) -> TokenConfiguration { .init(clientIdentity: "client") }
+    func acquire(_: TokenRequest) throws -> TokenSet {
+      if failAcquisition { throw failure }
+      return .init(accessToken: "access", refreshToken: "refresh")
+    }
+    func reject(_: TokenRequest, rejectedToken: String) throws -> Bool {
+      rejections += 1
+      throw failure
+    }
+  }
+
+  @Test func feedbackFailureCannotBypassStandardCancellation() async throws {
+    let stop = Stop()
+    for failure: any Error in [TokenProviderError(reason: .temporary), stop, CancellationError()] {
+      let provider = FailingProvider(failure)
+      let adapter = StandardAuthenticationAdapter(providers: ["identity": provider])
+      let original = try URLRequest(url: URL(string: "https://example.test")!).withSecurity([binding])
+      let request = try await adapter.adapt(request: original)
+      let response = HTTPURLResponse(url: request.url!, statusCode: 401, httpVersion: nil,
+                                     headerFields: ["WWW-Authenticate": "Bearer error=invalid_token"])!
+      await #expect { try await adapter.adapt(response: response, for: request) } throws: { error in
+        if failure is Stop { return error as? Stop === stop }
+        if failure is CancellationError { return error is CancellationError }
+        return error is TokenRejectedError
+      }
+      #expect(await provider.rejections == 1)
+      let forbidden = HTTPURLResponse(url: request.url!, statusCode: 403, httpVersion: nil,
+                                      headerFields: ["WWW-Authenticate": "Bearer error=invalid_token"])!
+      #expect(try await adapter.adapt(response: forbidden, for: request).statusCode == 403)
+      #expect(await provider.rejections == 1)
+    }
+    let provider = FailingProvider(TokenProviderError(reason: .temporary), failAcquisition: true)
+    let adapter = StandardAuthenticationAdapter(providers: ["identity": provider])
+    let request = try URLRequest(url: URL(string: "https://example.test")!).withSecurity([binding])
+    await #expect { try await adapter.adapt(request: request) } throws: { error in
+      (error as? TokenProviderError)?.reason == .temporary && !isRequestCancellation(error)
+    }
+  }
+
 }

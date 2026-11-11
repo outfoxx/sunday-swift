@@ -36,6 +36,15 @@ public struct StandardAuthenticationAdapter: RequestAdapter, ResponseAdapter {
   /// Reports rejection before stopping the exchange; does not renew or replay the request.
   public func adapt(response: HTTPURLResponse, for request: URLRequest) async throws -> HTTPURLResponse {
     guard !request.securityBindings.isEmpty else { return response }
-    return try await responses.adapt(response: response, for: request)
+    do {
+      return try await responses.adapt(response: response, for: request)
+    }
+    catch {
+      if isRequestCancellation(error) { throw error }
+      // Feedback failure must not bypass the explicitly selected stop policy.
+      let redacted = try RequestSecurity(bindings: request.securityBindings, providers: [:]).redact(response)
+      _ = try await BearerTokenRejectionAdapter().adapt(response: redacted, for: request)
+      throw error
+    }
   }
 }
