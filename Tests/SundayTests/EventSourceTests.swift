@@ -996,6 +996,62 @@ class EventSourceTests: XCTestCase {
     XCTAssertEqual(jitteredDelay, .milliseconds(900))
   }
 
+  func testTransientHTTPFailuresPreserveCursorAndReconnect() async throws {
+    for status in [408, 429, 500, 502, 503, 504] {
+      for throwsResponse in [false, true] {
+        let calls = Mutex(0)
+        let recovered = expectation(description: "Recovered after HTTP \(status)")
+        let source = EventSource { headers in
+          let call = calls.withLock { $0 += 1; return $0 }
+          if call == 1 {
+            return Self.dataEventStream(data: "retry: 10\nretry-max: 30\nid: checkpoint\ndata: before\n\n")
+          }
+          XCTAssertEqual(headers[HTTP.StdHeaders.lastEventId], ["checkpoint"])
+          if call == 2 {
+            if throwsResponse {
+              throw SundayError.responseValidationFailed(reason: .unacceptableStatusCode(
+                response: Self.eventStreamResponse(statusCode: status), data: nil))
+            }
+            return Self.dataEventStream(statusCode: status, data: "")
+          }
+          return Self.dataEventStream(data: "data: recovered\n\n", finishes: false)
+        }
+        await source.setOnStateError { error, state in
+          if error != nil { XCTAssertNotEqual(state, .closed) }
+        }
+        await source.setOnMessage { _, _, data in
+          if data == "recovered" { recovered.fulfill() }
+        }
+        await source.connect()
+        await fulfillment(of: [recovered], timeout: 3)
+        await source.close()
+        XCTAssertEqual(calls.withLock { $0 }, 3)
+      }
+    }
+  }
+
+  func testAuthenticationFailureStopsWithoutReconnecting() async {
+    for status in [401, 403] {
+      let calls = Mutex(0)
+      let closed = expectation(description: "Authentication failure closes stream")
+      let source = EventSource { _ in
+        calls.withLock { $0 += 1 }
+        return Self.dataEventStream(statusCode: status, data: "")
+      }
+      await source.setOnStateError { error, state in
+        if error != nil {
+          XCTAssertEqual(state, .closed)
+          closed.fulfill()
+        }
+      }
+      await source.connect()
+      await fulfillment(of: [closed], timeout: 3)
+      try? await Task.sleep(for: .milliseconds(600))
+      XCTAssertEqual(calls.withLock { $0 }, 1)
+      await source.close()
+    }
+  }
+
   func testNoContentResponseStopsWithoutReconnecting() async throws {
 
     let connectionCount = Mutex(0)

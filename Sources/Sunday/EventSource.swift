@@ -532,7 +532,7 @@ public actor EventSource { // swiftlint:disable:this type_body_length
       let error = SundayError.responseValidationFailed(
         reason: .unacceptableStatusCode(response: response, data: nil)
       )
-      close(notifying: error)
+      receivedError(error: error)
       return false
     }
 
@@ -618,9 +618,12 @@ public actor EventSource { // swiftlint:disable:this type_body_length
 
   private func isTerminalHTTPError(_ error: Swift.Error) -> Bool {
     switch error {
-    case SundayError.requestEncodingFailed,
-         SundayError.responseValidationFailed(reason: .unacceptableStatusCode):
+    case SundayError.requestEncodingFailed:
       return true
+    case SundayError.responseValidationFailed(reason: .unacceptableStatusCode(let response, _)):
+      // A proxy or unavailable service can fail a reconnect before it reaches the SSE endpoint.
+      // Keep the delivery cursor and existing bounded backoff across these temporary responses.
+      return ![408, 429, 500, 502, 503, 504].contains(response.statusCode)
     default: return false
     }
   }
